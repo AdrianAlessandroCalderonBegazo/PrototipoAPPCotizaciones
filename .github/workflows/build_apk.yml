@@ -1,0 +1,37 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}   # permite lanzarlo manualmente desde la pestaña Actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.3'
+          channel: 'stable'
+
+      - name: Instalar dependencias del proyecto
+        run: flutter pub get
+
+      - name: Compilar el APK (release)
+        run: flutter build apk --release
+
+      - name: Subir el APK como artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: cotizador-icr-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
