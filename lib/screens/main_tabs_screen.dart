@@ -20,10 +20,39 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
   int _indice = 0;
 
   late final List<Widget> _pantallas = [
-    const ProductosScreen(),
+    ProductosScreen(onVerCotizacion: () => setState(() => _indice = 1)),
     const CotizacionScreen(),
-    HistorialScreen(onIrAProductos: () => setState(() => _indice = 0)),
+    HistorialScreen(
+      onIrAProductos: () => setState(() => _indice = 0),
+      onNuevaCotizacion: _iniciarNuevaCotizacion,
+    ),
   ];
+
+  Future<void> _iniciarNuevaCotizacion() async {
+    final cotizacion = context.read<CotizacionState>();
+    if (cotizacion.totalItems > 0) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('¿Empezar una cotización nueva?'),
+          content: const Text('Se vaciará la cotización que tienes armada ahora.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Empezar nueva'),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true) return;
+      cotizacion.limpiar();
+    }
+    if (mounted) setState(() => _indice = 1);
+  }
 
   @override
   Widget build(BuildContext context) {

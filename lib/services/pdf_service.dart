@@ -42,6 +42,7 @@ class PdfService {
     required List<ItemCotizacion> items,
     String cliente = '',
     String rucDni = '',
+    String telefono = '',
     String vendedor = '',
     String banco = '',
     String moneda = '',
@@ -71,6 +72,7 @@ class PdfService {
           logo: logo,
           cliente: cliente,
           rucDni: rucDni,
+          telefono: telefono,
           vendedor: vendedor,
           fecha: fecha,
           numero: numero,
@@ -159,6 +161,7 @@ class PdfService {
     required pw.MemoryImage logo,
     required String cliente,
     required String rucDni,
+    required String telefono,
     required String vendedor,
     required String fecha,
     required int numero,
@@ -268,6 +271,13 @@ class PdfService {
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'RUC/DNI: $rucDni',
+                      style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                    ),
+                  ],
+                  if (telefono.isNotEmpty) ...[
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'Tel: $telefono',
                       style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
                     ),
                   ],
