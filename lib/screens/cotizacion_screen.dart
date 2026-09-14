@@ -14,8 +14,8 @@ import '../state/cotizacion_state.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/brand_app_bar_title.dart';
+import '../widgets/lottie_gate_screen.dart';
 import '../widgets/producto_thumbnail.dart';
-import 'generando_pdf_screen.dart';
 
 class CotizacionScreen extends StatefulWidget {
   const CotizacionScreen({super.key});
@@ -132,69 +132,67 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
     }
   }
 
+  Future<(Uint8List, int)> _procesoDeGeneracion(CotizacionState cotizacion) async {
+    final numero = await PdfService.siguienteNumero();
+    final cliente = _clienteController.text.trim();
+    final rucDni = _rucDniController.text.trim();
+
+    final bytes = await PdfService.generar(
+      numero: numero,
+      items: cotizacion.items,
+      cliente: cliente,
+      rucDni: rucDni,
+      telefono: _telefonoController.text.trim(),
+      vendedor: _vendedorController.text.trim(),
+      banco: _bancoController.text.trim(),
+      moneda: _monedaController.text.trim(),
+      nroCuenta: _nroCuentaController.text.trim(),
+      cci: _cciController.text.trim(),
+    );
+
+    final rutaArchivo = await PdfService.guardarEnDisco(bytes, numero);
+    await DbHelper.instance.guardarCotizacion(
+      CotizacionGuardada(
+        numero: PdfService.formatearNumero(numero),
+        cliente: cliente,
+        rucDni: rucDni.isEmpty ? null : rucDni,
+        fecha: DateTime.now(),
+        total: cotizacion.totalGeneral,
+        archivoPdf: rutaArchivo,
+      ),
+    );
+    await _guardarDatosBancarios();
+    return (bytes, numero);
+  }
+
   Future<void> _generarYCompartir(CotizacionState cotizacion) async {
     setState(() => _generando = true);
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        opaque: true,
-        pageBuilder: (_, __, ___) => const GenerandoPdfScreen(),
-        transitionsBuilder: (_, animation, __, child) =>
-            FadeTransition(opacity: animation, child: child),
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LottieGateScreen<(Uint8List, int)>(
+          lottieAsset: 'assets/animations/verification.lottie',
+          mensaje: 'Generando tu cotización...',
+          proceso: () => _procesoDeGeneracion(cotizacion),
+          alTerminar: (context, resultado) async {
+            final (bytes, numero) = resultado;
+            Navigator.of(context).pop();
+            await Printing.sharePdf(
+              bytes: bytes,
+              filename: 'cotizacion_${PdfService.formatearNumero(numero)}.pdf',
+            );
+          },
+          alFallar: (context, error) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('No se pudo generar la cotización: $error')),
+            );
+          },
+        ),
       ),
     );
 
-    final cronometro = Stopwatch()..start();
-    try {
-      final numero = await PdfService.siguienteNumero();
-      final cliente = _clienteController.text.trim();
-      final rucDni = _rucDniController.text.trim();
-
-      final bytes = await PdfService.generar(
-        numero: numero,
-        items: cotizacion.items,
-        cliente: cliente,
-        rucDni: rucDni,
-        telefono: _telefonoController.text.trim(),
-        vendedor: _vendedorController.text.trim(),
-        banco: _bancoController.text.trim(),
-        moneda: _monedaController.text.trim(),
-        nroCuenta: _nroCuentaController.text.trim(),
-        cci: _cciController.text.trim(),
-      );
-
-      final rutaArchivo = await PdfService.guardarEnDisco(bytes, numero);
-      await DbHelper.instance.guardarCotizacion(
-        CotizacionGuardada(
-          numero: PdfService.formatearNumero(numero),
-          cliente: cliente,
-          rucDni: rucDni.isEmpty ? null : rucDni,
-          fecha: DateTime.now(),
-          total: cotizacion.totalGeneral,
-          archivoPdf: rutaArchivo,
-        ),
-      );
-      await _guardarDatosBancarios();
-
-      // La animación se ve un mínimo de tiempo, aunque todo esto termine
-      // antes — si no, en un celular rápido casi ni se nota que pasó.
-      final restante = 1800 - cronometro.elapsedMilliseconds;
-      if (restante > 0) await Future.delayed(Duration(milliseconds: restante));
-
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'cotizacion_${PdfService.formatearNumero(numero)}.pdf',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo generar la cotización: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _generando = false);
-    }
+    if (mounted) setState(() => _generando = false);
   }
 
   InputDecoration _decoracion(String label, IconData icono, {Widget? suffix}) {

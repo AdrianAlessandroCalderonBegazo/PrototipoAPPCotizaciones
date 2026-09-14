@@ -147,14 +147,23 @@ class PdfService {
   }
 
   // Solo 5 columnas (sin Impuestos ni Price): con menos columnas cada una
-  // tiene más aire, y la imagen queda en un cuadro de tamaño fijo — así se
-  // ve pareja fila con fila, en vez de estirarse según la foto de cada una.
-  static const _flexItem = 1;
-  static const _flexImagen = 3;
-  static const _flexDescripcion = 8;
-  static const _flexCantidad = 2;
-  static const _flexPUnit = 2;
-  static const _anchoImagen = 40.0;
+  // tiene más aire. Cada columna (salvo Descripción) tiene un ANCHO FIJO en
+  // puntos, puesto directo en el Row sin Expanded — con Expanded, el propio
+  // paquete pdf le impone al hijo un ancho "tight" igual al de su fracción
+  // de flex e ignora el width que pida su SizedBox, así que el cuadro de la
+  // imagen terminaba siendo angosto o ancho según el flex, no 40x40 real;
+  // con fotos de distinto aspecto (retrato/paisaje) cada una se veía a una
+  // escala distinta y la tabla se notaba descuadrada. Con ancho fijo real
+  // el cuadro de imagen (y el resto de columnas) miden siempre lo mismo,
+  // fila tras fila; Descripción es la única columna flexible, para que
+  // absorba el espacio que sobra sin desarmar a las demás.
+  static const _anchoItem = 26.0;
+  static const _anchoImagen = 42.0;
+  static const _anchoCantidad = 46.0;
+  static const _anchoPUnit = 56.0;
+  static const _espacioColumna = 6.0;
+
+  static pw.Widget _espacio() => pw.SizedBox(width: _espacioColumna);
 
   static pw.Widget _encabezado({
     required pw.Context context,
@@ -241,11 +250,15 @@ class PdfService {
       padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: pw.Row(
         children: [
-          _celdaHeader('Item.', _flexItem),
-          _celdaHeader('Imagen', _flexImagen),
-          _celdaHeader('Descripción del Artículo', _flexDescripcion),
-          _celdaHeader('Cantidad', _flexCantidad),
-          _celdaHeader('P. Unit.', _flexPUnit),
+          _celdaHeaderCol('Item.', ancho: _anchoItem),
+          _espacio(),
+          _celdaHeaderCol('Imagen', ancho: _anchoImagen),
+          _espacio(),
+          _celdaHeaderCol('Descripción del Artículo'),
+          _espacio(),
+          _celdaHeaderCol('Cantidad', ancho: _anchoCantidad),
+          _espacio(),
+          _celdaHeaderCol('P. Unit.', ancho: _anchoPUnit),
         ],
       ),
     );
@@ -376,6 +389,20 @@ class PdfService {
     );
   }
 
+  // Igual que _celdaHeader, pero para la tabla de productos: ancho fijo por
+  // columna (mismos anchos que usa _filaProducto) en vez de flex, salvo
+  // Descripción, que no lleva [ancho] y queda como la única columna
+  // flexible — así el header queda pixel a pixel alineado con las filas.
+  static pw.Widget _celdaHeaderCol(String texto, {double? ancho}) {
+    final contenido = pw.Text(
+      texto,
+      maxLines: 1,
+      overflow: pw.TextOverflow.clip,
+      style: const pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+    );
+    return ancho != null ? pw.SizedBox(width: ancho, child: contenido) : pw.Expanded(child: contenido);
+  }
+
   static pw.Widget _filaProducto({
     required int index,
     required ItemCotizacion item,
@@ -390,26 +417,30 @@ class PdfService {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          pw.Expanded(
-            flex: _flexItem,
+          pw.SizedBox(
+            width: _anchoItem,
             child: pw.Text('${index + 1}', style: const pw.TextStyle(fontSize: 9)),
           ),
+          _espacio(),
+          pw.SizedBox(
+            width: _anchoImagen,
+            height: _anchoImagen,
+            child: imagen != null
+                ? pw.Image(pw.MemoryImage(imagen), fit: pw.BoxFit.contain)
+                : null,
+          ),
+          _espacio(),
           pw.Expanded(
-            flex: _flexImagen,
-            child: pw.SizedBox(
-              width: _anchoImagen,
-              height: _anchoImagen,
-              child: imagen != null
-                  ? pw.Image(pw.MemoryImage(imagen), fit: pw.BoxFit.contain)
-                  : null,
+            child: pw.Text(
+              '$ref${p.nombre}',
+              maxLines: 2,
+              overflow: pw.TextOverflow.clip,
+              style: const pw.TextStyle(fontSize: 9),
             ),
           ),
-          pw.Expanded(
-            flex: _flexDescripcion,
-            child: pw.Text('$ref${p.nombre}', style: const pw.TextStyle(fontSize: 9)),
-          ),
-          pw.Expanded(
-            flex: _flexCantidad,
+          _espacio(),
+          pw.SizedBox(
+            width: _anchoCantidad,
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
@@ -421,8 +452,9 @@ class PdfService {
               ],
             ),
           ),
-          pw.Expanded(
-            flex: _flexPUnit,
+          _espacio(),
+          pw.SizedBox(
+            width: _anchoPUnit,
             child: pw.Text(
               (p.precioVenta ?? 0).toStringAsFixed(2),
               style: const pw.TextStyle(fontSize: 9),
