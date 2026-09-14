@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/producto.dart';
 import '../services/db_helper.dart';
+import '../services/server_config.dart';
 import '../state/cotizacion_state.dart';
+import '../widgets/producto_thumbnail.dart';
 
 class CategoriaScreen extends StatefulWidget {
   final String categoria;
@@ -14,6 +16,7 @@ class CategoriaScreen extends StatefulWidget {
 
 class _CategoriaScreenState extends State<CategoriaScreen> {
   List<Producto> _productos = [];
+  String? _baseUrl;
   bool _cargando = true;
 
   @override
@@ -25,9 +28,11 @@ class _CategoriaScreenState extends State<CategoriaScreen> {
   Future<void> _cargar() async {
     final productos =
         await DbHelper.instance.getProductosPorCategoria(widget.categoria);
+    final baseUrl = await ServerConfig.baseUrl();
     if (!mounted) return;
     setState(() {
       _productos = productos;
+      _baseUrl = baseUrl;
       _cargando = false;
     });
   }
@@ -59,27 +64,27 @@ class _CategoriaScreenState extends State<CategoriaScreen> {
                         'S/ ${p.precioVenta!.toStringAsFixed(2)}',
                     ].join(' · '),
                   ),
-                  secondary: seleccionado
-                      ? SizedBox(
-                          width: 104,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle_outline),
-                                onPressed: () =>
-                                    cotizacion.setCantidad(p, cantidad - 1),
-                              ),
-                              Text('$cantidad'),
-                              IconButton(
-                                icon: const Icon(Icons.add_circle_outline),
-                                onPressed: () =>
-                                    cotizacion.setCantidad(p, cantidad + 1),
-                              ),
-                            ],
-                          ),
-                        )
-                      : null,
+                  secondary: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ProductoThumbnail(
+                        url: ServerConfig.imageUrl(_baseUrl, p.archivoImagen),
+                      ),
+                      if (seleccionado) ...[
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () =>
+                              cotizacion.setCantidad(p, cantidad - 1),
+                        ),
+                        Text('$cantidad'),
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: () =>
+                              cotizacion.setCantidad(p, cantidad + 1),
+                        ),
+                      ],
+                    ],
+                  ),
                 );
               },
             ),

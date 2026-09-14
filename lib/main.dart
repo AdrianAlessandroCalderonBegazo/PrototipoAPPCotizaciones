@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'services/db_helper.dart';
 import 'state/cotizacion_state.dart';
 import 'screens/home_screen.dart';
+import 'theme/brand_colors.dart';
 
 void main() {
   runApp(const CotizadorApp());
@@ -13,6 +14,16 @@ class CotizadorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: BrandColors.cian,
+      primary: BrandColors.cian,
+      onPrimary: Colors.white,
+      secondary: BrandColors.menta,
+      onSecondary: BrandColors.azulMarino,
+      tertiary: BrandColors.azulOscuro,
+      onTertiary: Colors.white,
+    );
+
     return ChangeNotifierProvider(
       create: (_) => CotizacionState(),
       child: MaterialApp(
@@ -20,7 +31,15 @@ class CotizadorApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
-          colorSchemeSeed: const Color(0xFF0F6E5F),
+          colorScheme: colorScheme,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: BrandColors.azulMarino,
+            foregroundColor: Colors.white,
+          ),
+          floatingActionButtonTheme: const FloatingActionButtonThemeData(
+            backgroundColor: BrandColors.cian,
+            foregroundColor: Colors.white,
+          ),
         ),
         home: const _Splash(),
       ),

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../services/pdf_service.dart';
+import '../services/server_config.dart';
 import '../state/cotizacion_state.dart';
+import '../widgets/producto_thumbnail.dart';
 
 class CotizacionScreen extends StatefulWidget {
   const CotizacionScreen({super.key});
@@ -14,6 +16,15 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
   final _clienteController = TextEditingController();
   final _vendedorController = TextEditingController();
   bool _generando = false;
+  String? _baseUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    ServerConfig.baseUrl().then((url) {
+      if (mounted) setState(() => _baseUrl = url);
+    });
+  }
 
   @override
   void dispose() {
@@ -89,6 +100,12 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
                     itemBuilder: (context, index) {
                       final item = items[index];
                       return ListTile(
+                        leading: ProductoThumbnail(
+                          url: ServerConfig.imageUrl(
+                            _baseUrl,
+                            item.producto.archivoImagen,
+                          ),
+                        ),
                         title: Text(item.producto.nombre),
                         subtitle: Text(
                           'Cant. ${item.cantidad} · S/ ${(item.producto.precioVenta ?? 0).toStringAsFixed(2)} c/u',
@@ -138,6 +155,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
                               items: items,
                               cliente: _clienteController.text.trim(),
                               vendedor: _vendedorController.text.trim(),
+                              baseUrl: _baseUrl,
                             );
                             if (!mounted) return;
                             setState(() => _generando = false);
