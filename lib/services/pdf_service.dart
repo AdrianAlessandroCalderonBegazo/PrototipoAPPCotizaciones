@@ -390,7 +390,7 @@ class PdfService {
               width: _anchoImagen,
               height: _anchoImagen,
               child: imagen != null
-                  ? pw.Image(pw.MemoryImage(imagen), fit: pw.BoxFit.cover)
+                  ? pw.Image(pw.MemoryImage(imagen), fit: pw.BoxFit.contain)
                   : null,
             ),
           ),
