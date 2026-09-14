@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/db_helper.dart';
 import 'state/cotizacion_state.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_tabs_screen.dart';
 import 'theme/brand_colors.dart';
 
 void main() {
@@ -70,7 +70,7 @@ class _SplashState extends State<_Splash> {
       await DbHelper.instance.seedFromAssetsIfEmpty();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const MainTabsScreen()),
       );
     } catch (e) {
       // Sin este catch, un catálogo semilla corrupto deja la app girando

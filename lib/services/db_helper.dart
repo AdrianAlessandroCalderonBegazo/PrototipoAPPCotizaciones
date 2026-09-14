@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import '../models/cotizacion_guardada.dart';
 import '../models/producto.dart';
 
 /// Toda la app le pide productos a este helper, sin saber si vienen del
@@ -21,23 +22,49 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'cotizador_icr.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE productos (
-            id INTEGER PRIMARY KEY,
-            costo REAL,
-            nombre TEXT NOT NULL,
-            precio_venta REAL,
-            referencia_interna TEXT,
-            unidad_medida TEXT,
-            categoria_producto TEXT,
-            archivo_imagen TEXT,
-            imagen_url TEXT
-          )
-        ''');
+        await _crearTablaProductos(db);
+        await _crearTablaCotizacionesGuardadas(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // No se toca la tabla productos: no hay que perder un catálogo que
+        // el usuario ya sincronizó con su servidor.
+        if (oldVersion < 2) {
+          await _crearTablaCotizacionesGuardadas(db);
+        }
       },
     );
+  }
+
+  Future<void> _crearTablaProductos(Database db) async {
+    await db.execute('''
+      CREATE TABLE productos (
+        id INTEGER PRIMARY KEY,
+        costo REAL,
+        nombre TEXT NOT NULL,
+        precio_venta REAL,
+        referencia_interna TEXT,
+        unidad_medida TEXT,
+        categoria_producto TEXT,
+        archivo_imagen TEXT,
+        imagen_url TEXT
+      )
+    ''');
+  }
+
+  Future<void> _crearTablaCotizacionesGuardadas(Database db) async {
+    await db.execute('''
+      CREATE TABLE cotizaciones_guardadas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        numero TEXT NOT NULL,
+        cliente TEXT NOT NULL,
+        ruc_dni TEXT,
+        fecha TEXT NOT NULL,
+        total REAL NOT NULL,
+        archivo_pdf TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<int> countTotal() async {
@@ -92,6 +119,23 @@ class DbHelper {
     return result.map((e) => Producto.fromMap(e)).toList();
   }
 
+  /// Todo el catálogo agrupado por categoría en una sola consulta — para la
+  /// pantalla de Productos (lista de categorías tipo acordeón), evita
+  /// pedirle a la base una consulta separada por cada categoría.
+  Future<Map<String, List<Producto>>> getTodosAgrupados() async {
+    final db = await database;
+    final result = await db.query(
+      'productos',
+      orderBy: 'categoria_producto, nombre',
+    );
+    final agrupado = <String, List<Producto>>{};
+    for (final fila in result) {
+      final producto = Producto.fromMap(fila);
+      agrupado.putIfAbsent(producto.categoriaProducto, () => []).add(producto);
+    }
+    return agrupado;
+  }
+
   Future<List<Producto>> buscar(String query) async {
     final db = await database;
     final result = await db.query(
@@ -102,5 +146,16 @@ class DbHelper {
       limit: 150,
     );
     return result.map((e) => Producto.fromMap(e)).toList();
+  }
+
+  Future<void> guardarCotizacion(CotizacionGuardada cotizacion) async {
+    final db = await database;
+    await db.insert('cotizaciones_guardadas', cotizacion.toMap());
+  }
+
+  Future<List<CotizacionGuardada>> getCotizacionesGuardadas() async {
+    final db = await database;
+    final result = await db.query('cotizaciones_guardadas', orderBy: 'fecha DESC');
+    return result.map((e) => CotizacionGuardada.fromMap(e)).toList();
   }
 }

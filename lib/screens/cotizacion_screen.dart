@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/cotizacion_guardada.dart';
+import '../services/db_helper.dart';
 import '../services/pdf_service.dart';
 import '../state/cotizacion_state.dart';
 import '../widgets/producto_thumbnail.dart';
@@ -13,20 +16,103 @@ class CotizacionScreen extends StatefulWidget {
 
 class _CotizacionScreenState extends State<CotizacionScreen> {
   final _clienteController = TextEditingController();
+  final _rucDniController = TextEditingController();
   final _vendedorController = TextEditingController();
+  final _bancoController = TextEditingController();
+  final _monedaController = TextEditingController();
+  final _nroCuentaController = TextEditingController();
+  final _cciController = TextEditingController();
   bool _generando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarDatosBancarios();
+  }
+
+  Future<void> _cargarDatosBancarios() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _bancoController.text = prefs.getString('cotizacion_banco') ?? '';
+      _monedaController.text = prefs.getString('cotizacion_moneda') ?? 'Soles';
+      _nroCuentaController.text = prefs.getString('cotizacion_nro_cuenta') ?? '';
+      _cciController.text = prefs.getString('cotizacion_cci') ?? '';
+    });
+  }
+
+  Future<void> _guardarDatosBancarios() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cotizacion_banco', _bancoController.text.trim());
+    await prefs.setString('cotizacion_moneda', _monedaController.text.trim());
+    await prefs.setString('cotizacion_nro_cuenta', _nroCuentaController.text.trim());
+    await prefs.setString('cotizacion_cci', _cciController.text.trim());
+  }
 
   @override
   void dispose() {
     _clienteController.dispose();
+    _rucDniController.dispose();
     _vendedorController.dispose();
+    _bancoController.dispose();
+    _monedaController.dispose();
+    _nroCuentaController.dispose();
+    _cciController.dispose();
     super.dispose();
+  }
+
+  Future<void> _generarYCompartir(CotizacionState cotizacion) async {
+    setState(() => _generando = true);
+    try {
+      final numero = await PdfService.siguienteNumero();
+      final cliente = _clienteController.text.trim();
+      final rucDni = _rucDniController.text.trim();
+
+      final bytes = await PdfService.generar(
+        numero: numero,
+        items: cotizacion.items,
+        cliente: cliente,
+        rucDni: rucDni,
+        vendedor: _vendedorController.text.trim(),
+        banco: _bancoController.text.trim(),
+        moneda: _monedaController.text.trim(),
+        nroCuenta: _nroCuentaController.text.trim(),
+        cci: _cciController.text.trim(),
+      );
+
+      final rutaArchivo = await PdfService.guardarEnDisco(bytes, numero);
+      await DbHelper.instance.guardarCotizacion(
+        CotizacionGuardada(
+          numero: PdfService.formatearNumero(numero),
+          cliente: cliente,
+          rucDni: rucDni.isEmpty ? null : rucDni,
+          fecha: DateTime.now(),
+          total: cotizacion.totalGeneral,
+          archivoPdf: rutaArchivo,
+        ),
+      );
+      await _guardarDatosBancarios();
+
+      if (!mounted) return;
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'cotizacion_${PdfService.formatearNumero(numero)}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo generar la cotización: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _generando = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final cotizacion = context.watch<CotizacionState>();
     final items = cotizacion.items;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -62,10 +148,12 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
           ? const Center(child: Text('Aún no agregaste productos.'))
           : Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
                     children: [
+                      Text('Datos del cliente', style: textTheme.titleSmall),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: _clienteController,
                         decoration: const InputDecoration(
@@ -75,81 +163,121 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
                       ),
                       const SizedBox(height: 10),
                       TextField(
+                        controller: _rucDniController,
+                        decoration: const InputDecoration(
+                          labelText: 'RUC / DNI del cliente (opcional)',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
                         controller: _vendedorController,
                         decoration: const InputDecoration(
                           labelText: 'Vendedor (opcional)',
                           border: OutlineInputBorder(),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return ListTile(
-                        leading: ProductoThumbnail(
-                          archivoImagen: item.producto.archivoImagen,
+                      const SizedBox(height: 20),
+                      Text('Datos bancarios (opcional)', style: textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _bancoController,
+                              decoration: const InputDecoration(
+                                labelText: 'Banco',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _monedaController,
+                              decoration: const InputDecoration(
+                                labelText: 'Moneda',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _nroCuentaController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nro de cuenta',
+                          border: OutlineInputBorder(),
                         ),
-                        title: Text(item.producto.nombre),
-                        subtitle: Text(
-                          'Cant. ${item.cantidad} · S/ ${(item.producto.precioVenta ?? 0).toStringAsFixed(2)} c/u',
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _cciController,
+                        decoration: const InputDecoration(
+                          labelText: 'CCI',
+                          border: OutlineInputBorder(),
                         ),
-                        trailing: Text(
-                          'S/ ${item.subtotal.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'TOTAL: S/ ${cotizacion.totalGeneral.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      ),
+                      const SizedBox(height: 20),
+                      const Divider(),
+                      Text('Productos seleccionados', style: textTheme.titleSmall),
+                      const SizedBox(height: 4),
+                      ...items.map(
+                        (item) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: ProductoThumbnail(
+                            archivoImagen: item.producto.archivoImagen,
+                          ),
+                          title: Text(item.producto.nombre),
+                          subtitle: Text(
+                            'Cant. ${item.cantidad} · S/ ${(item.producto.precioVenta ?? 0).toStringAsFixed(2)} c/u',
+                          ),
+                          trailing: Text(
+                            'S/ ${item.subtotal.toStringAsFixed(2)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                  child: FilledButton.icon(
-                    icon: _generando
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'TOTAL: S/ ${cotizacion.totalGeneral.toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
-                          )
-                        : const Icon(Icons.picture_as_pdf),
-                    label: Text(_generando ? 'Generando...' : 'Generar y compartir PDF'),
-                    onPressed: _generando
-                        ? null
-                        : () async {
-                            setState(() => _generando = true);
-                            final bytes = await PdfService.generar(
-                              items: items,
-                              cliente: _clienteController.text.trim(),
-                              vendedor: _vendedorController.text.trim(),
-                            );
-                            if (!mounted) return;
-                            setState(() => _generando = false);
-                            await Printing.sharePdf(
-                              bytes: bytes,
-                              filename: 'cotizacion.pdf',
-                            );
-                          },
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          icon: _generando
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.picture_as_pdf),
+                          label: Text(_generando ? 'Generando...' : 'Generar y compartir PDF'),
+                          onPressed: _generando ? null : () => _generarYCompartir(cotizacion),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],

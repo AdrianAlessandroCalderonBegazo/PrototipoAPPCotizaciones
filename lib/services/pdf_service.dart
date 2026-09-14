@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,27 +11,43 @@ import '../theme/brand_colors.dart';
 
 const _logoAsset = 'assets/icon/icon.png';
 
-/// Genera la cotización en PDF con el formato oficial de Inversiones ICR
-/// (el mismo de las cotizaciones que emite su Odoo): encabezado con
-/// logo/RUC/Nro, fila de cliente/total/fecha, vendedor/email, tabla con
-/// foto de cada producto y IGV, y el bloque de totales al final.
+/// Genera la cotización en PDF con el formato oficial de Inversiones ICR:
+/// encabezado con logo/RUC/Nro, fila de cliente (+ RUC/DNI opcional) /
+/// total/fecha, vendedor/email, tabla de productos, y el bloque de
+/// Banco/Moneda/Cuenta/CCI + Subtotal/Impuestos/Total al final.
 class PdfService {
   static const _empresa = 'INVERSIONES ICR S.R.L.';
-  static const _direccion =
-      'AV. PIZARRO 325-C_CERCADO, Mariscal Nieto 180101, Arequipa, Perú.';
+  static const _direccion = 'Calle Pizarro 325 C, Arequipa';
   static const _ruc = '20605309489';
   static const _email = 'inversionesicr@hotmail.com';
 
-  // Los precios del catálogo son con IGV incluido (18%, Perú); "Price" en la
-  // tabla es el neto de esa línea, igual que en las cotizaciones de Odoo.
+  // Los precios del catálogo son con IGV incluido (18%, Perú); el Subtotal
+  // del pie es ese total sin el IGV, igual que en las cotizaciones reales.
   static const _igv = 0.18;
 
+  /// Se pide UNA vez, antes de generar, para que quien llama pueda usar el
+  /// mismo número tanto en el PDF como al guardar el registro en el
+  /// historial (mismo nombre de archivo, mismo "Nro").
+  static Future<int> siguienteNumero() async {
+    final prefs = await SharedPreferences.getInstance();
+    final siguiente = (prefs.getInt('cotizacion_correlativo') ?? 0) + 1;
+    await prefs.setInt('cotizacion_correlativo', siguiente);
+    return siguiente;
+  }
+
+  static String formatearNumero(int numero) => 'S${numero.toString().padLeft(5, '0')}';
+
   static Future<Uint8List> generar({
+    required int numero,
     required List<ItemCotizacion> items,
     String cliente = '',
+    String rucDni = '',
     String vendedor = '',
+    String banco = '',
+    String moneda = '',
+    String nroCuenta = '',
+    String cci = '',
   }) async {
-    final numero = await _siguienteNumero();
     final imagenes = await _cargarImagenes(items);
     final logo = pw.MemoryImage(
       (await rootBundle.load(_logoAsset)).buffer.asUint8List(),
@@ -37,7 +55,7 @@ class PdfService {
 
     // locale 'en_US' solo para el agrupado de miles/decimales (1,234.56);
     // el símbolo "S/ " es el de la cotización real de Inversiones ICR.
-    final moneda = NumberFormat.currency(locale: 'en_US', symbol: 'S/ ');
+    final formatoMoneda = NumberFormat.currency(locale: 'en_US', symbol: 'S/ ');
     final fecha = DateFormat('dd/MM/yyyy').format(DateTime.now());
 
     final totalBruto = items.fold<double>(0, (s, i) => s + i.subtotal);
@@ -52,24 +70,28 @@ class PdfService {
           context: context,
           logo: logo,
           cliente: cliente,
+          rucDni: rucDni,
           vendedor: vendedor,
           fecha: fecha,
           numero: numero,
           totalBruto: totalBruto,
-          moneda: moneda,
+          moneda: formatoMoneda,
         ),
         build: (context) => [
           ...items.asMap().entries.map(
             (e) => _filaProducto(
               index: e.key,
               item: e.value,
-              moneda: moneda,
               imagen: imagenes[e.value.producto.archivoImagen],
             ),
           ),
           pw.SizedBox(height: 16),
           _bancoYTotales(
+            banco: banco,
             moneda: moneda,
+            nroCuenta: nroCuenta,
+            cci: cci,
+            formatoMoneda: formatoMoneda,
             subtotal: subtotalNeto,
             impuestos: impuestos,
             total: totalBruto,
@@ -81,11 +103,17 @@ class PdfService {
     return doc.save();
   }
 
-  static Future<int> _siguienteNumero() async {
-    final prefs = await SharedPreferences.getInstance();
-    final siguiente = (prefs.getInt('cotizacion_correlativo') ?? 0) + 1;
-    await prefs.setInt('cotizacion_correlativo', siguiente);
-    return siguiente;
+  /// Guarda el PDF ya generado en el almacenamiento propio de la app, para
+  /// poder volver a abrirlo/compartirlo después desde el Historial.
+  static Future<String> guardarEnDisco(Uint8List bytes, int numero) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final carpeta = Directory('${dir.path}/cotizaciones');
+    if (!await carpeta.exists()) {
+      await carpeta.create(recursive: true);
+    }
+    final archivo = File('${carpeta.path}/cotizacion_${formatearNumero(numero)}.pdf');
+    await archivo.writeAsBytes(bytes);
+    return archivo.path;
   }
 
   /// Las fotos van empaquetadas en la propia app (assets/productos/), así
@@ -116,25 +144,28 @@ class PdfService {
     return resultado;
   }
 
+  // Solo 5 columnas (sin Impuestos ni Price): con menos columnas cada una
+  // tiene más aire, y la imagen queda en un cuadro de tamaño fijo — así se
+  // ve pareja fila con fila, en vez de estirarse según la foto de cada una.
   static const _flexItem = 1;
-  static const _flexImagen = 2;
-  static const _flexDescripcion = 6;
+  static const _flexImagen = 3;
+  static const _flexDescripcion = 8;
   static const _flexCantidad = 2;
   static const _flexPUnit = 2;
-  static const _flexImpuestos = 2;
-  static const _flexPrice = 2;
+  static const _anchoImagen = 40.0;
 
   static pw.Widget _encabezado({
     required pw.Context context,
     required pw.MemoryImage logo,
     required String cliente,
+    required String rucDni,
     required String vendedor,
     required String fecha,
     required int numero,
     required double totalBruto,
     required NumberFormat moneda,
   }) {
-    final numeroFmt = 'S${numero.toString().padLeft(5, '0')}';
+    final numeroFmt = formatearNumero(numero);
 
     final tarjetaEmpresa = pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -212,8 +243,6 @@ class PdfService {
           _celdaHeader('Descripción del Artículo', _flexDescripcion),
           _celdaHeader('Cantidad', _flexCantidad),
           _celdaHeader('P. Unit.', _flexPUnit),
-          _celdaHeader('Impuestos', _flexImpuestos),
-          _celdaHeader('Price', _flexPrice),
         ],
       ),
     );
@@ -228,9 +257,21 @@ class PdfService {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(
-                cliente.isEmpty ? 'Cliente sin nombre' : cliente,
-                style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    cliente.isEmpty ? 'Cliente sin nombre' : cliente,
+                    style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                  ),
+                  if (rucDni.isNotEmpty) ...[
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'RUC/DNI: $rucDni',
+                      style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                    ),
+                  ],
+                ],
               ),
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
@@ -328,17 +369,14 @@ class PdfService {
   static pw.Widget _filaProducto({
     required int index,
     required ItemCotizacion item,
-    required NumberFormat moneda,
     Uint8List? imagen,
   }) {
     final p = item.producto;
     final ref = (p.referenciaInterna ?? '').isNotEmpty ? '[${p.referenciaInterna}] ' : '';
-    final bruto = item.subtotal;
-    final neto = bruto / (1 + _igv);
 
     return pw.Container(
       color: index.isEven ? PdfColors.white : BrandColors.pdfTint(BrandColors.pdfCian, 0.92),
-      padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
@@ -348,9 +386,13 @@ class PdfService {
           ),
           pw.Expanded(
             flex: _flexImagen,
-            child: imagen != null
-                ? pw.Image(pw.MemoryImage(imagen), height: 32, fit: pw.BoxFit.contain)
-                : pw.SizedBox(height: 32),
+            child: pw.SizedBox(
+              width: _anchoImagen,
+              height: _anchoImagen,
+              child: imagen != null
+                  ? pw.Image(pw.MemoryImage(imagen), fit: pw.BoxFit.cover)
+                  : null,
+            ),
           ),
           pw.Expanded(
             flex: _flexDescripcion,
@@ -376,21 +418,17 @@ class PdfService {
               style: const pw.TextStyle(fontSize: 9),
             ),
           ),
-          pw.Expanded(
-            flex: _flexImpuestos,
-            child: pw.Text('IGV', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
-          ),
-          pw.Expanded(
-            flex: _flexPrice,
-            child: pw.Text(moneda.format(neto), style: const pw.TextStyle(fontSize: 9)),
-          ),
         ],
       ),
     );
   }
 
   static pw.Widget _bancoYTotales({
-    required NumberFormat moneda,
+    required String banco,
+    required String moneda,
+    required String nroCuenta,
+    required String cci,
+    required NumberFormat formatoMoneda,
     required double subtotal,
     required double impuestos,
     required double total,
@@ -410,6 +448,20 @@ class PdfService {
             ],
           ),
         ),
+        pw.Container(
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300)),
+          ),
+          padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+          child: pw.Row(
+            children: [
+              _celdaDato(banco),
+              _celdaDato(moneda),
+              _celdaDato(nroCuenta),
+              _celdaDato(cci),
+            ],
+          ),
+        ),
         pw.SizedBox(height: 14),
         pw.Align(
           alignment: pw.Alignment.centerRight,
@@ -417,14 +469,23 @@ class PdfService {
             width: 220,
             child: pw.Column(
               children: [
-                _filaTotal('Subtotal', moneda.format(subtotal)),
-                _filaTotal('Impuestos', moneda.format(impuestos)),
-                _filaTotal('Total', moneda.format(total), destacado: true),
+                _filaTotal('Subtotal', formatoMoneda.format(subtotal)),
+                _filaTotal('Impuestos', formatoMoneda.format(impuestos)),
+                _filaTotal('Total', formatoMoneda.format(total), destacado: true),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  static pw.Widget _celdaDato(String valor) {
+    return pw.Expanded(
+      child: pw.Text(
+        valor.isEmpty ? '-' : valor,
+        style: const pw.TextStyle(fontSize: 9),
+      ),
     );
   }
 
