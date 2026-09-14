@@ -6,6 +6,7 @@ import '../models/cotizacion_guardada.dart';
 import '../services/db_helper.dart';
 import '../services/pdf_service.dart';
 import '../state/cotizacion_state.dart';
+import '../widgets/brand_app_bar_title.dart';
 import '../widgets/producto_thumbnail.dart';
 
 class CotizacionScreen extends StatefulWidget {
@@ -116,7 +117,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cotización'),
+        title: const BrandAppBarTitle(subtitulo: 'Armar cotización'),
         actions: [
           if (items.isNotEmpty)
             IconButton(

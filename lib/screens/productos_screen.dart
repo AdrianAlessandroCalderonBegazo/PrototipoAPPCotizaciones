@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/producto.dart';
 import '../services/db_helper.dart';
 import '../state/cotizacion_state.dart';
+import '../widgets/brand_app_bar_title.dart';
 import '../widgets/producto_thumbnail.dart';
 import 'config_screen.dart';
 
@@ -100,7 +101,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
                 ),
                 onChanged: (v) => setState(() => _busqueda = v),
               )
-            : const Text('Productos'),
+            : const BrandAppBarTitle(subtitulo: 'Catálogo de productos'),
         actions: [
           IconButton(
             icon: Icon(_buscando ? Icons.close : Icons.search),

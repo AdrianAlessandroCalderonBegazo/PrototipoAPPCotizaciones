@@ -40,6 +40,14 @@ class CotizadorApp extends StatelessWidget {
             backgroundColor: BrandColors.cian,
             foregroundColor: Colors.white,
           ),
+          navigationBarTheme: NavigationBarThemeData(
+            indicatorColor: BrandColors.cian,
+            iconTheme: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? const IconThemeData(color: Colors.white)
+                  : null,
+            ),
+          ),
         ),
         home: const _Splash(),
       ),

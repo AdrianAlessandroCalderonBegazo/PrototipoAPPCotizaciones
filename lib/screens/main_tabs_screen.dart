@@ -19,10 +19,10 @@ class MainTabsScreen extends StatefulWidget {
 class _MainTabsScreenState extends State<MainTabsScreen> {
   int _indice = 0;
 
-  static const _pantallas = [
-    ProductosScreen(),
-    CotizacionScreen(),
-    HistorialScreen(),
+  late final List<Widget> _pantallas = [
+    const ProductosScreen(),
+    const CotizacionScreen(),
+    HistorialScreen(onIrAProductos: () => setState(() => _indice = 0)),
   ];
 
   @override
