@@ -1,11 +1,13 @@
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../state/cotizacion_state.dart';
 import '../theme/brand_colors.dart';
+
+const _logoAsset = 'assets/icon/icon.png';
 
 /// Genera la cotización en PDF con el formato oficial de Inversiones ICR
 /// (el mismo de las cotizaciones que emite su Odoo): encabezado con
@@ -26,10 +28,12 @@ class PdfService {
     required List<ItemCotizacion> items,
     String cliente = '',
     String vendedor = '',
-    String? baseUrl,
   }) async {
     final numero = await _siguienteNumero();
-    final imagenes = await _descargarImagenes(items, baseUrl);
+    final imagenes = await _cargarImagenes(items);
+    final logo = pw.MemoryImage(
+      (await rootBundle.load(_logoAsset)).buffer.asUint8List(),
+    );
 
     // locale 'en_US' solo para el agrupado de miles/decimales (1,234.56);
     // el símbolo "S/ " es el de la cotización real de Inversiones ICR.
@@ -46,6 +50,7 @@ class PdfService {
         margin: const pw.EdgeInsets.all(24),
         header: (context) => _encabezado(
           context: context,
+          logo: logo,
           cliente: cliente,
           vendedor: vendedor,
           fecha: fecha,
@@ -83,16 +88,14 @@ class PdfService {
     return siguiente;
   }
 
-  /// Descarga en paralelo la foto de cada producto distinto desde el mismo
-  /// servidor local usado para sincronizar. Si no hay servidor configurado,
-  /// o una foto puntual falla, esa celda simplemente queda en blanco — no
-  /// debe impedir que se genere el resto de la cotización.
-  static Future<Map<String, Uint8List>> _descargarImagenes(
+  /// Las fotos van empaquetadas en la propia app (assets/productos/), así
+  /// que esto no depende de red ni de servidor: si un producto puntual no
+  /// trae imagen, o el archivo no está en el bundle, esa celda simplemente
+  /// queda en blanco — no debe impedir que se genere el resto del PDF.
+  static Future<Map<String, Uint8List>> _cargarImagenes(
     List<ItemCotizacion> items,
-    String? baseUrl,
   ) async {
     final resultado = <String, Uint8List>{};
-    if (baseUrl == null) return resultado;
 
     final archivos = items
         .map((i) => i.producto.archivoImagen)
@@ -103,14 +106,10 @@ class PdfService {
     await Future.wait(
       archivos.map((archivo) async {
         try {
-          final res = await http
-              .get(Uri.parse('$baseUrl/uploads/$archivo'))
-              .timeout(const Duration(seconds: 8));
-          if (res.statusCode == 200) {
-            resultado[archivo] = res.bodyBytes;
-          }
+          final data = await rootBundle.load('assets/productos/$archivo');
+          resultado[archivo] = data.buffer.asUint8List();
         } catch (_) {
-          // Sin conexión al servidor de imágenes: se omite esta foto.
+          // No está empaquetada esta foto en particular: se omite.
         }
       }),
     );
@@ -127,6 +126,7 @@ class PdfService {
 
   static pw.Widget _encabezado({
     required pw.Context context,
+    required pw.MemoryImage logo,
     required String cliente,
     required String vendedor,
     required String fecha,
@@ -141,21 +141,30 @@ class PdfService {
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
         pw.Expanded(
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              pw.Text(
-                _empresa,
-                style: pw.TextStyle(
-                  fontSize: 15,
-                  fontWeight: pw.FontWeight.bold,
-                  color: BrandColors.pdfAzulMarino,
+              pw.Image(logo, height: 34, fit: pw.BoxFit.contain),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      _empresa,
+                      style: pw.TextStyle(
+                        fontSize: 15,
+                        fontWeight: pw.FontWeight.bold,
+                        color: BrandColors.pdfAzulMarino,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      _direccion,
+                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                    ),
+                  ],
                 ),
-              ),
-              pw.SizedBox(height: 3),
-              pw.Text(
-                _direccion,
-                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
               ),
             ],
           ),
