@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/db_helper.dart';
+import 'state/checklist_state.dart';
 import 'state/cotizacion_state.dart';
 import 'screens/main_tabs_screen.dart';
 import 'theme/brand_colors.dart';
@@ -25,8 +26,11 @@ class CotizadorApp extends StatelessWidget {
       onTertiary: Colors.white,
     );
 
-    return ChangeNotifierProvider(
-      create: (_) => CotizacionState(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CotizacionState()),
+        ChangeNotifierProvider(create: (_) => ChecklistState()),
+      ],
       child: MaterialApp(
         title: 'Cotizador ICR',
         debugShowCheckedModeBanner: false,

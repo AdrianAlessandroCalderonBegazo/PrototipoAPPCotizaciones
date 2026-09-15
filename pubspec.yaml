@@ -39,6 +39,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/productos_seed.json
+    - assets/checklist_seed.json
     - assets/productos/
     - assets/icon/icon.png
     - assets/animations/
@@ -51,4 +52,8 @@ flutter:
         - asset: assets/fonts/IBMPlexSans-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/IBMPlexSans-Bold.ttf
+          weight: 700
+    - family: Dancing Script
+      fonts:
+        - asset: assets/fonts/DancingScript-Bold.ttf
           weight: 700

@@ -6,8 +6,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../state/checklist_state.dart';
 import '../state/cotizacion_state.dart';
 import '../theme/brand_colors.dart';
+
+const _firmaAsset = 'assets/fonts/DancingScript-Bold.ttf';
 
 const _logoAsset = 'assets/icon/icon.png';
 
@@ -116,6 +119,282 @@ class PdfService {
     final archivo = File('${carpeta.path}/cotizacion_${formatearNumero(numero)}.pdf');
     await archivo.writeAsBytes(bytes);
     return archivo.path;
+  }
+
+  /// PDF del checklist de obra: mismo encabezado de marca, una sección por
+  /// categoría con sus ítems marcados/sin marcar, y la firma del
+  /// responsable al final (en la tipografía cursiva, simulando una firma).
+  static Future<Uint8List> generarChecklist({
+    required List<ChecklistCategoriaState> categorias,
+    required String responsable,
+  }) async {
+    final logo = pw.MemoryImage((await rootBundle.load(_logoAsset)).buffer.asUint8List());
+    pw.Font? firmaFont;
+    try {
+      firmaFont = pw.Font.ttf(await rootBundle.load(_firmaAsset));
+    } catch (_) {
+      firmaFont = null;
+    }
+
+    final fecha = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
+    final totalItems = categorias.fold<int>(0, (s, c) => s + c.items.length);
+    final totalMarcados = categorias.fold<int>(0, (s, c) => s + c.totalMarcados);
+
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        margin: const pw.EdgeInsets.all(24),
+        header: (context) => _encabezadoChecklist(
+          context: context,
+          logo: logo,
+          responsable: responsable,
+          fecha: fecha,
+          totalItems: totalItems,
+          totalMarcados: totalMarcados,
+        ),
+        build: (context) => [
+          for (final cat in categorias) ..._seccionCategoriaChecklist(cat),
+          pw.SizedBox(height: 24),
+          _firmaChecklist(responsable, firmaFont),
+        ],
+      ),
+    );
+
+    return doc.save();
+  }
+
+  /// Guarda el PDF del checklist en su propia carpeta (aparte de las
+  /// cotizaciones), con un nombre único por fecha/hora.
+  static Future<String> guardarChecklistEnDisco(Uint8List bytes) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final carpeta = Directory('${dir.path}/checklists');
+    if (!await carpeta.exists()) {
+      await carpeta.create(recursive: true);
+    }
+    final marca = DateTime.now().millisecondsSinceEpoch;
+    final archivo = File('${carpeta.path}/checklist_$marca.pdf');
+    await archivo.writeAsBytes(bytes);
+    return archivo.path;
+  }
+
+  static pw.Widget _encabezadoChecklist({
+    required pw.Context context,
+    required pw.MemoryImage logo,
+    required String responsable,
+    required String fecha,
+    required int totalItems,
+    required int totalMarcados,
+  }) {
+    final tarjetaEmpresa = pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Expanded(
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Image(logo, height: 34, fit: pw.BoxFit.contain),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      _empresa,
+                      style: pw.TextStyle(
+                        fontSize: 15,
+                        fontWeight: pw.FontWeight.bold,
+                        color: BrandColors.pdfAzulMarino,
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      _direccion,
+                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400),
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text(
+                'CHECKLIST DE OBRA',
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                  color: BrandColors.pdfCian,
+                ),
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text(fecha, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (context.pageNumber != 1) {
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [tarjetaEmpresa, pw.SizedBox(height: 10)],
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        tarjetaEmpresa,
+        pw.SizedBox(height: 14),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Responsable',
+                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                  ),
+                  pw.Text(
+                    responsable.trim().isEmpty ? '-' : responsable.trim(),
+                    style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+                  ),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text(
+                    'Ítems marcados',
+                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                  ),
+                  pw.Text(
+                    '$totalMarcados / $totalItems',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 13,
+                      color: BrandColors.pdfCian,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 10),
+      ],
+    );
+  }
+
+  static List<pw.Widget> _seccionCategoriaChecklist(ChecklistCategoriaState cat) {
+    return [
+      pw.Container(
+        margin: const pw.EdgeInsets.only(top: 12, bottom: 4),
+        color: BrandColors.pdfCian,
+        padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(
+              child: pw.Text(
+                cat.nombre,
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
+                ),
+              ),
+            ),
+            pw.Text(
+              '${cat.totalMarcados}/${cat.items.length}',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.white),
+            ),
+          ],
+        ),
+      ),
+      ...cat.items.asMap().entries.map((e) => _filaItemChecklist(e.key, e.value)),
+    ];
+  }
+
+  static pw.Widget _filaItemChecklist(int index, ChecklistItemEntry item) {
+    return pw.Container(
+      color: index.isEven ? PdfColors.white : BrandColors.pdfTint(BrandColors.pdfCian, 0.94),
+      padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+      child: pw.Row(
+        children: [
+          pw.Container(
+            width: 12,
+            height: 12,
+            alignment: pw.Alignment.center,
+            decoration: pw.BoxDecoration(
+              color: item.marcado ? BrandColors.pdfCian : PdfColors.white,
+              border: pw.Border.all(
+                color: item.marcado ? BrandColors.pdfCian : PdfColors.grey400,
+              ),
+              borderRadius: pw.BorderRadius.circular(3),
+            ),
+            child: item.marcado
+                ? pw.Text(
+                    'X',
+                    style: const pw.TextStyle(
+                      fontSize: 8,
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  )
+                : null,
+          ),
+          pw.SizedBox(width: 8),
+          pw.Expanded(
+            child: pw.Text(
+              item.esExtra
+                  ? '${item.texto} (agregado${item.esProducto ? ' · catálogo' : ''})'
+                  : item.texto,
+              style: const pw.TextStyle(fontSize: 9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _firmaChecklist(String responsable, pw.Font? firmaFont) {
+    if (responsable.trim().isEmpty) return pw.SizedBox();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          responsable.trim(),
+          style: pw.TextStyle(font: firmaFont, fontSize: 26, color: BrandColors.pdfAzulMarino),
+        ),
+        pw.Container(
+          width: 180,
+          height: 0.8,
+          color: PdfColors.grey400,
+          margin: const pw.EdgeInsets.only(top: 2, bottom: 4),
+        ),
+        pw.Text(
+          'Responsable en terreno',
+          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+        ),
+      ],
+    );
   }
 
   /// Las fotos van empaquetadas en la propia app (assets/productos/), así

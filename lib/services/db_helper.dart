@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import '../models/checklist_guardado.dart';
 import '../models/cotizacion_guardada.dart';
 import '../models/producto.dart';
 
@@ -22,16 +23,20 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'cotizador_icr.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await _crearTablaProductos(db);
         await _crearTablaCotizacionesGuardadas(db);
+        await _crearTablaChecklistsGuardados(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         // No se toca la tabla productos: no hay que perder un catálogo que
         // el usuario ya sincronizó con su servidor.
         if (oldVersion < 2) {
           await _crearTablaCotizacionesGuardadas(db);
+        }
+        if (oldVersion < 3) {
+          await _crearTablaChecklistsGuardados(db);
         }
       },
     );
@@ -63,6 +68,20 @@ class DbHelper {
         fecha TEXT NOT NULL,
         total REAL NOT NULL,
         archivo_pdf TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _crearTablaChecklistsGuardados(Database db) async {
+    await db.execute('''
+      CREATE TABLE checklists_guardados (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        responsable TEXT NOT NULL,
+        fecha TEXT NOT NULL,
+        total_items INTEGER NOT NULL,
+        items_marcados INTEGER NOT NULL,
+        resumen_texto TEXT NOT NULL,
+        archivo_pdf TEXT
       )
     ''');
   }
@@ -157,5 +176,28 @@ class DbHelper {
     final db = await database;
     final result = await db.query('cotizaciones_guardadas', orderBy: 'fecha DESC');
     return result.map((e) => CotizacionGuardada.fromMap(e)).toList();
+  }
+
+  /// Devuelve el id de la fila insertada, para poder actualizarla después
+  /// (ej. cuando recién en ese momento se genera el PDF).
+  Future<int> guardarChecklist(ChecklistGuardado checklist) async {
+    final db = await database;
+    return db.insert('checklists_guardados', checklist.toMap());
+  }
+
+  Future<void> actualizarChecklist(int id, ChecklistGuardado checklist) async {
+    final db = await database;
+    await db.update(
+      'checklists_guardados',
+      checklist.toMap(),
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<List<ChecklistGuardado>> getChecklistsGuardados() async {
+    final db = await database;
+    final result = await db.query('checklists_guardados', orderBy: 'fecha DESC');
+    return result.map((e) => ChecklistGuardado.fromMap(e)).toList();
   }
 }

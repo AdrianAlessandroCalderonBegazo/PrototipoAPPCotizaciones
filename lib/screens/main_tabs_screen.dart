@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../state/checklist_state.dart';
 import '../state/cotizacion_state.dart';
+import 'checklist_screen.dart';
 import 'cotizacion_screen.dart';
 import 'historial_screen.dart';
 import 'productos_screen.dart';
 
-/// Barra de navegación de abajo con las tres pestañas de la app. Usa
+/// Barra de navegación de abajo con las cuatro pestañas de la app. Usa
 /// IndexedStack para que cada pestaña conserve su estado (lo que escribiste
-/// en el formulario, qué categorías tenías desplegadas) al cambiar de una
-/// a otra.
+/// en el formulario, qué categorías tenías desplegadas, en qué categoría
+/// del checklist ibas) al cambiar de una a otra.
 class MainTabsScreen extends StatefulWidget {
   const MainTabsScreen({super.key});
 
@@ -22,9 +24,11 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
   late final List<Widget> _pantallas = [
     ProductosScreen(onVerCotizacion: () => setState(() => _indice = 1)),
     const CotizacionScreen(),
+    const ChecklistScreen(),
     HistorialScreen(
       onIrAProductos: () => setState(() => _indice = 0),
       onNuevaCotizacion: _iniciarNuevaCotizacion,
+      onNuevoChecklist: _iniciarNuevoChecklist,
     ),
   ];
 
@@ -54,6 +58,32 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
     if (mounted) setState(() => _indice = 1);
   }
 
+  Future<void> _iniciarNuevoChecklist() async {
+    final checklist = context.read<ChecklistState>();
+    if (checklist.tieneProgreso) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('¿Empezar un checklist nuevo?'),
+          content: const Text('Se perderá el progreso del checklist que tienes a medias ahora.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Empezar nuevo'),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true) return;
+      await checklist.reiniciar();
+    }
+    if (mounted) setState(() => _indice = 2);
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalItems = context.watch<CotizacionState>().totalItems;
@@ -77,6 +107,11 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
             ),
             selectedIcon: const Icon(Icons.request_quote),
             label: 'Cotización',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.checklist_outlined),
+            selectedIcon: Icon(Icons.checklist),
+            label: 'Checklist',
           ),
           const NavigationDestination(
             icon: Icon(Icons.history_outlined),

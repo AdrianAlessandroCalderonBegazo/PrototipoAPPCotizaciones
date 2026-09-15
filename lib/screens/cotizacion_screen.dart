@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,8 +13,10 @@ import '../state/cotizacion_state.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/brand_app_bar_title.dart';
+import '../widgets/buscador_productos.dart';
 import '../widgets/lottie_gate_screen.dart';
 import '../widgets/producto_thumbnail.dart';
+import '../widgets/seccion_card.dart';
 
 class CotizacionScreen extends StatefulWidget {
   const CotizacionScreen({super.key});
@@ -125,7 +126,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _BuscadorProductos(),
+      builder: (_) => const BuscadorProductos(),
     );
     if (producto != null && mounted) {
       context.read<CotizacionState>().agregarUno(producto);
@@ -247,7 +248,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          _SeccionCard(
+          SeccionCard(
             icono: Icons.person_outline,
             color: BrandColors.azulOscuro,
             titulo: 'Datos del cliente',
@@ -292,7 +293,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
               ),
             ],
           ),
-          _SeccionCard(
+          SeccionCard(
             icono: Icons.account_balance_outlined,
             color: BrandColors.cian,
             titulo: 'Datos bancarios (opcional)',
@@ -342,7 +343,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
               ),
             ],
           ),
-          _SeccionCard(
+          SeccionCard(
             icono: Icons.shopping_cart_outlined,
             color: BrandColors.azulMarino,
             titulo: 'Productos (${cotizacion.totalItems})',
@@ -442,65 +443,6 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
   }
 }
 
-/// Tarjeta redondeada con un ícono de cabecera — el mismo lenguaje visual
-/// que las tarjetas de categoría de Productos, para que la pantalla se
-/// sienta parte de la misma app.
-class _SeccionCard extends StatelessWidget {
-  final IconData icono;
-  final Color color;
-  final String titulo;
-  final List<Widget> children;
-
-  const _SeccionCard({
-    required this.icono,
-    required this.color,
-    required this.titulo,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icono, size: 18, color: color),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                titulo,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: BrandColors.azulMarino,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
 /// Fila de un producto ya agregado al carrito: cantidad con stepper +/- y
 /// un botón para quitarlo del todo, sin tener que bajarlo hasta cero.
 class _FilaCarrito extends StatelessWidget {
@@ -582,158 +524,6 @@ class _FilaCarrito extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 1),
         decoration: BoxDecoration(color: fondo, borderRadius: BorderRadius.circular(13)),
         child: Icon(icono, size: 14, color: iconoColor),
-      ),
-    );
-  }
-}
-
-/// Buscador en hoja modal para agregar un producto sin salir de Cotización
-/// — usa el mismo `buscar()` del catálogo local que ya tenía DbHelper.
-class _BuscadorProductos extends StatefulWidget {
-  const _BuscadorProductos();
-
-  @override
-  State<_BuscadorProductos> createState() => _BuscadorProductosState();
-}
-
-class _BuscadorProductosState extends State<_BuscadorProductos> {
-  final _controller = TextEditingController();
-  List<Producto> _resultados = [];
-  bool _buscando = false;
-  Timer? _debounce;
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onChanged(String query) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () => _buscar(query));
-  }
-
-  Future<void> _buscar(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() => _resultados = []);
-      return;
-    }
-    setState(() => _buscando = true);
-    final resultados = await DbHelper.instance.buscar(query.trim());
-    if (!mounted) return;
-    setState(() {
-      _resultados = resultados;
-      _buscando = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 4),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Agregar producto',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 17,
-                        color: BrandColors.azulMarino,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _controller,
-                autofocus: true,
-                onChanged: _onChanged,
-                decoration: InputDecoration(
-                  hintText: 'Buscar por nombre o código...',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: _buscando
-                  ? const Center(child: CircularProgressIndicator())
-                  : _resultados.isEmpty
-                      ? ListView(
-                          controller: scrollController,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 60),
-                              child: Center(
-                                child: Text(
-                                  _controller.text.trim().isEmpty
-                                      ? 'Escribe para buscar en el catálogo.'
-                                      : 'No se encontró nada para "${_controller.text}".',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.grey.shade600),
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      : ListView.builder(
-                          controller: scrollController,
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                          itemCount: _resultados.length,
-                          itemBuilder: (context, index) {
-                            final p = _resultados[index];
-                            return ListTile(
-                              leading: ProductoThumbnail(archivoImagen: p.archivoImagen),
-                              title: Text(
-                                p.nombre,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Text('S/ ${(p.precioVenta ?? 0).toStringAsFixed(2)}'),
-                              trailing: const Icon(Icons.add_circle, color: BrandColors.cian),
-                              onTap: () => Navigator.pop(context, p),
-                            );
-                          },
-                        ),
-            ),
-          ],
-        ),
       ),
     );
   }
