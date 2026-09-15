@@ -88,6 +88,106 @@ class _HistorialScreenState extends State<HistorialScreen> {
     );
   }
 
+  Future<void> _eliminarCotizacion(CotizacionGuardada c) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('¿Eliminar esta cotización?'),
+        content: Text(
+          '"${c.cliente.isEmpty ? 'Cliente sin nombre' : c.cliente}" se eliminará del historial. '
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    await DbHelper.instance.eliminarCotizacion(c.id!);
+    try {
+      final archivo = File(c.archivoPdf);
+      if (await archivo.exists()) await archivo.delete();
+    } catch (_) {
+      // No pasa nada si el archivo ya no está o no se puede borrar.
+    }
+    if (mounted) _cargar();
+  }
+
+  Future<void> _eliminarChecklist(ChecklistGuardado c) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('¿Eliminar este checklist?'),
+        content: const Text('Se eliminará del historial. Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    await DbHelper.instance.eliminarChecklist(c.id!);
+    final ruta = c.archivoPdf;
+    if (ruta != null) {
+      try {
+        final archivo = File(ruta);
+        if (await archivo.exists()) await archivo.delete();
+      } catch (_) {
+        // No pasa nada si el archivo ya no está o no se puede borrar.
+      }
+    }
+    if (mounted) _cargar();
+  }
+
+  Future<void> _mostrarGestionar() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '¿Qué quieres crear?',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: BrandColors.azulMarino),
+            ),
+            const SizedBox(height: 14),
+            _OpcionGestionar(
+              icono: Icons.request_quote_outlined,
+              color: BrandColors.cian,
+              titulo: 'Gestionar Cotización',
+              subtitulo: 'Crear una cotización nueva',
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _filtro = _FiltroHistorial.cotizaciones);
+                widget.onNuevaCotizacion?.call();
+              },
+            ),
+            const SizedBox(height: 10),
+            _OpcionGestionar(
+              icono: Icons.checklist,
+              color: BrandColors.azulOscuro,
+              titulo: 'Gestionar Checklist',
+              subtitulo: 'Crear un checklist de obra nuevo',
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _filtro = _FiltroHistorial.checklists);
+                widget.onNuevoChecklist?.call();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final formatoFecha = DateFormat('dd/MM/yyyy · HH:mm');
@@ -117,9 +217,9 @@ class _HistorialScreenState extends State<HistorialScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: esCotizaciones ? widget.onNuevaCotizacion : widget.onNuevoChecklist,
+        onPressed: _mostrarGestionar,
         icon: const Icon(Icons.add),
-        label: Text(esCotizaciones ? 'Nueva cotización' : 'Nuevo checklist'),
+        label: const Text('Gestionar'),
       ),
     );
   }
@@ -148,6 +248,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
               formatoFecha: formatoFecha,
               onPreview: () => _previsualizarCotizacion(c),
               onShare: () => _compartirCotizacion(c),
+              onDelete: () => _eliminarCotizacion(c),
             ),
           ),
         );
@@ -181,6 +282,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
                 context,
                 MaterialPageRoute(builder: (_) => _ChecklistDetalleScreen(checklist: c)),
               ),
+              onDelete: () => _eliminarChecklist(c),
             ),
           ),
         );
@@ -254,17 +356,83 @@ class _SelectorFiltro extends StatelessWidget {
   }
 }
 
+class _OpcionGestionar extends StatelessWidget {
+  final IconData icono;
+  final Color color;
+  final String titulo;
+  final String subtitulo;
+  final VoidCallback onTap;
+
+  const _OpcionGestionar({
+    required this.icono,
+    required this.color,
+    required this.titulo,
+    required this.subtitulo,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icono, color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: BrandColors.azulMarino,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(subtitulo, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TarjetaCotizacion extends StatelessWidget {
   final CotizacionGuardada cotizacion;
   final DateFormat formatoFecha;
   final VoidCallback onPreview;
   final VoidCallback onShare;
+  final VoidCallback onDelete;
 
   const _TarjetaCotizacion({
     required this.cotizacion,
     required this.formatoFecha,
     required this.onPreview,
     required this.onShare,
+    required this.onDelete,
   });
 
   @override
@@ -310,6 +478,15 @@ class _TarjetaCotizacion extends StatelessWidget {
                 const Text(
                   'Ver',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: BrandColors.cian),
+                ),
+                const SizedBox(width: 10),
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: onDelete,
+                  child: const Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                  ),
                 ),
               ],
             ),
@@ -402,11 +579,13 @@ class _TarjetaChecklist extends StatelessWidget {
   final ChecklistGuardado checklist;
   final DateFormat formatoFecha;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   const _TarjetaChecklist({
     required this.checklist,
     required this.formatoFecha,
     required this.onTap,
+    required this.onDelete,
   });
 
   @override
@@ -453,6 +632,15 @@ class _TarjetaChecklist extends StatelessWidget {
                   const SizedBox(width: 6),
                 ],
                 Icon(Icons.chevron_right, size: 16, color: colorScheme.outline),
+                const SizedBox(width: 10),
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: onDelete,
+                  child: const Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 4),

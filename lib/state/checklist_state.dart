@@ -97,19 +97,21 @@ class ChecklistState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void agregarExtra(String texto, {bool esProducto = false}) {
+  /// Agrega un ítem nuevo a una categoría cualquiera (no solo la actual) —
+  /// lo usa el resumen final, donde se ven y editan las 10 a la vez.
+  void agregarItemEn(int categoriaIndex, String texto, {bool esProducto = false}) {
     final limpio = texto.trim();
     if (limpio.isEmpty) return;
-    categoriaActual.items.add(
+    _categorias[categoriaIndex].items.add(
       ChecklistItemEntry(texto: limpio, marcado: true, esExtra: true, esProducto: esProducto),
     );
     notifyListeners();
   }
 
-  void quitarExtra(int itemIndex) {
-    final item = categoriaActual.items[itemIndex];
-    if (!item.esExtra) return;
-    categoriaActual.items.removeAt(itemIndex);
+  /// Elimina cualquier ítem de cualquier categoría (del Excel o agregado a
+  /// mano) — quien llama es responsable de confirmar antes con el usuario.
+  void eliminarItemEn(int categoriaIndex, int itemIndex) {
+    _categorias[categoriaIndex].items.removeAt(itemIndex);
     notifyListeners();
   }
 

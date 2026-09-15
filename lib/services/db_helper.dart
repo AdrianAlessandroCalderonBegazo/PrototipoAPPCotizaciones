@@ -178,6 +178,11 @@ class DbHelper {
     return result.map((e) => CotizacionGuardada.fromMap(e)).toList();
   }
 
+  Future<void> eliminarCotizacion(int id) async {
+    final db = await database;
+    await db.delete('cotizaciones_guardadas', where: 'id = ?', whereArgs: [id]);
+  }
+
   /// Devuelve el id de la fila insertada, para poder actualizarla después
   /// (ej. cuando recién en ese momento se genera el PDF).
   Future<int> guardarChecklist(ChecklistGuardado checklist) async {
@@ -193,6 +198,11 @@ class DbHelper {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  Future<void> eliminarChecklist(int id) async {
+    final db = await database;
+    await db.delete('checklists_guardados', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<List<ChecklistGuardado>> getChecklistsGuardados() async {
