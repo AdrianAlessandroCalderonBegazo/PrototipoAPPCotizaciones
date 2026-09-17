@@ -9,15 +9,15 @@ import '../widgets/animated_pressable.dart';
 import '../widgets/brand_app_bar_title.dart';
 import '../widgets/producto_thumbnail.dart';
 import 'config_screen.dart';
+import 'generar_cotizacion_screen.dart';
 
-/// Pestaña "Productos": lista de categorías tipo acordeón — al presionar
-/// una categoría, se despliegan sus productos con checkbox justo debajo,
-/// sin navegar a otra pantalla. La búsqueda filtra tanto por nombre de
-/// categoría como por nombre/referencia de producto.
+/// Pestaña "Cotizar": lista de categorías tipo acordeón — al presionar una
+/// categoría, se despliegan sus productos con checkbox justo debajo, sin
+/// navegar a otra pantalla. La búsqueda filtra tanto por nombre de
+/// categoría como por nombre/referencia de producto. Al elegir productos,
+/// "Generar cotización" empuja el formulario final.
 class ProductosScreen extends StatefulWidget {
-  final VoidCallback? onVerCotizacion;
-
-  const ProductosScreen({super.key, this.onVerCotizacion});
+  const ProductosScreen({super.key});
 
   @override
   State<ProductosScreen> createState() => _ProductosScreenState();
@@ -83,7 +83,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const BrandAppBarTitle(subtitulo: 'Catálogo de productos'),
+        title: const BrandAppBarTitle(subtitulo: 'Selecciona productos'),
         actions: [
           IconButton(
             icon: const Icon(Icons.sync),
@@ -157,7 +157,12 @@ class _ProductosScreenState extends State<ProductosScreen> {
         ],
       ),
       bottomNavigationBar: cotizacion.totalItems > 0
-          ? _ResumenParcialBar(cotizacion: cotizacion, onTap: widget.onVerCotizacion)
+          ? _ResumenParcialBar(
+              cotizacion: cotizacion,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const GenerarCotizacionScreen()),
+              ),
+            )
           : null,
     );
   }
@@ -194,10 +199,10 @@ class _ResumenParcialBar extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.shopping_cart, color: BrandColors.cian, size: 20),
+                  const Icon(Icons.request_quote_outlined, color: BrandColors.cian, size: 20),
                   const SizedBox(width: 10),
                   Text(
-                    'Resumen parcial (${cotizacion.totalItems} items)',
+                    'Generar cotización (${cotizacion.totalItems})',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

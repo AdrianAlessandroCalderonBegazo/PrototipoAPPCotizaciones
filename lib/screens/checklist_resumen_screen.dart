@@ -1,6 +1,5 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../models/checklist_guardado.dart';
 import '../models/producto.dart';
@@ -13,11 +12,12 @@ import '../widgets/brand_app_bar_title.dart';
 import '../widgets/buscador_productos.dart';
 import '../widgets/lottie_gate_screen.dart';
 import '../widgets/seccion_card.dart';
+import 'checklist_guardado_screen.dart';
 
 /// Resumen final del checklist, después de pasar por las 10 categorías:
 /// acá se puede agregar o quitar cualquier ítem de cualquier categoría, y
-/// una vez conforme, "Guardar checklist" lo manda al historial — recién
-/// ahí aparecen las opciones de copiar el texto o generar el PDF.
+/// una vez conforme, "Guardar checklist" lo manda al historial, genera el
+/// PDF y lleva a la pantalla de confirmación con la vista previa.
 class ChecklistResumenScreen extends StatefulWidget {
   const ChecklistResumenScreen({super.key});
 
@@ -27,10 +27,7 @@ class ChecklistResumenScreen extends StatefulWidget {
 
 class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
   final _responsableController = TextEditingController();
-  bool _generando = false;
   bool _guardando = false;
-  bool _guardado = false;
-  int? _idGuardado;
 
   @override
   void dispose() {
@@ -46,75 +43,56 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
       itemsMarcados: checklist.totalMarcados,
       resumenTexto: checklist.generarTextoResumen(responsable: _responsableController.text),
       archivoPdf: archivoPdf,
+      categoriasJson: checklist.categoriasAJson(),
     );
   }
 
-  Future<void> _guardarChecklist(ChecklistState checklist) async {
-    setState(() => _guardando = true);
-    _idGuardado = await DbHelper.instance.guardarChecklist(_construirRegistro(checklist));
-    if (!mounted) return;
-    setState(() {
-      _guardando = false;
-      _guardado = true;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Checklist guardado en el historial.')),
-    );
-  }
-
-  /// Si ya se guardó, mantiene actualizado ese mismo registro (por si se
-  /// editó algo, o recién ahora se generó el PDF) en vez de duplicarlo.
-  Future<void> _actualizarSiGuardado(ChecklistState checklist, {String? archivoPdf}) async {
-    if (_idGuardado == null) return;
-    await DbHelper.instance.actualizarChecklist(
-      _idGuardado!,
-      _construirRegistro(checklist, archivoPdf: archivoPdf),
-    );
-  }
-
-  Future<(Uint8List, String)> _procesoDeGeneracion(ChecklistState checklist) async {
+  Future<(Uint8List, String)> _procesoDeGuardado(ChecklistState checklist) async {
     final bytes = await PdfService.generarChecklist(
       categorias: checklist.categorias,
       responsable: _responsableController.text,
     );
     final ruta = await PdfService.guardarChecklistEnDisco(bytes);
-    await _actualizarSiGuardado(checklist, archivoPdf: ruta);
+    await DbHelper.instance.guardarChecklist(_construirRegistro(checklist, archivoPdf: ruta));
     return (bytes, ruta);
   }
 
-  Future<void> _generarPdf(ChecklistState checklist) async {
-    setState(() => _generando = true);
+  Future<void> _guardarChecklist(ChecklistState checklist) async {
+    setState(() => _guardando = true);
+    final texto = checklist.generarTextoResumen(responsable: _responsableController.text);
+    final totalMarcados = checklist.totalMarcados;
+    final totalItems = checklist.totalItems;
+
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => LottieGateScreen<(Uint8List, String)>(
           lottieAsset: 'assets/animations/verification.lottie',
-          mensaje: 'Generando tu checklist...',
-          proceso: () => _procesoDeGeneracion(checklist),
-          alTerminar: (context, resultado) async {
+          mensaje: 'Guardando tu checklist...',
+          proceso: () => _procesoDeGuardado(checklist),
+          alTerminar: (context, resultado) {
             final (bytes, _) = resultado;
             Navigator.of(context).pop();
-            await Printing.sharePdf(bytes: bytes, filename: 'checklist_de_obra.pdf');
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => ChecklistGuardadoScreen(
+                  bytes: bytes,
+                  textoResumen: texto,
+                  totalMarcados: totalMarcados,
+                  totalItems: totalItems,
+                ),
+              ),
+            );
           },
           alFallar: (context, error) {
             Navigator.of(context).pop();
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('No se pudo generar el PDF: $error')),
+              SnackBar(content: Text('No se pudo guardar el checklist: $error')),
             );
           },
         ),
       ),
     );
-    if (mounted) setState(() => _generando = false);
-  }
-
-  Future<void> _copiarWhatsapp(ChecklistState checklist) async {
-    final texto = checklist.generarTextoResumen(responsable: _responsableController.text);
-    await Clipboard.setData(ClipboardData(text: texto));
-    await _actualizarSiGuardado(checklist);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Checklist copiado — pégalo donde quieras enviarlo.')),
-    );
+    if (mounted) setState(() => _guardando = false);
   }
 
   Future<void> _empezarNuevo(ChecklistState checklist) async {
@@ -264,53 +242,21 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: _guardado
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _copiarWhatsapp(checklist),
-                        icon: const Icon(Icons.chat_outlined),
-                        label: const Text('Copiar'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(color: BrandColors.cian),
-                          foregroundColor: BrandColors.azulMarino,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: _generando ? null : () => _generarPdf(checklist),
-                        icon: _generando
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.picture_as_pdf_outlined),
-                        label: Text(_generando ? 'Generando...' : 'Generar PDF'),
-                        style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                      ),
-                    ),
-                  ],
-                )
-              : SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _guardando ? null : () => _guardarChecklist(checklist),
-                    icon: _guardando
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: Text(_guardando ? 'Guardando...' : 'Guardar checklist'),
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                  ),
-                ),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _guardando ? null : () => _guardarChecklist(checklist),
+              icon: _guardando
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(_guardando ? 'Guardando...' : 'Guardar checklist'),
+              style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            ),
+          ),
         ),
       ),
     );

@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/checklist_state.dart';
 import '../state/cotizacion_state.dart';
+import '../state/navegacion_state.dart';
+import 'chat_screen.dart';
 import 'checklist_screen.dart';
-import 'cotizacion_screen.dart';
 import 'historial_screen.dart';
+import 'home_screen.dart';
 import 'productos_screen.dart';
 
-/// Barra de navegación de abajo con las cuatro pestañas de la app. Usa
-/// IndexedStack para que cada pestaña conserve su estado (lo que escribiste
-/// en el formulario, qué categorías tenías desplegadas, en qué categoría
-/// del checklist ibas) al cambiar de una a otra.
+/// Barra de navegación de abajo con las cinco pestañas de la app. Usa
+/// IndexedStack para que cada pestaña conserve su estado (lo que
+/// escribiste, qué categorías tenías desplegadas, en qué categoría del
+/// checklist ibas) al cambiar de una a otra. El índice activo vive en
+/// NavegacionState (no como estado local) para que una pantalla empujada
+/// en profundidad — como la confirmación al crear una cotización o
+/// guardar un checklist — pueda pedir "volver al inicio" sin necesitar un
+/// callback pasado a mano por cada nivel de navegación.
 class MainTabsScreen extends StatefulWidget {
   const MainTabsScreen({super.key});
 
@@ -19,17 +25,16 @@ class MainTabsScreen extends StatefulWidget {
 }
 
 class _MainTabsScreenState extends State<MainTabsScreen> {
-  int _indice = 0;
-
   late final List<Widget> _pantallas = [
-    ProductosScreen(onVerCotizacion: () => setState(() => _indice = 1)),
-    const CotizacionScreen(),
-    const ChecklistScreen(),
     HistorialScreen(
-      onIrAProductos: () => setState(() => _indice = 0),
+      onIrAProductos: () => context.read<NavegacionState>().irA(TabsApp.cotizar),
       onNuevaCotizacion: _iniciarNuevaCotizacion,
       onNuevoChecklist: _iniciarNuevoChecklist,
     ),
+    const ProductosScreen(),
+    const HomeScreen(),
+    const ChecklistScreen(),
+    const ChatScreen(),
   ];
 
   Future<void> _iniciarNuevaCotizacion() async {
@@ -55,7 +60,7 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
       if (confirmar != true) return;
       cotizacion.limpiar();
     }
-    if (mounted) setState(() => _indice = 1);
+    if (mounted) context.read<NavegacionState>().irA(TabsApp.cotizar);
   }
 
   Future<void> _iniciarNuevoChecklist() async {
@@ -81,23 +86,24 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
       if (confirmar != true) return;
       await checklist.reiniciar();
     }
-    if (mounted) setState(() => _indice = 2);
+    if (mounted) context.read<NavegacionState>().irA(TabsApp.checklist);
   }
 
   @override
   Widget build(BuildContext context) {
     final totalItems = context.watch<CotizacionState>().totalItems;
+    final indice = context.watch<NavegacionState>().indice;
 
     return Scaffold(
-      body: IndexedStack(index: _indice, children: _pantallas),
+      body: IndexedStack(index: indice, children: _pantallas),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _indice,
-        onDestinationSelected: (i) => setState(() => _indice = i),
+        selectedIndex: indice,
+        onDestinationSelected: (i) => context.read<NavegacionState>().irA(i),
         destinations: [
           const NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2),
-            label: 'Productos',
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Historial',
           ),
           NavigationDestination(
             icon: Badge(
@@ -106,7 +112,12 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
               child: const Icon(Icons.request_quote_outlined),
             ),
             selectedIcon: const Icon(Icons.request_quote),
-            label: 'Cotización',
+            label: 'Cotizar',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
           ),
           const NavigationDestination(
             icon: Icon(Icons.checklist_outlined),
@@ -114,9 +125,9 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
             label: 'Checklist',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'Historial',
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'Chat',
           ),
         ],
       ),

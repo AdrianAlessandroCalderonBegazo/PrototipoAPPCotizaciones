@@ -23,7 +23,7 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'cotizador_icr.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await _crearTablaProductos(db);
         await _crearTablaCotizacionesGuardadas(db);
@@ -37,6 +37,9 @@ class DbHelper {
         }
         if (oldVersion < 3) {
           await _crearTablaChecklistsGuardados(db);
+        }
+        if (oldVersion < 4) {
+          await _agregarColumnasDetalle(db);
         }
       },
     );
@@ -65,9 +68,16 @@ class DbHelper {
         numero TEXT NOT NULL,
         cliente TEXT NOT NULL,
         ruc_dni TEXT,
+        telefono TEXT,
+        vendedor TEXT,
+        banco TEXT,
+        moneda TEXT,
+        nro_cuenta TEXT,
+        cci TEXT,
         fecha TEXT NOT NULL,
         total REAL NOT NULL,
-        archivo_pdf TEXT NOT NULL
+        archivo_pdf TEXT NOT NULL,
+        items_json TEXT
       )
     ''');
   }
@@ -81,9 +91,39 @@ class DbHelper {
         total_items INTEGER NOT NULL,
         items_marcados INTEGER NOT NULL,
         resumen_texto TEXT NOT NULL,
-        archivo_pdf TEXT
+        archivo_pdf TEXT,
+        categorias_json TEXT
       )
     ''');
+  }
+
+  /// Upgrade desde una versión anterior a la 4: agrega las columnas nuevas
+  /// de detalle a las tablas que ya existían, sin tocar las filas que ya
+  /// había (ALTER TABLE ADD COLUMN no borra nada, solo agrega la columna
+  /// vacía). Si una columna ya existe (por ejemplo, porque la tabla se
+  /// creó recién con el esquema nuevo en este mismo upgrade) se ignora.
+  Future<void> _agregarColumnasDetalle(Database db) async {
+    const columnasCotizacion = [
+      'telefono',
+      'vendedor',
+      'banco',
+      'moneda',
+      'nro_cuenta',
+      'cci',
+      'items_json',
+    ];
+    for (final columna in columnasCotizacion) {
+      try {
+        await db.execute('ALTER TABLE cotizaciones_guardadas ADD COLUMN $columna TEXT');
+      } catch (_) {
+        // La columna ya existe.
+      }
+    }
+    try {
+      await db.execute('ALTER TABLE checklists_guardados ADD COLUMN categorias_json TEXT');
+    } catch (_) {
+      // La columna ya existe.
+    }
   }
 
   Future<int> countTotal() async {

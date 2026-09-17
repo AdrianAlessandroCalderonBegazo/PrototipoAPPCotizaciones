@@ -6,10 +6,13 @@ import 'package:printing/printing.dart';
 import '../models/checklist_guardado.dart';
 import '../models/cotizacion_guardada.dart';
 import '../services/db_helper.dart';
+import '../state/checklist_state.dart';
 import '../theme/brand_colors.dart';
+import '../utils/checklist_estilo.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/brand_app_bar_title.dart';
 import '../widgets/fade_slide_in.dart';
+import '../widgets/producto_thumbnail.dart';
 import '../widgets/pulsing_dot.dart';
 
 enum _FiltroHistorial { cotizaciones, checklists }
@@ -40,10 +43,67 @@ class _HistorialScreenState extends State<HistorialScreen> {
   List<ChecklistGuardado> _checklists = [];
   bool _cargando = true;
 
+  final _busquedaController = TextEditingController();
+  String _busqueda = '';
+  DateTimeRange? _rangoFecha;
+
   @override
   void initState() {
     super.initState();
     _cargar();
+  }
+
+  @override
+  void dispose() {
+    _busquedaController.dispose();
+    super.dispose();
+  }
+
+  bool _coincideFecha(DateTime fecha) {
+    final rango = _rangoFecha;
+    if (rango == null) return true;
+    final inicio = DateTime(rango.start.year, rango.start.month, rango.start.day);
+    final fin = DateTime(rango.end.year, rango.end.month, rango.end.day + 1);
+    return !fecha.isBefore(inicio) && fecha.isBefore(fin);
+  }
+
+  List<CotizacionGuardada> get _cotizacionesFiltradas {
+    final busqueda = _busqueda.trim().toLowerCase();
+    return _cotizaciones.where((c) {
+      final coincideNombre = busqueda.isEmpty || c.cliente.toLowerCase().contains(busqueda);
+      return coincideNombre && _coincideFecha(c.fecha);
+    }).toList();
+  }
+
+  List<ChecklistGuardado> get _checklistsFiltrados {
+    final busqueda = _busqueda.trim().toLowerCase();
+    return _checklists.where((c) {
+      final coincideNombre = busqueda.isEmpty || c.responsable.toLowerCase().contains(busqueda);
+      return coincideNombre && _coincideFecha(c.fecha);
+    }).toList();
+  }
+
+  Future<void> _elegirRangoFecha() async {
+    final ahora = DateTime.now();
+    final rango = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(ahora.year - 5),
+      lastDate: DateTime(ahora.year + 1),
+      initialDateRange: _rangoFecha,
+      helpText: 'Filtrar por fecha',
+      cancelText: 'Cancelar',
+      confirmText: 'Aplicar',
+      saveText: 'Aplicar',
+    );
+    if (rango != null) setState(() => _rangoFecha = rango);
+  }
+
+  void _limpiarFiltros() {
+    setState(() {
+      _busqueda = '';
+      _busquedaController.clear();
+      _rangoFecha = null;
+    });
   }
 
   Future<void> _cargar() async {
@@ -68,14 +128,10 @@ class _HistorialScreenState extends State<HistorialScreen> {
     return existe;
   }
 
-  Future<void> _previsualizarCotizacion(CotizacionGuardada c) async {
-    if (!await _verificarArchivo(c.archivoPdf)) return;
-    if (!mounted) return;
+  void _abrirCotizacion(CotizacionGuardada c) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => _VistaPreviaScreen(archivoPdf: c.archivoPdf, titulo: 'Cotización ${c.numero}'),
-      ),
+      MaterialPageRoute(builder: (_) => _CotizacionDetalleScreen(cotizacion: c)),
     );
   }
 
@@ -112,6 +168,19 @@ class _HistorialScreenState extends State<HistorialScreen> {
       // No pasa nada si el archivo ya no está o no se puede borrar.
     }
     if (mounted) _cargar();
+  }
+
+  Future<void> _compartirChecklist(ChecklistGuardado c) async {
+    final ruta = c.archivoPdf;
+    if (ruta == null || !await _verificarArchivo(ruta)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este checklist no tiene PDF. Ábrelo y usa "Copiar como mensaje".')),
+      );
+      return;
+    }
+    final archivo = File(ruta);
+    await Printing.sharePdf(bytes: await archivo.readAsBytes(), filename: 'checklist_de_obra.pdf');
   }
 
   Future<void> _eliminarChecklist(ChecklistGuardado c) async {
@@ -204,6 +273,72 @@ class _HistorialScreenState extends State<HistorialScreen> {
               onChanged: (f) => setState(() => _filtro = f),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _busquedaController,
+                    onChanged: (v) => setState(() => _busqueda = v),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar por nombre',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: _busqueda.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () => setState(() {
+                                _busqueda = '';
+                                _busquedaController.clear();
+                              }),
+                            ),
+                      filled: true,
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedPressable(
+                  onTap: _elegirRangoFecha,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: _rangoFecha != null
+                          ? BrandColors.cian.withValues(alpha: 0.15)
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.calendar_month_outlined,
+                      size: 20,
+                      color: _rangoFecha != null ? BrandColors.cian : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_rangoFecha != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: InputChip(
+                  avatar: const Icon(Icons.calendar_month_outlined, size: 16),
+                  label: Text(
+                    '${DateFormat('dd/MM/yy').format(_rangoFecha!.start)} - ${DateFormat('dd/MM/yy').format(_rangoFecha!.end)}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onDeleted: () => setState(() => _rangoFecha = null),
+                ),
+              ),
+            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _cargar,
@@ -229,16 +364,26 @@ class _HistorialScreenState extends State<HistorialScreen> {
       return _EstadoVacio(
         icono: Icons.receipt_long_outlined,
         titulo: 'Aún no generaste ninguna cotización',
-        subtitulo: 'Ve a Productos, elige lo que necesitas y genera tu primera cotización.',
-        textoBoton: 'Ir a Productos',
+        subtitulo: 'Ve a Cotizar, elige lo que necesitas y genera tu primera cotización.',
+        textoBoton: 'Ir a Cotizar',
         onBoton: widget.onIrAProductos,
+      );
+    }
+    final lista = _cotizacionesFiltradas;
+    if (lista.isEmpty) {
+      return _EstadoVacio(
+        icono: Icons.search_off,
+        titulo: 'Ninguna cotización coincide',
+        subtitulo: 'Prueba con otro nombre o cambia el rango de fechas.',
+        textoBoton: 'Quitar filtros',
+        onBoton: _limpiarFiltros,
       );
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-      itemCount: _cotizaciones.length,
+      itemCount: lista.length,
       itemBuilder: (context, index) {
-        final c = _cotizaciones[index];
+        final c = lista[index];
         return FadeSlideIn(
           index: index,
           child: Padding(
@@ -246,7 +391,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
             child: _TarjetaCotizacion(
               cotizacion: c,
               formatoFecha: formatoFecha,
-              onPreview: () => _previsualizarCotizacion(c),
+              onPreview: () => _abrirCotizacion(c),
               onShare: () => _compartirCotizacion(c),
               onDelete: () => _eliminarCotizacion(c),
             ),
@@ -266,11 +411,21 @@ class _HistorialScreenState extends State<HistorialScreen> {
         onBoton: widget.onNuevoChecklist,
       );
     }
+    final lista = _checklistsFiltrados;
+    if (lista.isEmpty) {
+      return _EstadoVacio(
+        icono: Icons.search_off,
+        titulo: 'Ningún checklist coincide',
+        subtitulo: 'Prueba con otro nombre o cambia el rango de fechas.',
+        textoBoton: 'Quitar filtros',
+        onBoton: _limpiarFiltros,
+      );
+    }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-      itemCount: _checklists.length,
+      itemCount: lista.length,
       itemBuilder: (context, index) {
-        final c = _checklists[index];
+        final c = lista[index];
         return FadeSlideIn(
           index: index,
           child: Padding(
@@ -282,6 +437,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
                 context,
                 MaterialPageRoute(builder: (_) => _ChecklistDetalleScreen(checklist: c)),
               ),
+              onShare: () => _compartirChecklist(c),
               onDelete: () => _eliminarChecklist(c),
             ),
           ),
@@ -476,17 +632,8 @@ class _TarjetaCotizacion extends StatelessWidget {
                 const Icon(Icons.visibility_outlined, size: 15, color: BrandColors.cian),
                 const SizedBox(width: 3),
                 const Text(
-                  'Ver',
+                  'Ver detalle',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: BrandColors.cian),
-                ),
-                const SizedBox(width: 10),
-                InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: onDelete,
-                  child: const Padding(
-                    padding: EdgeInsets.all(2),
-                    child: Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                  ),
                 ),
               ],
             ),
@@ -520,57 +667,62 @@ class _TarjetaCotizacion extends StatelessWidget {
             const SizedBox(height: 12),
             Divider(height: 1, color: colorScheme.outlineVariant),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Total',
-                      style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
-                    ),
-                    Text(
-                      'S/ ${cotizacion.total.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: BrandColors.azulMarino,
-                      ),
-                    ),
-                  ],
-                ),
-                AnimatedPressable(
-                  onTap: onShare,
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: BrandColors.cian,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.share_outlined, size: 16, color: Colors.white),
-                        SizedBox(width: 6),
-                        Text(
-                          'Compartir',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              'Total',
+              style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
             ),
+            Text(
+              'S/ ${cotizacion.total.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: BrandColors.azulMarino,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _FilaAccionesTarjeta(onShare: onShare, onDelete: onDelete),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FilaAccionesTarjeta extends StatelessWidget {
+  final VoidCallback onShare;
+  final VoidCallback onDelete;
+
+  const _FilaAccionesTarjeta({required this.onShare, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onShare,
+            icon: const Icon(Icons.share_outlined, size: 16),
+            label: const Text('Compartir'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              foregroundColor: BrandColors.cian,
+              side: const BorderSide(color: BrandColors.cian),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
+            label: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.4)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -579,12 +731,14 @@ class _TarjetaChecklist extends StatelessWidget {
   final ChecklistGuardado checklist;
   final DateFormat formatoFecha;
   final VoidCallback onTap;
+  final VoidCallback onShare;
   final VoidCallback onDelete;
 
   const _TarjetaChecklist({
     required this.checklist,
     required this.formatoFecha,
     required this.onTap,
+    required this.onShare,
     required this.onDelete,
   });
 
@@ -631,16 +785,12 @@ class _TarjetaChecklist extends StatelessWidget {
                   const Icon(Icons.picture_as_pdf_outlined, size: 14, color: BrandColors.cian),
                   const SizedBox(width: 6),
                 ],
-                Icon(Icons.chevron_right, size: 16, color: colorScheme.outline),
-                const SizedBox(width: 10),
-                InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: onDelete,
-                  child: const Padding(
-                    padding: EdgeInsets.all(2),
-                    child: Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
-                  ),
+                const Text(
+                  'Ver detalle',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: BrandColors.cian),
                 ),
+                const SizedBox(width: 2),
+                const Icon(Icons.chevron_right, size: 16, color: BrandColors.cian),
               ],
             ),
             const SizedBox(height: 4),
@@ -683,6 +833,8 @@ class _TarjetaChecklist extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            _FilaAccionesTarjeta(onShare: onShare, onDelete: onDelete),
           ],
         ),
       ),
@@ -718,9 +870,239 @@ class _VistaPreviaScreen extends StatelessWidget {
   }
 }
 
-/// Detalle de un checklist guardado: el texto tal como se copió (o se
-/// hubiera copiado) para WhatsApp, y — si en su momento se generó — el
-/// PDF correspondiente.
+/// Detalle nativo de una cotización guardada: cliente, RUC/DNI, fecha,
+/// vendedor/datos bancarios y el detalle completo de productos — con
+/// opción de ver el PDF ya generado o compartirlo directamente.
+class _CotizacionDetalleScreen extends StatelessWidget {
+  final CotizacionGuardada cotizacion;
+
+  const _CotizacionDetalleScreen({required this.cotizacion});
+
+  Future<bool> _verificarArchivo(BuildContext context) async {
+    if (await File(cotizacion.archivoPdf).exists()) return true;
+    if (!context.mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Ese PDF ya no está disponible en el celular.')),
+    );
+    return false;
+  }
+
+  Future<void> _verPdf(BuildContext context) async {
+    if (!await _verificarArchivo(context)) return;
+    if (!context.mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _VistaPreviaScreen(
+          archivoPdf: cotizacion.archivoPdf,
+          titulo: 'Cotización ${cotizacion.numero}',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _compartir(BuildContext context) async {
+    if (!await _verificarArchivo(context)) return;
+    final bytes = await File(cotizacion.archivoPdf).readAsBytes();
+    await Printing.sharePdf(bytes: bytes, filename: 'cotizacion_${cotizacion.numero}.pdf');
+  }
+
+  Widget _filaDato(String etiqueta, String valor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(etiqueta, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          ),
+          Expanded(
+            child: Text(valor, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final formatoFecha = DateFormat('dd/MM/yyyy · HH:mm');
+    final colorScheme = Theme.of(context).colorScheme;
+    final tieneDatosVendedor = (cotizacion.vendedor ?? '').isNotEmpty ||
+        (cotizacion.banco ?? '').isNotEmpty ||
+        (cotizacion.moneda ?? '').isNotEmpty ||
+        (cotizacion.nroCuenta ?? '').isNotEmpty ||
+        (cotizacion.cci ?? '').isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(title: BrandAppBarTitle(subtitulo: 'Cotización ${cotizacion.numero}')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: BrandColors.azulMarino,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  cotizacion.cliente.isEmpty ? 'Cliente sin nombre' : cotizacion.cliente,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                if ((cotizacion.rucDni ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text('RUC/DNI: ${cotizacion.rucDni}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+                if ((cotizacion.telefono ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text('Tel: ${cotizacion.telefono}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+                const SizedBox(height: 8),
+                Text(formatoFecha.format(cotizacion.fecha), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            ),
+          ),
+          if (tieneDatosVendedor) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if ((cotizacion.vendedor ?? '').isNotEmpty) _filaDato('Vendedor(a)', cotizacion.vendedor!),
+                  if ((cotizacion.banco ?? '').isNotEmpty) _filaDato('Banco', cotizacion.banco!),
+                  if ((cotizacion.moneda ?? '').isNotEmpty) _filaDato('Moneda', cotizacion.moneda!),
+                  if ((cotizacion.nroCuenta ?? '').isNotEmpty) _filaDato('Nro cuenta', cotizacion.nroCuenta!),
+                  if ((cotizacion.cci ?? '').isNotEmpty) _filaDato('CCI', cotizacion.cci!),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 10),
+            child: Text(
+              'Productos',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: BrandColors.azulMarino),
+            ),
+          ),
+          if (cotizacion.items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Esta cotización se guardó antes de registrar el detalle de productos.',
+                style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+              ),
+            )
+          else
+            ...cotizacion.items.map((item) => _FilaProductoDetalle(item: item)),
+          const SizedBox(height: 8),
+          Divider(color: colorScheme.outlineVariant),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total',
+                style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                'S/ ${cotizacion.total.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: BrandColors.azulMarino),
+              ),
+            ],
+          ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _verPdf(context),
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('Ver PDF'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: BrandColors.cian),
+                    foregroundColor: BrandColors.azulMarino,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => _compartir(context),
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Compartir'),
+                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilaProductoDetalle extends StatelessWidget {
+  final ItemCotizacionGuardado item;
+
+  const _FilaProductoDetalle({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ProductoThumbnail(archivoImagen: item.archivoImagen, size: 44),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.nombre,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${item.cantidad.toStringAsFixed(2)} x S/ ${item.precioUnitario.toStringAsFixed(2)}',
+                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            'S/ ${item.subtotal.toStringAsFixed(2)}',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: BrandColors.azulMarino),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Detalle de un checklist guardado: cada categoría con lo que se marcó y
+/// lo que no (si el registro tiene ese detalle guardado — [categoriasJson]
+/// — o si no, el texto plano tal como se hubiera copiado), más "copiar
+/// como mensaje" y, si en su momento se generó, el PDF correspondiente.
 class _ChecklistDetalleScreen extends StatelessWidget {
   final ChecklistGuardado checklist;
 
@@ -757,42 +1139,41 @@ class _ChecklistDetalleScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final formatoFecha = DateFormat('dd/MM/yyyy · HH:mm');
     final colorScheme = Theme.of(context).colorScheme;
+    final categorias = categoriasDesdeJson(checklist.categoriasJson);
 
     return Scaffold(
       appBar: AppBar(title: const BrandAppBarTitle(subtitulo: 'Checklist de obra')),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              checklist.responsable.isEmpty ? 'Sin responsable especificado' : checklist.responsable,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: BrandColors.azulMarino),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${formatoFecha.format(checklist.fecha)} · ${checklist.itemsMarcados} de ${checklist.totalItems} ítems marcados',
-              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    checklist.resumenTexto,
-                    style: const TextStyle(fontSize: 12.5, height: 1.5),
-                  ),
-                ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          Text(
+            checklist.responsable.isEmpty ? 'Sin responsable especificado' : checklist.responsable,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: BrandColors.azulMarino),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${formatoFecha.format(checklist.fecha)} · ${checklist.itemsMarcados} de ${checklist.totalItems} ítems marcados',
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+          if (categorias.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(14),
               ),
-            ),
-          ],
-        ),
+              child: Text(
+                checklist.resumenTexto,
+                style: const TextStyle(fontSize: 12.5, height: 1.5),
+              ),
+            )
+          else
+            ...categorias.asMap().entries.map(
+                  (e) => _TarjetaCategoriaDetalle(indice: e.key, categoria: e.value),
+                ),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -804,7 +1185,7 @@ class _ChecklistDetalleScreen extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => _copiar(context),
                   icon: const Icon(Icons.copy_outlined),
-                  label: const Text('Copiar'),
+                  label: const Text('Copiar como mensaje'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: const BorderSide(color: BrandColors.cian),
@@ -825,6 +1206,81 @@ class _ChecklistDetalleScreen extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TarjetaCategoriaDetalle extends StatelessWidget {
+  final int indice;
+  final ChecklistCategoriaState categoria;
+
+  const _TarjetaCategoriaDetalle({required this.indice, required this.categoria});
+
+  @override
+  Widget build(BuildContext context) {
+    final estilo = estiloDeCategoriaChecklist(indice);
+    final completo = categoria.items.isNotEmpty && categoria.totalMarcados == categoria.items.length;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: estilo.color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(estilo.icono, color: estilo.color, size: 20),
+          ),
+          title: Text(
+            quitarNumeroCategoria(categoria.nombre),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          subtitle: Text(
+            '${categoria.totalMarcados} de ${categoria.items.length}',
+            style: TextStyle(
+              color: completo ? BrandColors.cian : colorScheme.onSurfaceVariant,
+              fontWeight: completo ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            ),
+          ),
+          children: categoria.items.map((item) {
+            return ListTile(
+              dense: true,
+              leading: Icon(
+                item.marcado ? Icons.check_circle : Icons.radio_button_unchecked,
+                size: 18,
+                color: item.marcado ? BrandColors.cian : colorScheme.outline,
+              ),
+              title: Text(
+                item.texto,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: item.marcado ? null : colorScheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: item.esExtra
+                  ? Icon(
+                      item.esProducto ? Icons.inventory_2_outlined : Icons.edit_note_outlined,
+                      size: 16,
+                      color: colorScheme.outline,
+                    )
+                  : null,
+            );
+          }).toList(),
         ),
       ),
     );

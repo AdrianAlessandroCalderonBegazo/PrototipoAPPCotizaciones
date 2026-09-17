@@ -1,5 +1,9 @@
 /// Registro de un checklist de obra ya finalizado — lo que se muestra en
-/// la pestaña "Historial" (filtrado junto a las cotizaciones).
+/// la pestaña "Historial" (filtrado junto a las cotizaciones) y en su
+/// pantalla de detalle. [categoriasJson] guarda las 10 categorías con
+/// cada ítem (marcado o no) tal como quedaron al guardar, para poder
+/// mostrar el detalle estructurado después (ver checklist_state.dart:
+/// categoriasDesdeJson / ChecklistCategoriaState.toJson).
 class ChecklistGuardado {
   final int? id;
   final String responsable;
@@ -8,6 +12,7 @@ class ChecklistGuardado {
   final int itemsMarcados;
   final String resumenTexto;
   final String? archivoPdf;
+  final String categoriasJson;
 
   ChecklistGuardado({
     this.id,
@@ -17,6 +22,7 @@ class ChecklistGuardado {
     required this.itemsMarcados,
     required this.resumenTexto,
     this.archivoPdf,
+    this.categoriasJson = '[]',
   });
 
   factory ChecklistGuardado.fromMap(Map<String, dynamic> map) {
@@ -28,6 +34,7 @@ class ChecklistGuardado {
       itemsMarcados: (map['items_marcados'] as num).toInt(),
       resumenTexto: (map['resumen_texto'] ?? '').toString(),
       archivoPdf: map['archivo_pdf'] as String?,
+      categoriasJson: (map['categorias_json'] ?? '[]').toString(),
     );
   }
 
@@ -39,6 +46,7 @@ class ChecklistGuardado {
       'items_marcados': itemsMarcados,
       'resumen_texto': resumenTexto,
       'archivo_pdf': archivoPdf,
+      'categorias_json': categoriasJson,
     };
   }
 }

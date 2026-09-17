@@ -66,15 +66,12 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     final categoria = checklist.categoriaActual;
     final estilo = estiloDeCategoriaChecklist(checklist.indice);
 
+    final porcentaje = checklist.totalItems == 0
+        ? 0
+        : ((checklist.totalMarcados / checklist.totalItems) * 100).round();
+
     return Scaffold(
       appBar: AppBar(
-        leading: checklist.esPrimeraCategoria
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Categoría anterior',
-                onPressed: checklist.retroceder,
-              ),
         title: const BrandAppBarTitle(subtitulo: 'Checklist de obra'),
       ),
       body: Column(
@@ -82,6 +79,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
           _BarraProgreso(
             total: checklist.categorias.length,
             actual: checklist.indice,
+            porcentaje: porcentaje,
             onTap: checklist.irACategoria,
           ),
           Expanded(
@@ -143,11 +141,10 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
         ],
       ),
       bottomNavigationBar: _BarraAvanzar(
+        esPrimera: checklist.esPrimeraCategoria,
         esUltima: checklist.esUltimaCategoria,
-        siguienteNombre: checklist.esUltimaCategoria
-            ? null
-            : quitarNumeroCategoria(checklist.categorias[checklist.indice + 1].nombre),
-        onTap: () {
+        onAnterior: checklist.retroceder,
+        onSiguiente: () {
           if (checklist.esUltimaCategoria) {
             _finalizar(checklist);
           } else {
@@ -162,9 +159,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
 class _BarraProgreso extends StatelessWidget {
   final int total;
   final int actual;
+  final int porcentaje;
   final ValueChanged<int> onTap;
 
-  const _BarraProgreso({required this.total, required this.actual, required this.onTap});
+  const _BarraProgreso({
+    required this.total,
+    required this.actual,
+    required this.porcentaje,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -197,13 +200,26 @@ class _BarraProgreso extends StatelessWidget {
             }),
           ),
           const SizedBox(height: 6),
-          Text(
-            'Categoría ${actual + 1} de $total',
-            style: TextStyle(
-              fontSize: 11,
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Categoría ${actual + 1} de $total',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '$porcentaje% revisado',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: BrandColors.cian,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -281,88 +297,59 @@ class _Casillero extends StatelessWidget {
   }
 }
 
-/// Barra inferior de la pantalla, en dos tonos: la acción de avanzar y,
-/// aparte, el nombre de la categoría que sigue (o "Finalizar" si es la
-/// última) — para que quede claro qué viene después sin adivinar.
+/// Barra inferior de la pantalla: "Anterior" (oculto en la primera
+/// categoría) y la acción de avanzar, que cambia a "Ir al resumen" en la
+/// última — así siempre se sabe qué viene después sin adivinar.
 class _BarraAvanzar extends StatelessWidget {
+  final bool esPrimera;
   final bool esUltima;
-  final String? siguienteNombre;
-  final VoidCallback onTap;
+  final VoidCallback onAnterior;
+  final VoidCallback onSiguiente;
 
-  const _BarraAvanzar({required this.esUltima, required this.siguienteNombre, required this.onTap});
+  const _BarraAvanzar({
+    required this.esPrimera,
+    required this.esUltima,
+    required this.onAnterior,
+    required this.onSiguiente,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: AnimatedPressable(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: esUltima ? 1 : 3,
-                  child: Container(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Row(
+          children: [
+            if (!esPrimera) ...[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onAnterior,
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Text('Anterior'),
+                  style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    color: BrandColors.cian,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          esUltima ? Icons.task_alt : Icons.arrow_forward,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          esUltima ? 'Finalizar y Ver Resumen' : 'Pasar a Siguiente Categoría',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
+                    foregroundColor: BrandColors.azulMarino,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                   ),
                 ),
-                if (!esUltima)
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                      color: BrandColors.azulOscuro,
-                      child: Text(
-                        siguienteNombre ?? '',
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              flex: esPrimera ? 1 : 2,
+              child: FilledButton.icon(
+                onPressed: onSiguiente,
+                icon: Icon(esUltima ? Icons.task_alt : Icons.arrow_forward, size: 18),
+                label: Text(esUltima ? 'Ir al resumen' : 'Siguiente paso'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: BrandColors.cian,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

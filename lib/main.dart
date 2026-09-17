@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'services/db_helper.dart';
 import 'state/checklist_state.dart';
 import 'state/cotizacion_state.dart';
+import 'state/navegacion_state.dart';
 import 'screens/main_tabs_screen.dart';
 import 'theme/brand_colors.dart';
 import 'widgets/lottie_gate_screen.dart';
@@ -30,6 +31,7 @@ class CotizadorApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => CotizacionState()),
         ChangeNotifierProvider(create: (_) => ChecklistState()),
+        ChangeNotifierProvider(create: (_) => NavegacionState()),
       ],
       child: MaterialApp(
         title: 'Cotizador ICR',

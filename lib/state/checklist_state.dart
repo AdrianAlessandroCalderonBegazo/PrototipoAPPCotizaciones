@@ -20,6 +20,22 @@ class ChecklistItemEntry {
     this.esExtra = false,
     this.esProducto = false,
   });
+
+  factory ChecklistItemEntry.fromJson(Map<String, dynamic> json) {
+    return ChecklistItemEntry(
+      texto: (json['texto'] ?? '').toString(),
+      marcado: json['marcado'] == true,
+      esExtra: json['es_extra'] == true,
+      esProducto: json['es_producto'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'texto': texto,
+        'marcado': marcado,
+        'es_extra': esExtra,
+        'es_producto': esProducto,
+      };
 }
 
 class ChecklistCategoriaState {
@@ -28,7 +44,36 @@ class ChecklistCategoriaState {
 
   ChecklistCategoriaState({required this.nombre, required this.items});
 
+  factory ChecklistCategoriaState.fromJson(Map<String, dynamic> json) {
+    return ChecklistCategoriaState(
+      nombre: (json['nombre'] ?? '').toString(),
+      items: (json['items'] as List<dynamic>? ?? [])
+          .map((e) => ChecklistItemEntry.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'nombre': nombre,
+        'items': items.map((i) => i.toJson()).toList(),
+      };
+
   int get totalMarcados => items.where((i) => i.marcado).length;
+}
+
+/// Reconstruye las categorías guardadas de un checklist histórico (para su
+/// pantalla de detalle) — si el registro es viejo y no tiene este detalle,
+/// o el JSON está corrupto, devuelve una lista vacía en vez de fallar.
+List<ChecklistCategoriaState> categoriasDesdeJson(String json) {
+  if (json.trim().isEmpty) return [];
+  try {
+    final decoded = jsonDecode(json) as List<dynamic>;
+    return decoded
+        .map((e) => ChecklistCategoriaState.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  } catch (_) {
+    return [];
+  }
 }
 
 /// Estado del checklist de obra: carga las 10 categorías base una sola vez
@@ -134,6 +179,10 @@ class ChecklistState extends ChangeNotifier {
     _indice = i;
     notifyListeners();
   }
+
+  /// Serializa el estado actual de las 10 categorías (con lo marcado y los
+  /// extras) para guardarlo junto con el registro del historial.
+  String categoriasAJson() => jsonEncode(_categorias.map((c) => c.toJson()).toList());
 
   /// Vuelve a armar todas las categorías desde cero (sin marcar, sin
   /// extras) para empezar un checklist nuevo.

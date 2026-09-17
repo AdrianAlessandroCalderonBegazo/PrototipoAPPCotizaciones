@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cotizacion_guardada.dart';
@@ -12,19 +11,24 @@ import '../services/pdf_service.dart';
 import '../state/cotizacion_state.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
-import '../widgets/brand_app_bar_title.dart';
 import '../widgets/buscador_productos.dart';
 import '../widgets/lottie_gate_screen.dart';
 import '../widgets/producto_thumbnail.dart';
 import '../widgets/seccion_card.dart';
+import 'cotizacion_creada_screen.dart';
 
-class CotizacionScreen extends StatefulWidget {
-  const CotizacionScreen({super.key});
+/// Paso final para armar una cotización: datos del cliente, datos
+/// bancarios, y el resumen de productos ya elegidos (con la opción de
+/// agregar alguno más). Se llega acá desde la pestaña "Cotizar" al
+/// presionar "Generar cotización"; al terminar, reemplaza esta pantalla
+/// por la de confirmación con la vista previa del PDF.
+class GenerarCotizacionScreen extends StatefulWidget {
+  const GenerarCotizacionScreen({super.key});
   @override
-  State<CotizacionScreen> createState() => _CotizacionScreenState();
+  State<GenerarCotizacionScreen> createState() => _GenerarCotizacionScreenState();
 }
 
-class _CotizacionScreenState extends State<CotizacionScreen> {
+class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
   final _clienteController = TextEditingController();
   final _rucDniController = TextEditingController();
   final _telefonoController = TextEditingController();
@@ -137,18 +141,24 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
     final numero = await PdfService.siguienteNumero();
     final cliente = _clienteController.text.trim();
     final rucDni = _rucDniController.text.trim();
+    final telefono = _telefonoController.text.trim();
+    final vendedor = _vendedorController.text.trim();
+    final banco = _bancoController.text.trim();
+    final moneda = _monedaController.text.trim();
+    final nroCuenta = _nroCuentaController.text.trim();
+    final cci = _cciController.text.trim();
 
     final bytes = await PdfService.generar(
       numero: numero,
       items: cotizacion.items,
       cliente: cliente,
       rucDni: rucDni,
-      telefono: _telefonoController.text.trim(),
-      vendedor: _vendedorController.text.trim(),
-      banco: _bancoController.text.trim(),
-      moneda: _monedaController.text.trim(),
-      nroCuenta: _nroCuentaController.text.trim(),
-      cci: _cciController.text.trim(),
+      telefono: telefono,
+      vendedor: vendedor,
+      banco: banco,
+      moneda: moneda,
+      nroCuenta: nroCuenta,
+      cci: cci,
     );
 
     final rutaArchivo = await PdfService.guardarEnDisco(bytes, numero);
@@ -157,16 +167,32 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
         numero: PdfService.formatearNumero(numero),
         cliente: cliente,
         rucDni: rucDni.isEmpty ? null : rucDni,
+        telefono: telefono.isEmpty ? null : telefono,
+        vendedor: vendedor.isEmpty ? null : vendedor,
+        banco: banco.isEmpty ? null : banco,
+        moneda: moneda.isEmpty ? null : moneda,
+        nroCuenta: nroCuenta.isEmpty ? null : nroCuenta,
+        cci: cci.isEmpty ? null : cci,
         fecha: DateTime.now(),
         total: cotizacion.totalGeneral,
         archivoPdf: rutaArchivo,
+        items: cotizacion.items
+            .map(
+              (i) => ItemCotizacionGuardado(
+                nombre: i.producto.nombre,
+                cantidad: i.cantidad.toDouble(),
+                precioUnitario: i.producto.precioVenta ?? 0,
+                archivoImagen: i.producto.archivoImagen,
+              ),
+            )
+            .toList(),
       ),
     );
     await _guardarDatosBancarios();
     return (bytes, numero);
   }
 
-  Future<void> _generarYCompartir(CotizacionState cotizacion) async {
+  Future<void> _generarCotizacion(CotizacionState cotizacion) async {
     setState(() => _generando = true);
 
     await Navigator.of(context).push(
@@ -175,12 +201,19 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
           lottieAsset: 'assets/animations/verification.lottie',
           mensaje: 'Generando tu cotización...',
           proceso: () => _procesoDeGeneracion(cotizacion),
-          alTerminar: (context, resultado) async {
+          alTerminar: (context, resultado) {
             final (bytes, numero) = resultado;
+            final total = cotizacion.totalGeneral;
+            cotizacion.limpiar();
             Navigator.of(context).pop();
-            await Printing.sharePdf(
-              bytes: bytes,
-              filename: 'cotizacion_${PdfService.formatearNumero(numero)}.pdf',
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => CotizacionCreadaScreen(
+                  numero: PdfService.formatearNumero(numero),
+                  total: total,
+                  bytes: bytes,
+                ),
+              ),
             );
           },
           alFallar: (context, error) {
@@ -217,7 +250,17 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const BrandAppBarTitle(subtitulo: 'Armar cotización'),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'PASO FINAL',
+              style: TextStyle(fontSize: 11, letterSpacing: 0.6, color: Colors.white70),
+            ),
+            Text('Generar cotización', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
         actions: [
           if (items.isNotEmpty)
             IconButton(
@@ -346,7 +389,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
           SeccionCard(
             icono: Icons.shopping_cart_outlined,
             color: BrandColors.azulMarino,
-            titulo: 'Productos (${cotizacion.totalItems})',
+            titulo: 'Resumen (${cotizacion.totalItems})',
             children: [
               if (items.isEmpty)
                 Padding(
@@ -375,7 +418,7 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
                       Icon(Icons.add_circle_outline, size: 18, color: BrandColors.cian),
                       SizedBox(width: 8),
                       Text(
-                        'Agregar producto',
+                        'Agregar otro producto',
                         style: TextStyle(color: BrandColors.cian, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -431,9 +474,9 @@ class _CotizacionScreenState extends State<CotizacionScreen> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Icon(Icons.picture_as_pdf_outlined),
-                label: Text(_generando ? 'Generando...' : 'Generar PDF'),
-                onPressed: (items.isEmpty || _generando) ? null : () => _generarYCompartir(cotizacion),
+                    : const Icon(Icons.check_circle_outline),
+                label: Text(_generando ? 'Generando...' : 'Crear cotización'),
+                onPressed: (items.isEmpty || _generando) ? null : () => _generarCotizacion(cotizacion),
               ),
             ],
           ),
