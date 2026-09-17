@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../state/navegacion_state.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
+import '../widgets/brand_icon.dart';
 
 /// Pestaña "Home": punto de entrada rápido a Cotizaciones y Checklist. No
 /// hay sistema de usuarios en la app, así que el saludo es genérico (no
@@ -54,7 +55,7 @@ class HomeScreen extends StatelessWidget {
             _TarjetaAccesoDirecto(
               titulo: 'Cotizaciones',
               subtitulo: 'Arma una cotización con el catálogo completo',
-              icono: Icons.request_quote_outlined,
+              icono: const BrandIcon('documents.svg', color: Colors.white, size: 28),
               colores: const [BrandColors.cian, BrandColors.azulOscuro],
               onTap: () => context.read<NavegacionState>().irA(TabsApp.cotizar),
             ),
@@ -62,7 +63,7 @@ class HomeScreen extends StatelessWidget {
             _TarjetaAccesoDirecto(
               titulo: 'Checklist',
               subtitulo: 'Revisa todo antes de salir a obra',
-              icono: Icons.checklist_rtl_outlined,
+              icono: const BrandIcon('clipboard.svg', color: Colors.white, size: 28),
               colores: const [BrandColors.azulMarino, BrandColors.azulOscuro],
               onTap: () => context.read<NavegacionState>().irA(TabsApp.checklist),
             ),
@@ -76,7 +77,7 @@ class HomeScreen extends StatelessWidget {
 class _TarjetaAccesoDirecto extends StatelessWidget {
   final String titulo;
   final String subtitulo;
-  final IconData icono;
+  final Widget icono;
   final List<Color> colores;
   final VoidCallback onTap;
 
@@ -115,7 +116,7 @@ class _TarjetaAccesoDirecto extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icono, color: Colors.white, size: 28),
+              child: Center(child: icono),
             ),
             const SizedBox(width: 16),
             Expanded(

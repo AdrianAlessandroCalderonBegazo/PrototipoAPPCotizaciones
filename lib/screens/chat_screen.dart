@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/brand_app_bar_title.dart';
+import '../widgets/brand_icon.dart';
 
 /// Pestaña "Chat": placeholder — se desarrollará en una siguiente etapa.
 class ChatScreen extends StatelessWidget {
@@ -23,7 +24,7 @@ class ChatScreen extends StatelessWidget {
                   color: BrandColors.cian.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Icon(Icons.chat_bubble_outline, size: 40, color: BrandColors.cian),
+                child: const Center(child: BrandIcon('chat.svg', size: 40, color: BrandColors.cian)),
               ),
               const SizedBox(height: 20),
               const Text(

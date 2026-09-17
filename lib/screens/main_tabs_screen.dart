@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../state/checklist_state.dart';
 import '../state/cotizacion_state.dart';
 import '../state/navegacion_state.dart';
+import '../widgets/brand_icon.dart';
 import 'chat_screen.dart';
 import 'checklist_screen.dart';
 import 'historial_screen.dart';
@@ -93,6 +94,7 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
   Widget build(BuildContext context) {
     final totalItems = context.watch<CotizacionState>().totalItems;
     final indice = context.watch<NavegacionState>().indice;
+    final colorInactivo = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return Scaffold(
       body: IndexedStack(index: indice, children: _pantallas),
@@ -100,33 +102,33 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
         selectedIndex: indice,
         onDestinationSelected: (i) => context.read<NavegacionState>().irA(i),
         destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
+          NavigationDestination(
+            icon: BrandIcon('historial.svg', color: colorInactivo),
+            selectedIcon: const BrandIcon('historial.svg', color: Colors.white),
             label: 'Historial',
           ),
           NavigationDestination(
             icon: Badge(
               isLabelVisible: totalItems > 0,
               label: Text('$totalItems'),
-              child: const Icon(Icons.request_quote_outlined),
+              child: BrandIcon('documents.svg', color: colorInactivo),
             ),
-            selectedIcon: const Icon(Icons.request_quote),
+            selectedIcon: const BrandIcon('documents.svg', color: Colors.white),
             label: 'Cotizar',
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
+          NavigationDestination(
+            icon: BrandIcon('home_add.svg', color: colorInactivo),
+            selectedIcon: const BrandIcon('home_add.svg', color: Colors.white),
             label: 'Home',
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.checklist_outlined),
-            selectedIcon: Icon(Icons.checklist),
+          NavigationDestination(
+            icon: BrandIcon('clipboard.svg', color: colorInactivo),
+            selectedIcon: const BrandIcon('clipboard.svg', color: Colors.white),
             label: 'Checklist',
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            selectedIcon: Icon(Icons.chat_bubble),
+          NavigationDestination(
+            icon: BrandIcon('chat.svg', color: colorInactivo),
+            selectedIcon: const BrandIcon('chat.svg', color: Colors.white),
             label: 'Chat',
           ),
         ],
