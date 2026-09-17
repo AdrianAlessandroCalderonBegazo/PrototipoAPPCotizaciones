@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/navegacion_state.dart';
+import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/brand_icon.dart';
@@ -25,46 +26,33 @@ class HomeScreen extends StatelessWidget {
                   child: Image.asset('assets/icon/icon.png', width: 44, height: 44),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Inversiones ICR',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: BrandColors.azulMarino,
-                        ),
-                      ),
-                      Text(
-                        '¡Bienvenido de vuelta!',
-                        style: TextStyle(fontSize: 13, color: Colors.grey),
-                      ),
+                      Text('Inversiones ICR', style: AppTextStyles.subtitulo.copyWith(color: BrandColors.azulMarino)),
+                      const Text('¡Bienvenido de vuelta!', style: AppTextStyles.apoyo),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 28),
-            const Text(
-              '¿Qué necesitas hacer hoy?',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: BrandColors.azulMarino),
-            ),
+            Text('¿Qué necesitas hacer hoy?', style: AppTextStyles.subtitulo.copyWith(color: BrandColors.azulMarino)),
             const SizedBox(height: 14),
             _TarjetaAccesoDirecto(
               titulo: 'Cotizaciones',
               subtitulo: 'Arma una cotización con el catálogo completo',
-              icono: const BrandIcon('documents.svg', color: Colors.white, size: 28),
-              colores: const [BrandColors.cian, BrandColors.azulOscuro],
+              icono: const BrandIcon('documents.svg', color: Colors.white, size: 24),
+              colorIcono: BrandColors.cian,
               onTap: () => context.read<NavegacionState>().irA(TabsApp.cotizar),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             _TarjetaAccesoDirecto(
               titulo: 'Checklist',
               subtitulo: 'Revisa todo antes de salir a obra',
-              icono: const BrandIcon('clipboard.svg', color: Colors.white, size: 28),
-              colores: const [BrandColors.azulMarino, BrandColors.azulOscuro],
+              icono: const BrandIcon('clipboard.svg', color: Colors.white, size: 24),
+              colorIcono: BrandColors.azulMarino,
               onTap: () => context.read<NavegacionState>().irA(TabsApp.checklist),
             ),
           ],
@@ -74,18 +62,20 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+/// "Tarjeta de acceso" del sistema de diseño: fondo celeste pálido, ícono
+/// en una caja de color sólido, título/descripción y "Ver ›" a la derecha.
 class _TarjetaAccesoDirecto extends StatelessWidget {
   final String titulo;
   final String subtitulo;
   final Widget icono;
-  final List<Color> colores;
+  final Color colorIcono;
   final VoidCallback onTap;
 
   const _TarjetaAccesoDirecto({
     required this.titulo,
     required this.subtitulo,
     required this.icono,
-    required this.colores,
+    required this.colorIcono,
     required this.onTap,
   });
 
@@ -93,49 +83,40 @@ class _TarjetaAccesoDirecto extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedPressable(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: colores, begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: colores.last.withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          color: BrandColors.celeste,
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           children: [
             Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(color: colorIcono, borderRadius: BorderRadius.circular(14)),
               child: Center(child: icono),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    titulo,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitulo,
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12.5),
-                  ),
+                  Text(titulo, style: AppTextStyles.subtitulo.copyWith(color: BrandColors.azulMarino)),
+                  const SizedBox(height: 3),
+                  Text(subtitulo, style: AppTextStyles.apoyo),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Ver', style: TextStyle(color: BrandColors.cian, fontWeight: FontWeight.bold, fontSize: 13)),
+                Icon(Icons.chevron_right, color: BrandColors.cian, size: 18),
+              ],
+            ),
           ],
         ),
       ),

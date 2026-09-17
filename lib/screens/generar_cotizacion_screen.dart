@@ -9,6 +9,7 @@ import '../models/producto.dart';
 import '../services/db_helper.dart';
 import '../services/pdf_service.dart';
 import '../state/cotizacion_state.dart';
+import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/buscador_productos.dart';
@@ -269,20 +270,14 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
   Widget _tituloSeccion(String texto) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10, top: 6),
-      child: Text(
-        texto,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: BrandColors.azulMarino, letterSpacing: 0.6),
-      ),
+      child: Text(texto, style: AppTextStyles.etiqueta.copyWith(color: BrandColors.azulMarino)),
     );
   }
 
   Widget _etiqueta(String texto) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        texto,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600, letterSpacing: 0.4),
-      ),
+      child: Text(texto, style: AppTextStyles.etiqueta),
     );
   }
 
@@ -384,18 +379,12 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
                         icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
                       ),
                       const SizedBox(width: 4),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'PASO FINAL',
-                              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                            ),
-                            Text(
-                              'Generar cotización',
-                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
+                            Text('PASO FINAL', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
+                            Text('Generar cotización', style: AppTextStyles.titulo.copyWith(color: Colors.white)),
                           ],
                         ),
                       ),
@@ -539,10 +528,7 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Total con IGV',
-                          style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-                        ),
+                        Text('Total con IGV', style: AppTextStyles.apoyo.copyWith(fontWeight: FontWeight.w600, fontSize: 13)),
                         Text(
                           'S/ ${cotizacion.totalGeneral.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: BrandColors.azulMarino),
@@ -557,7 +543,7 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: BrandColors.azulMarino,
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: const StadiumBorder(),
                         ),
                         child: _generando
                             ? const SizedBox(

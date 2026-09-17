@@ -38,7 +38,7 @@ class CotizadorApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
-          fontFamily: 'IBM Plex Sans',
+          fontFamily: 'Manrope',
           colorScheme: colorScheme,
           appBarTheme: const AppBarTheme(
             backgroundColor: BrandColors.azulMarino,

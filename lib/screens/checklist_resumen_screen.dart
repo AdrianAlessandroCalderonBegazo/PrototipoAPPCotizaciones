@@ -5,6 +5,7 @@ import '../models/checklist_guardado.dart';
 import '../services/db_helper.dart';
 import '../services/pdf_service.dart';
 import '../state/checklist_state.dart';
+import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../utils/checklist_estilo.dart';
 import '../widgets/lottie_gate_screen.dart';
@@ -133,10 +134,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'PASO $total DE $total · RESUMEN',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.6),
-                  ),
+                  Text('PASO $total DE $total · RESUMEN', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
                   Row(
                     children: [
                       IconButton(
@@ -168,7 +166,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
               const SizedBox(height: 16),
               Text(
                 '${checklist.totalMarcados} de ${checklist.totalItems} ítems revisados',
-                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                style: AppTextStyles.subtitulo.copyWith(color: Colors.white),
               ),
             ],
           ),
@@ -247,12 +245,9 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 10),
-                    child: Text(
-                      'RESUMEN POR CATEGORÍA',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: BrandColors.azulMarino, letterSpacing: 0.6),
-                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 10),
+                    child: Text('RESUMEN POR CATEGORÍA', style: AppTextStyles.etiqueta.copyWith(color: BrandColors.azulMarino)),
                   ),
                   Container(
                     decoration: BoxDecoration(
@@ -287,10 +282,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'PENDIENTES',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red.shade700, letterSpacing: 0.6),
-                          ),
+                          Text('PENDIENTES', style: AppTextStyles.etiqueta.copyWith(color: Colors.red.shade700)),
                           const SizedBox(height: 6),
                           Text(
                             pendientes.join(' · '),
@@ -316,7 +308,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: BrandColors.cian,
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: const StadiumBorder(),
                         ),
                         child: _guardando
                             ? const SizedBox(
@@ -334,7 +326,9 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                         onPressed: () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          foregroundColor: BrandColors.azulMarino,
+                          side: const BorderSide(color: BrandColors.azulMarino),
+                          shape: const StadiumBorder(),
                         ),
                         child: const Text('Volver al paso anterior'),
                       ),

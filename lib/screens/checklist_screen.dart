@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../state/checklist_state.dart';
+import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../utils/checklist_estilo.dart';
 import '../widgets/agregar_item_checklist.dart';
@@ -65,10 +66,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'PASO ${checklist.indice + 1} DE $total',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.6),
-                  ),
+                  Text('PASO ${checklist.indice + 1} DE $total', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
                   Text('$porcentaje%', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                 ],
               ),
@@ -92,15 +90,9 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 }),
               ),
               const SizedBox(height: 16),
-              Text(
-                quitarNumeroCategoria(categoria.nombre),
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-              ),
+              Text(quitarNumeroCategoria(categoria.nombre), style: AppTextStyles.titulo.copyWith(color: Colors.white)),
               const SizedBox(height: 4),
-              const Text(
-                'Marca lo que ya está verificado',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              ),
+              Text('Marca lo que ya está verificado', style: AppTextStyles.apoyo.copyWith(color: Colors.white70)),
             ],
           ),
         ),
@@ -187,7 +179,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       child: Text(
                         'Siguiente paso: ${quitarNumeroCategoria(checklist.categorias[checklist.indice + 1].nombre)}',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        style: AppTextStyles.apoyo,
                       ),
                     ),
                   ],
@@ -316,7 +308,7 @@ class _BarraAvanzar extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     foregroundColor: BrandColors.azulMarino,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: const StadiumBorder(),
                   ),
                   child: const Text('Anterior'),
                 ),

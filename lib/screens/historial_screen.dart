@@ -7,6 +7,7 @@ import '../models/checklist_guardado.dart';
 import '../models/cotizacion_guardada.dart';
 import '../services/db_helper.dart';
 import '../state/checklist_state.dart';
+import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../utils/checklist_estilo.dart';
 import '../widgets/animated_pressable.dart';
@@ -290,20 +291,9 @@ class _HistorialScreenState extends State<HistorialScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'HISTORIAL',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-              ),
+              Text('HISTORIAL', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
               const SizedBox(height: 4),
-              const Text(
-                'Cotizaciones y checklists',
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-              ),
+              Text('Cotizaciones y checklists', style: AppTextStyles.titulo.copyWith(color: Colors.white)),
               const SizedBox(height: 16),
               TextField(
                 controller: _busquedaController,
@@ -429,7 +419,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
             child: Center(
               child: Text(
                 'toca una tarjeta para ver el detalle',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: AppTextStyles.apoyo,
               ),
             ),
           );
@@ -604,7 +594,7 @@ class _OpcionGestionar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(subtitulo, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text(subtitulo, style: AppTextStyles.apoyo),
                 ],
               ),
             ),
@@ -976,10 +966,7 @@ class _CotizacionDetalleScreenState extends State<_CotizacionDetalleScreen> {
     return Column(
       crossAxisAlignment: alinearDerecha ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        Text(
-          etiqueta,
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600, letterSpacing: 0.4),
-        ),
+        Text(etiqueta, style: AppTextStyles.etiqueta),
         const SizedBox(height: 4),
         Text(valor, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: BrandColors.azulMarino)),
       ],
@@ -1049,14 +1036,8 @@ class _CotizacionDetalleScreenState extends State<_CotizacionDetalleScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'COTIZACIÓN',
-                            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                          ),
-                          Text(
-                            cotizacion.numero,
-                            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                          ),
+                          Text('COTIZACIÓN', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
+                          Text(cotizacion.numero, style: AppTextStyles.titulo.copyWith(color: Colors.white)),
                         ],
                       ),
                     ],
@@ -1099,15 +1080,7 @@ class _CotizacionDetalleScreenState extends State<_CotizacionDetalleScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'PRODUCTOS · ${items.length}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurfaceVariant,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
+                  Text('PRODUCTOS · ${items.length}', style: AppTextStyles.etiqueta),
                   const SizedBox(height: 10),
                   if (items.isEmpty)
                     Padding(
@@ -1165,7 +1138,7 @@ class _CotizacionDetalleScreenState extends State<_CotizacionDetalleScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: BrandColors.azulMarino,
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: const StadiumBorder(),
                         ),
                         child: const Text('EXPORTAR PDF', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
                       ),
@@ -1177,7 +1150,9 @@ class _CotizacionDetalleScreenState extends State<_CotizacionDetalleScreen> {
                         onPressed: _compartir,
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          foregroundColor: BrandColors.azulMarino,
+                          side: const BorderSide(color: BrandColors.azulMarino),
+                          shape: const StadiumBorder(),
                         ),
                         child: const Text('Compartir cotización'),
                       ),

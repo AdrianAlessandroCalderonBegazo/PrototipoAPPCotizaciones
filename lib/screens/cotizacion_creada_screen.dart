@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../state/navegacion_state.dart';
+import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 
 /// Pantalla de confirmación al terminar de generar una cotización: banner
@@ -56,10 +57,7 @@ class CotizacionCreadaScreen extends StatelessWidget {
                       child: const Icon(Icons.check_rounded, color: Colors.white, size: 32),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Cotización creada',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
+                    Text('Cotización creada', style: AppTextStyles.subtitulo.copyWith(color: Colors.white, fontSize: 18)),
                     const SizedBox(height: 4),
                     Text(
                       '$numero · S/ ${total.toStringAsFixed(2)}',
@@ -101,15 +99,7 @@ class CotizacionCreadaScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'TOTAL',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              letterSpacing: 0.6,
-                            ),
-                          ),
+                          const Text('TOTAL', style: AppTextStyles.etiqueta),
                           Text(
                             'S/ ${total.toStringAsFixed(2)}',
                             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: BrandColors.azulMarino),
@@ -131,7 +121,7 @@ class CotizacionCreadaScreen extends StatelessWidget {
                         style: FilledButton.styleFrom(
                           backgroundColor: BrandColors.azulMarino,
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: const StadiumBorder(),
                         ),
                         child: const Text(
                           'COMPARTIR COTIZACIÓN',
@@ -146,7 +136,9 @@ class CotizacionCreadaScreen extends StatelessWidget {
                         onPressed: () => _volverAlInicio(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          foregroundColor: BrandColors.azulMarino,
+                          side: const BorderSide(color: BrandColors.azulMarino),
+                          shape: const StadiumBorder(),
                         ),
                         child: const Text('Volver al inicio'),
                       ),

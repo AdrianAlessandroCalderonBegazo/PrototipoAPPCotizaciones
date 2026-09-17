@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/producto.dart';
 import '../services/db_helper.dart';
 import '../state/cotizacion_state.dart';
+import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/producto_thumbnail.dart';
@@ -92,23 +93,15 @@ class _ProductosScreenState extends State<ProductosScreen> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'COTIZACIONES',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        SizedBox(height: 4),
+                        Text('COTIZACIONES', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
+                        const SizedBox(height: 4),
                         Text(
                           'Selecciona productos',
-                          style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                          style: AppTextStyles.titulo.copyWith(color: Colors.white),
                         ),
                       ],
                     ),
@@ -343,12 +336,12 @@ class _FilaProducto extends StatelessWidget {
                   producto.nombre,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: AppTextStyles.cuerpo,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   unidad.isEmpty ? 'S/ ${precio.toStringAsFixed(2)}' : 'S/ ${precio.toStringAsFixed(2)} · $unidad',
-                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  style: AppTextStyles.apoyo,
                 ),
               ],
             ),
@@ -446,7 +439,7 @@ class _BarraResumen extends StatelessWidget {
               children: [
                 Text(
                   '${cotizacion.items.length} productos · subtotal',
-                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                  style: AppTextStyles.apoyo.copyWith(fontWeight: FontWeight.w600),
                 ),
                 Text(
                   'S/ ${cotizacion.totalGeneral.toStringAsFixed(2)}',
@@ -462,7 +455,7 @@ class _BarraResumen extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: BrandColors.azulMarino,
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: const StadiumBorder(),
                 ),
                 child: const Text('GENERAR COTIZACIÓN', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
               ),
