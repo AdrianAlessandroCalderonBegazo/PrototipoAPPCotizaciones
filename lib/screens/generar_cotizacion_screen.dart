@@ -13,15 +13,17 @@ import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/buscador_productos.dart';
 import '../widgets/lottie_gate_screen.dart';
-import '../widgets/producto_thumbnail.dart';
-import '../widgets/seccion_card.dart';
 import 'cotizacion_creada_screen.dart';
 
+const _bancos = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'Banco de la Nación', 'Banco Pichincha', 'Banco Falabella', 'Otro'];
+const _monedas = ['Soles', 'Dólares'];
+
 /// Paso final para armar una cotización: datos del cliente, datos
-/// bancarios, y el resumen de productos ya elegidos (con la opción de
-/// agregar alguno más). Se llega acá desde la pestaña "Cotizar" al
-/// presionar "Generar cotización"; al terminar, reemplaza esta pantalla
-/// por la de confirmación con la vista previa del PDF.
+/// bancarios, y un resumen de cuántos productos se eligieron (ajustar
+/// cantidades se hace en la pestaña "Cotizar"; acá solo se puede agregar
+/// alguno que se haya olvidado). Se llega acá desde "Cotizar" al presionar
+/// "Generar cotización"; al terminar, reemplaza esta pantalla por la de
+/// confirmación con la vista previa del PDF.
 class GenerarCotizacionScreen extends StatefulWidget {
   const GenerarCotizacionScreen({super.key});
   @override
@@ -33,10 +35,11 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
   final _rucDniController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _vendedorController = TextEditingController();
-  final _bancoController = TextEditingController();
-  final _monedaController = TextEditingController();
+  final _bancoOtroController = TextEditingController();
   final _nroCuentaController = TextEditingController();
   final _cciController = TextEditingController();
+  String? _bancoSeleccionado;
+  String _monedaSeleccionada = 'Soles';
   bool _generando = false;
   bool _consultandoSunat = false;
 
@@ -49,18 +52,33 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
   Future<void> _cargarDatosBancarios() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    final bancoGuardado = prefs.getString('cotizacion_banco') ?? '';
+    final monedaGuardada = prefs.getString('cotizacion_moneda') ?? 'Soles';
     setState(() {
-      _bancoController.text = prefs.getString('cotizacion_banco') ?? '';
-      _monedaController.text = prefs.getString('cotizacion_moneda') ?? 'Soles';
+      if (bancoGuardado.isEmpty) {
+        _bancoSeleccionado = null;
+      } else if (_bancos.contains(bancoGuardado)) {
+        _bancoSeleccionado = bancoGuardado;
+      } else {
+        _bancoSeleccionado = 'Otro';
+        _bancoOtroController.text = bancoGuardado;
+      }
+      _monedaSeleccionada = _monedas.contains(monedaGuardada) ? monedaGuardada : 'Soles';
       _nroCuentaController.text = prefs.getString('cotizacion_nro_cuenta') ?? '';
       _cciController.text = prefs.getString('cotizacion_cci') ?? '';
     });
   }
 
+  String get _bancoEfectivo {
+    if (_bancoSeleccionado == null) return '';
+    if (_bancoSeleccionado == 'Otro') return _bancoOtroController.text.trim();
+    return _bancoSeleccionado!;
+  }
+
   Future<void> _guardarDatosBancarios() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('cotizacion_banco', _bancoController.text.trim());
-    await prefs.setString('cotizacion_moneda', _monedaController.text.trim());
+    await prefs.setString('cotizacion_banco', _bancoEfectivo);
+    await prefs.setString('cotizacion_moneda', _monedaSeleccionada);
     await prefs.setString('cotizacion_nro_cuenta', _nroCuentaController.text.trim());
     await prefs.setString('cotizacion_cci', _cciController.text.trim());
   }
@@ -71,8 +89,7 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
     _rucDniController.dispose();
     _telefonoController.dispose();
     _vendedorController.dispose();
-    _bancoController.dispose();
-    _monedaController.dispose();
+    _bancoOtroController.dispose();
     _nroCuentaController.dispose();
     _cciController.dispose();
     super.dispose();
@@ -143,8 +160,8 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
     final rucDni = _rucDniController.text.trim();
     final telefono = _telefonoController.text.trim();
     final vendedor = _vendedorController.text.trim();
-    final banco = _bancoController.text.trim();
-    final moneda = _monedaController.text.trim();
+    final banco = _bancoEfectivo;
+    final moneda = _monedaSeleccionada;
     final nroCuenta = _nroCuentaController.text.trim();
     final cci = _cciController.text.trim();
 
@@ -230,16 +247,113 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
     if (mounted) setState(() => _generando = false);
   }
 
-  InputDecoration _decoracion(String label, IconData icono, {Widget? suffix}) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icono, size: 20),
-      suffixIcon: suffix,
-      filled: true,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+  Future<void> _confirmarVaciar(CotizacionState cotizacion) {
+    return showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('¿Vaciar cotización?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () {
+              cotizacion.limpiar();
+              Navigator.pop(context);
+            },
+            child: const Text('Vaciar'),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _tituloSeccion(String texto) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 6),
+      child: Text(
+        texto,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: BrandColors.azulMarino, letterSpacing: 0.6),
+      ),
+    );
+  }
+
+  Widget _etiqueta(String texto) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        texto,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600, letterSpacing: 0.4),
+      ),
+    );
+  }
+
+  InputDecoration _decoracionCampo({Widget? suffix, String? hint}) {
+    final borde = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+    );
+    return InputDecoration(
+      hintText: hint,
+      suffixIcon: suffix,
+      isDense: true,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: borde,
+      enabledBorder: borde,
+    );
+  }
+
+  Widget _campo(String label, TextEditingController controller, {TextInputType? keyboardType, Widget? suffix}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _etiqueta(label),
+        TextField(controller: controller, keyboardType: keyboardType, decoration: _decoracionCampo(suffix: suffix)),
+      ],
+    );
+  }
+
+  Widget _campoBanco() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _etiqueta('BANCO'),
+        DropdownButtonFormField<String>(
+          initialValue: _bancoSeleccionado,
+          isExpanded: true,
+          hint: const Text('Elegir', style: TextStyle(fontSize: 13)),
+          decoration: _decoracionCampo(),
+          items: _bancos
+              .map((b) => DropdownMenuItem(value: b, child: Text(b, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))))
+              .toList(),
+          onChanged: (v) => setState(() => _bancoSeleccionado = v),
+        ),
+        if (_bancoSeleccionado == 'Otro') ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: _bancoOtroController,
+            decoration: _decoracionCampo(hint: 'Nombre del banco'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _campoMoneda() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _etiqueta('MONEDA'),
+        DropdownButtonFormField<String>(
+          initialValue: _monedaSeleccionada,
+          isExpanded: true,
+          decoration: _decoracionCampo(),
+          items: _monedas.map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 13)))).toList(),
+          onChanged: (v) {
+            if (v != null) setState(() => _monedaSeleccionada = v);
+          },
+        ),
+      ],
     );
   }
 
@@ -247,328 +361,221 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
   Widget build(BuildContext context) {
     final cotizacion = context.watch<CotizacionState>();
     final items = cotizacion.items;
-    final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        body: Column(
           children: [
-            Text(
-              'PASO FINAL',
-              style: TextStyle(fontSize: 11, letterSpacing: 0.6, color: Colors.white70),
-            ),
-            Text('Generar cotización', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-          ],
-        ),
-        actions: [
-          if (items.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Vaciar',
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('¿Vaciar cotización?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancelar'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        cotizacion.limpiar();
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Vaciar'),
-                    ),
-                  ],
-                ),
+            Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: BrandColors.azulMarino,
+                borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
               ),
-            ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          SeccionCard(
-            icono: Icons.person_outline,
-            color: BrandColors.azulOscuro,
-            titulo: 'Datos del cliente',
-            children: [
-              TextField(
-                controller: _clienteController,
-                decoration: _decoracion('Cliente (opcional)', Icons.storefront_outlined),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _rucDniController,
-                keyboardType: TextInputType.number,
-                decoration: _decoracion(
-                  'RUC / DNI (opcional)',
-                  Icons.badge_outlined,
-                  suffix: _consultandoSunat
-                      ? const Padding(
-                          padding: EdgeInsets.all(13),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.travel_explore, size: 20),
-                          tooltip: 'Buscar en SUNAT',
-                          onPressed: _consultarSunat,
-                        ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _telefonoController,
-                keyboardType: TextInputType.phone,
-                decoration: _decoracion('Teléfono (opcional)', Icons.phone_outlined),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _vendedorController,
-                decoration: _decoracion('Vendedor (opcional)', Icons.support_agent_outlined),
-              ),
-            ],
-          ),
-          SeccionCard(
-            icono: Icons.account_balance_outlined,
-            color: BrandColors.cian,
-            titulo: 'Datos bancarios (opcional)',
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _bancoController,
-                      decoration: _decoracion('Banco', Icons.account_balance_outlined),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _monedaController,
-                      decoration: _decoracion('Moneda', Icons.payments_outlined),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _nroCuentaController,
-                decoration: _decoracion(
-                  'Nro de cuenta',
-                  Icons.credit_card_outlined,
-                  suffix: IconButton(
-                    icon: const Icon(Icons.copy_outlined, size: 18),
-                    tooltip: 'Copiar',
-                    onPressed: () => _copiar(_nroCuentaController.text, 'Nro de cuenta'),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _cciController,
-                decoration: _decoracion(
-                  'CCI',
-                  Icons.tag_outlined,
-                  suffix: IconButton(
-                    icon: const Icon(Icons.copy_outlined, size: 18),
-                    tooltip: 'Copiar',
-                    onPressed: () => _copiar(_cciController.text, 'CCI'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SeccionCard(
-            icono: Icons.shopping_cart_outlined,
-            color: BrandColors.azulMarino,
-            titulo: 'Resumen (${cotizacion.totalItems})',
-            children: [
-              if (items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Aún no agregaste productos.',
-                    style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
-                  ),
-                )
-              else
-                ...items.map((item) => _FilaCarrito(item: item, cotizacion: cotizacion)),
-              const SizedBox(height: 4),
-              AnimatedPressable(
-                onTap: _agregarProducto,
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: BrandColors.cian, width: 1.4),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 4, 12, 20),
+                  child: Row(
                     children: [
-                      Icon(Icons.add_circle_outline, size: 18, color: BrandColors.cian),
-                      SizedBox(width: 8),
-                      Text(
-                        'Agregar otro producto',
-                        style: TextStyle(color: BrandColors.cian, fontWeight: FontWeight.bold),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
                       ),
+                      const SizedBox(width: 4),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'PASO FINAL',
+                              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                            ),
+                            Text(
+                              'Generar cotización',
+                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (items.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.white),
+                          tooltip: 'Vaciar',
+                          onPressed: () => _confirmarVaciar(cotizacion),
+                        ),
                     ],
                   ),
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'TOTAL',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                children: [
+                  _tituloSeccion('DATOS DEL CLIENTE'),
+                  _campo('CLIENTE', _clienteController),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _campo(
+                          'RUC / DNI',
+                          _rucDniController,
+                          keyboardType: TextInputType.number,
+                          suffix: _consultandoSunat
+                              ? const Padding(
+                                  padding: EdgeInsets.all(13),
+                                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                )
+                              : IconButton(
+                                  icon: const Icon(Icons.travel_explore, size: 20),
+                                  tooltip: 'Buscar en SUNAT',
+                                  onPressed: _consultarSunat,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _campo('TELÉFONO', _telefonoController, keyboardType: TextInputType.phone),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _campo('VENDEDOR', _vendedorController),
+                  const SizedBox(height: 20),
+                  _tituloSeccion('DATOS BANCARIOS'),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _campoBanco()),
+                      const SizedBox(width: 10),
+                      Expanded(child: _campoMoneda()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _campo(
+                    'N.° DE CUENTA',
+                    _nroCuentaController,
+                    suffix: IconButton(
+                      icon: const Icon(Icons.copy_outlined, size: 18),
+                      tooltip: 'Copiar',
+                      onPressed: () => _copiar(_nroCuentaController.text, 'Nro de cuenta'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _campo(
+                    'CCI',
+                    _cciController,
+                    suffix: IconButton(
+                      icon: const Icon(Icons.copy_outlined, size: 18),
+                      tooltip: 'Copiar',
+                      onPressed: () => _copiar(_cciController.text, 'CCI'),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _tituloSeccion('RESUMEN'),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          items.isEmpty ? 'Aún no agregaste productos' : '${items.length} productos seleccionados',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        Text(
+                          'S/ ${cotizacion.totalGeneral.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: BrandColors.azulMarino),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  AnimatedPressable(
+                    onTap: _agregarProducto,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: BrandColors.cian, width: 1.4),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add, size: 18, color: BrandColors.cian),
+                          SizedBox(width: 8),
+                          Text(
+                            'Agregar otro producto',
+                            style: TextStyle(color: BrandColors.cian, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      'S/ ${cotizacion.totalGeneral.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.bold,
-                        color: BrandColors.azulMarino,
+                  ),
+                ],
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total con IGV',
+                          style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'S/ ${cotizacion.totalGeneral.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: BrandColors.azulMarino),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: (items.isEmpty || _generando) ? null : () => _generarCotizacion(cotizacion),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BrandColors.azulMarino,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: _generando
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('CREAR COTIZACIÓN', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                ),
-                icon: _generando
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.check_circle_outline),
-                label: Text(_generando ? 'Generando...' : 'Crear cotización'),
-                onPressed: (items.isEmpty || _generando) ? null : () => _generarCotizacion(cotizacion),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Fila de un producto ya agregado al carrito: cantidad con stepper +/- y
-/// un botón para quitarlo del todo, sin tener que bajarlo hasta cero.
-class _FilaCarrito extends StatelessWidget {
-  final ItemCotizacion item;
-  final CotizacionState cotizacion;
-
-  const _FilaCarrito({required this.item, required this.cotizacion});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = item.producto;
-    final precio = p.precioVenta ?? 0;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          ProductoThumbnail(archivoImagen: p.archivoImagen, size: 44),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  p.nombre,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'S/ ${precio.toStringAsFixed(2)} c/u · Subt. S/ ${item.subtotal.toStringAsFixed(2)}',
-                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 4),
-          _botonRedondo(
-            Icons.remove,
-            BrandColors.azulMarino.withValues(alpha: 0.08),
-            BrandColors.azulMarino,
-            () => cotizacion.setCantidad(p, item.cantidad - 1),
-          ),
-          SizedBox(
-            width: 22,
-            child: Text(
-              '${item.cantidad}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-          ),
-          _botonRedondo(
-            Icons.add,
-            BrandColors.azulMarino.withValues(alpha: 0.08),
-            BrandColors.azulMarino,
-            () => cotizacion.setCantidad(p, item.cantidad + 1),
-          ),
-          const SizedBox(width: 2),
-          _botonRedondo(
-            Icons.delete_outline,
-            Colors.red.withValues(alpha: 0.08),
-            Colors.red,
-            () => cotizacion.quitar(p),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _botonRedondo(IconData icono, Color fondo, Color iconoColor, VoidCallback onTap) {
-    return AnimatedPressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(13),
-      child: Container(
-        width: 26,
-        height: 26,
-        margin: const EdgeInsets.symmetric(horizontal: 1),
-        decoration: BoxDecoration(color: fondo, borderRadius: BorderRadius.circular(13)),
-        child: Icon(icono, size: 14, color: iconoColor),
-      ),
-    );
-  }
-}
