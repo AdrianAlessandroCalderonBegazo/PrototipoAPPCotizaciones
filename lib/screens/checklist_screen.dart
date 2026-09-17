@@ -1,20 +1,22 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../state/checklist_state.dart';
 import '../theme/brand_colors.dart';
 import '../utils/checklist_estilo.dart';
+import '../widgets/agregar_item_checklist.dart';
 import '../widgets/animated_pressable.dart';
-import '../widgets/brand_app_bar_title.dart';
 import '../widgets/fade_slide_in.dart';
 import 'checklist_resumen_screen.dart';
 
 /// Pestaña "Checklist": recorrido obligatorio categoría por categoría (10
 /// en total, tomadas del Excel real de la empresa) para que antes de salir
 /// a obra no se quede nada por olvidar. Se puede retroceder libremente a
-/// una categoría ya vista, pero avanzar es siempre de una en una. Agregar
-/// o quitar ítems se hace en el resumen final, donde se ven las 10 juntas.
+/// una categoría ya vista, pero avanzar es siempre de una en una. Cada
+/// categoría permite agregar un ítem que se le haya olvidado; el resumen
+/// final (al terminar la última) muestra las categorías juntas.
 class ChecklistScreen extends StatefulWidget {
   const ChecklistScreen({super.key});
 
@@ -45,6 +47,67 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     );
   }
 
+  Widget _encabezado(BuildContext context, ChecklistState checklist, ChecklistCategoriaState categoria, int porcentaje) {
+    final total = checklist.categorias.length;
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: BrandColors.azulMarino,
+        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'PASO ${checklist.indice + 1} DE $total',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.6),
+                  ),
+                  Text('$porcentaje%', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: List.generate(total, (i) {
+                  final alcanzado = i <= checklist.indice;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: alcanzado ? () => checklist.irACategoria(i) : null,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: alcanzado ? BrandColors.cian : Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                quitarNumeroCategoria(categoria.nombre),
+                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Marca lo que ya está verificado',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final checklist = context.watch<ChecklistState>();
@@ -64,164 +127,87 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
 
     final categoria = checklist.categoriaActual;
-    final estilo = estiloDeCategoriaChecklist(checklist.indice);
-
     final porcentaje = checklist.totalItems == 0
         ? 0
         : ((checklist.totalMarcados / checklist.totalItems) * 100).round();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const BrandAppBarTitle(subtitulo: 'Checklist de obra'),
-      ),
-      body: Column(
-        children: [
-          _BarraProgreso(
-            total: checklist.categorias.length,
-            actual: checklist.indice,
-            porcentaje: porcentaje,
-            onTap: checklist.irACategoria,
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: estilo.color.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(14),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        body: Column(
+          children: [
+            _encabezado(context, checklist, categoria, porcentaje),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                children: [
+                  ...categoria.items.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    return FadeSlideIn(
+                      index: index,
+                      child: _FilaItemChecklist(
+                        item: item,
+                        onTap: () => checklist.toggleItem(index),
                       ),
-                      child: Icon(estilo.icono, color: estilo.color, size: 26),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  AnimatedPressable(
+                    onTap: () => mostrarAgregarItemChecklist(
+                      context,
+                      checklist: checklist,
+                      categoriaIndex: checklist.indice,
+                      nombreCategoria: quitarNumeroCategoria(categoria.nombre),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: BrandColors.cian, width: 1.4),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          Icon(Icons.add, size: 18, color: BrandColors.cian),
+                          SizedBox(width: 8),
                           Text(
-                            quitarNumeroCategoria(categoria.nombre),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: BrandColors.azulMarino,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${categoria.totalMarcados} de ${categoria.items.length} ítems marcados',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                            'Añadir objeto a este paso',
+                            style: TextStyle(color: BrandColors.cian, fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ...categoria.items.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final item = entry.value;
-                  return FadeSlideIn(
-                    index: index,
-                    child: _FilaItemChecklist(
-                      item: item,
-                      onTap: () => checklist.toggleItem(index),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _BarraAvanzar(
-        esPrimera: checklist.esPrimeraCategoria,
-        esUltima: checklist.esUltimaCategoria,
-        onAnterior: checklist.retroceder,
-        onSiguiente: () {
-          if (checklist.esUltimaCategoria) {
-            _finalizar(checklist);
-          } else {
-            checklist.avanzar();
-          }
-        },
-      ),
-    );
-  }
-}
-
-class _BarraProgreso extends StatelessWidget {
-  final int total;
-  final int actual;
-  final int porcentaje;
-  final ValueChanged<int> onTap;
-
-  const _BarraProgreso({
-    required this.total,
-    required this.actual,
-    required this.porcentaje,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: List.generate(total, (i) {
-              final alcanzado = i <= actual;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: alcanzado ? () => onTap(i) : null,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: i == actual
-                          ? BrandColors.cian
-                          : alcanzado
-                              ? BrandColors.cian.withValues(alpha: 0.4)
-                              : colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
                   ),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Categoría ${actual + 1} de $total',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
+                  if (!checklist.esUltimaCategoria) ...[
+                    const SizedBox(height: 14),
+                    Center(
+                      child: Text(
+                        'Siguiente paso: ${quitarNumeroCategoria(checklist.categorias[checklist.indice + 1].nombre)}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              Text(
-                '$porcentaje% revisado',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: BrandColors.cian,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
+        bottomNavigationBar: _BarraAvanzar(
+          esPrimera: checklist.esPrimeraCategoria,
+          esUltima: checklist.esUltimaCategoria,
+          onAnterior: checklist.retroceder,
+          onSiguiente: () {
+            if (checklist.esUltimaCategoria) {
+              _finalizar(checklist);
+            } else {
+              checklist.avanzar();
+            }
+          },
+        ),
       ),
     );
   }
@@ -255,7 +241,9 @@ class _FilaItemChecklist extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: item.marcado ? BrandColors.azulMarino : colorScheme.onSurface,
+                  color: item.marcado ? colorScheme.onSurfaceVariant : colorScheme.onSurface,
+                  decoration: item.marcado ? TextDecoration.lineThrough : TextDecoration.none,
+                  decorationColor: colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -323,29 +311,30 @@ class _BarraAvanzar extends StatelessWidget {
           children: [
             if (!esPrimera) ...[
               Expanded(
-                child: OutlinedButton.icon(
+                child: OutlinedButton(
                   onPressed: onAnterior,
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: const Text('Anterior'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     foregroundColor: BrandColors.azulMarino,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
+                  child: const Text('Anterior'),
                 ),
               ),
               const SizedBox(width: 12),
             ],
             Expanded(
               flex: esPrimera ? 1 : 2,
-              child: FilledButton.icon(
+              child: FilledButton(
                 onPressed: onSiguiente,
-                icon: Icon(esUltima ? Icons.task_alt : Icons.arrow_forward, size: 18),
-                label: Text(esUltima ? 'Ir al resumen' : 'Siguiente paso'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: BrandColors.cian,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: Text(
+                  esUltima ? 'IR AL RESUMEN' : 'SIGUIENTE PASO',
+                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.4),
                 ),
               ),
             ),
