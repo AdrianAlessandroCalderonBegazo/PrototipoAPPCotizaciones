@@ -183,6 +183,7 @@ class _GenerarCotizacionScreenState extends State<GenerarCotizacionScreen> {
                 cantidad: i.cantidad.toDouble(),
                 precioUnitario: i.producto.precioVenta ?? 0,
                 archivoImagen: i.producto.archivoImagen,
+                unidadMedida: i.producto.unidadMedida,
               ),
             )
             .toList(),

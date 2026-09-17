@@ -12,10 +12,17 @@ import '../utils/checklist_estilo.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/brand_app_bar_title.dart';
 import '../widgets/fade_slide_in.dart';
-import '../widgets/producto_thumbnail.dart';
 import '../widgets/pulsing_dot.dart';
 
 enum _FiltroHistorial { cotizaciones, checklists }
+
+// DateFormat('d MMM', 'es') depende de datos de locale que la app no
+// inicializa (para no encarecer el arranque solo por esto); además, el
+// mes abreviado que trae esa tabla para setiembre es "sept", no "sep"
+// como se usa en el diseño — con esta lista chica alcanza y queda exacto.
+const _mesesCorto = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+String _fechaCorta(DateTime fecha) => '${fecha.day} ${_mesesCorto[fecha.month - 1]}';
 
 /// Pestaña "Historial": cotizaciones y checklists de obra ya generados,
 /// más recientes primero, con un selector arriba para ver uno u otro tipo.
@@ -96,6 +103,15 @@ class _HistorialScreenState extends State<HistorialScreen> {
       saveText: 'Aplicar',
     );
     if (rango != null) setState(() => _rangoFecha = rango);
+  }
+
+  String _etiquetaRango(DateTimeRange rango) {
+    if (rango.start.year == rango.end.year &&
+        rango.start.month == rango.end.month &&
+        rango.start.day == rango.end.day) {
+      return _fechaCorta(rango.start);
+    }
+    return '${_fechaCorta(rango.start)} - ${_fechaCorta(rango.end)}';
   }
 
   void _limpiarFiltros() {
@@ -257,104 +273,128 @@ class _HistorialScreenState extends State<HistorialScreen> {
     );
   }
 
+  Widget _encabezado(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: BrandColors.azulMarino,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'HISTORIAL',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Cotizaciones y checklists',
+                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _busquedaController,
+                onChanged: (v) => setState(() => _busqueda = v),
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                cursorColor: Colors.white,
+                decoration: InputDecoration(
+                  hintText: 'Buscar por nombre',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: Colors.white54),
+                  suffixIcon: _busqueda.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Colors.white54),
+                          onPressed: () => setState(() {
+                            _busqueda = '';
+                            _busquedaController.clear();
+                          }),
+                        ),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.1),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _PildoraFiltro(
+                      texto: 'Cotizaciones',
+                      activo: _filtro == _FiltroHistorial.cotizaciones,
+                      onTap: () => setState(() => _filtro = _FiltroHistorial.cotizaciones),
+                    ),
+                    const SizedBox(width: 8),
+                    _PildoraFiltro(
+                      texto: 'Checklists',
+                      activo: _filtro == _FiltroHistorial.checklists,
+                      onTap: () => setState(() => _filtro = _FiltroHistorial.checklists),
+                    ),
+                    const SizedBox(width: 8),
+                    _PildoraFiltro(
+                      texto: _rangoFecha == null ? 'Fecha' : _etiquetaRango(_rangoFecha!),
+                      activo: _rangoFecha != null,
+                      icono: Icons.calendar_month_outlined,
+                      onTap: _elegirRangoFecha,
+                      onClear: _rangoFecha == null ? null : () => setState(() => _rangoFecha = null),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final formatoFecha = DateFormat('dd/MM/yyyy · HH:mm');
     final esCotizaciones = _filtro == _FiltroHistorial.cotizaciones;
 
-    return Scaffold(
-      appBar: AppBar(title: const BrandAppBarTitle(subtitulo: 'Historial')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: _SelectorFiltro(
-              filtro: _filtro,
-              onChanged: (f) => setState(() => _filtro = f),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _busquedaController,
-                    onChanged: (v) => setState(() => _busqueda = v),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por nombre',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: _busqueda.isEmpty
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              onPressed: () => setState(() {
-                                _busqueda = '';
-                                _busquedaController.clear();
-                              }),
-                            ),
-                      filled: true,
-                      isDense: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                AnimatedPressable(
-                  onTap: _elegirRangoFecha,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: _rangoFecha != null
-                          ? BrandColors.cian.withValues(alpha: 0.15)
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.calendar_month_outlined,
-                      size: 20,
-                      color: _rangoFecha != null ? BrandColors.cian : Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_rangoFecha != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: InputChip(
-                  avatar: const Icon(Icons.calendar_month_outlined, size: 16),
-                  label: Text(
-                    '${DateFormat('dd/MM/yy').format(_rangoFecha!.start)} - ${DateFormat('dd/MM/yy').format(_rangoFecha!.end)}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  onDeleted: () => setState(() => _rangoFecha = null),
-                ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        body: Column(
+          children: [
+            _encabezado(context),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _cargar,
+                child: _cargando
+                    ? const Center(child: CircularProgressIndicator())
+                    : esCotizaciones
+                        ? _listaCotizaciones(formatoFecha)
+                        : _listaChecklists(formatoFecha),
               ),
             ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _cargar,
-              child: _cargando
-                  ? const Center(child: CircularProgressIndicator())
-                  : esCotizaciones
-                      ? _listaCotizaciones(formatoFecha)
-                      : _listaChecklists(formatoFecha),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _mostrarGestionar,
-        icon: const Icon(Icons.add),
-        label: const Text('Gestionar'),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _mostrarGestionar,
+          icon: const Icon(Icons.add),
+          label: const Text('Gestionar'),
+        ),
       ),
     );
   }
@@ -381,8 +421,19 @@ class _HistorialScreenState extends State<HistorialScreen> {
     }
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-      itemCount: lista.length,
+      itemCount: lista.length + 1,
       itemBuilder: (context, index) {
+        if (index == lista.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                'toca una tarjeta para ver el detalle',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          );
+        }
         final c = lista[index];
         return FadeSlideIn(
           index: index,
@@ -390,7 +441,6 @@ class _HistorialScreenState extends State<HistorialScreen> {
             padding: const EdgeInsets.only(bottom: 12),
             child: _TarjetaCotizacion(
               cotizacion: c,
-              formatoFecha: formatoFecha,
               onPreview: () => _abrirCotizacion(c),
               onShare: () => _compartirCotizacion(c),
               onDelete: () => _eliminarCotizacion(c),
@@ -447,64 +497,54 @@ class _HistorialScreenState extends State<HistorialScreen> {
   }
 }
 
-class _SelectorFiltro extends StatelessWidget {
-  final _FiltroHistorial filtro;
-  final ValueChanged<_FiltroHistorial> onChanged;
+/// Píldora de filtro del encabezado de Historial — dos son un toggle
+/// (Cotizaciones/Checklists, siempre una activa) y la tercera (Fecha) es
+/// un filtro independiente que se puede limpiar con su propia "x".
+class _PildoraFiltro extends StatelessWidget {
+  final String texto;
+  final bool activo;
+  final IconData? icono;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
 
-  const _SelectorFiltro({required this.filtro, required this.onChanged});
+  const _PildoraFiltro({
+    required this.texto,
+    required this.activo,
+    required this.onTap,
+    this.icono,
+    this.onClear,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _opcion(
-              context,
-              'Cotizaciones',
-              Icons.request_quote_outlined,
-              _FiltroHistorial.cotizaciones,
-            ),
-          ),
-          Expanded(
-            child: _opcion(context, 'Checklists', Icons.checklist, _FiltroHistorial.checklists),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _opcion(BuildContext context, String texto, IconData icono, _FiltroHistorial valor) {
-    final activo = filtro == valor;
-    final colorScheme = Theme.of(context).colorScheme;
     return AnimatedPressable(
-      onTap: () => onChanged(valor),
-      borderRadius: BorderRadius.circular(11),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: activo ? BrandColors.azulMarino : Colors.transparent,
-          borderRadius: BorderRadius.circular(11),
+          color: activo ? BrandColors.cian : Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icono, size: 16, color: activo ? Colors.white : colorScheme.onSurfaceVariant),
-            const SizedBox(width: 6),
+            if (icono != null) ...[
+              Icon(icono, size: 14, color: Colors.white),
+              const SizedBox(width: 6),
+            ],
             Text(
               texto,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: activo ? Colors.white : colorScheme.onSurfaceVariant,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
             ),
+            if (onClear != null) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: onClear,
+                child: const Icon(Icons.close, size: 14, color: Colors.white),
+              ),
+            ],
           ],
         ),
       ),
@@ -578,14 +618,12 @@ class _OpcionGestionar extends StatelessWidget {
 
 class _TarjetaCotizacion extends StatelessWidget {
   final CotizacionGuardada cotizacion;
-  final DateFormat formatoFecha;
   final VoidCallback onPreview;
   final VoidCallback onShare;
   final VoidCallback onDelete;
 
   const _TarjetaCotizacion({
     required this.cotizacion,
-    required this.formatoFecha,
     required this.onPreview,
     required this.onShare,
     required this.onDelete,
@@ -594,15 +632,20 @@ class _TarjetaCotizacion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final moneda = NumberFormat.currency(locale: 'en_US', symbol: 'S/ ', decimalDigits: 0);
+    final fecha = _fechaCorta(cotizacion.fecha);
+    final cliente = cotizacion.cliente.isEmpty ? 'Cliente sin nombre' : cotizacion.cliente;
+    final productos = cotizacion.items.length;
+    final subtitulo = productos > 0 ? '$fecha · $cliente · $productos productos' : '$fecha · $cliente';
 
     return AnimatedPressable(
       onTap: onPreview,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
@@ -616,74 +659,87 @@ class _TarjetaCotizacion extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.receipt_long_outlined, size: 14, color: colorScheme.outline),
-                const SizedBox(width: 4),
-                Text(
-                  'Nro ${cotizacion.numero}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.outline,
-                    letterSpacing: 0.3,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: BrandColors.menta.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.receipt_long_outlined, color: BrandColors.azulOscuro, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cotización ${cotizacion.numero}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: BrandColors.azulMarino),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitulo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                const Icon(Icons.visibility_outlined, size: 15, color: BrandColors.cian),
-                const SizedBox(width: 3),
-                const Text(
-                  'Ver detalle',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: BrandColors.cian),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              cotizacion.cliente.isEmpty ? 'Cliente sin nombre' : cotizacion.cliente,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: BrandColors.azulMarino,
-              ),
-            ),
-            if ((cotizacion.rucDni ?? '').isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                'RUC/DNI: ${cotizacion.rucDni}',
-                style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-              ),
-            ],
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.schedule_outlined, size: 14, color: colorScheme.outline),
-                const SizedBox(width: 4),
+                const SizedBox(width: 8),
                 Text(
-                  formatoFecha.format(cotizacion.fecha),
-                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                  moneda.format(cotizacion.total),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: BrandColors.cian),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Divider(height: 1, color: colorScheme.outlineVariant),
-            const SizedBox(height: 12),
-            Text(
-              'Total',
-              style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
-            ),
-            Text(
-              'S/ ${cotizacion.total.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: BrandColors.azulMarino,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _FilaAccionesTarjeta(onShare: onShare, onDelete: onDelete),
+            const SizedBox(height: 10),
+            _AccionesTexto(onShare: onShare, onDelete: onDelete),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Acciones de la tarjeta en texto plano (sin caja), como en el diseño de
+/// referencia — más liviano que un botón con borde para una tarjeta chica.
+class _AccionesTexto extends StatelessWidget {
+  final VoidCallback onShare;
+  final VoidCallback onDelete;
+
+  const _AccionesTexto({required this.onShare, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextButton(
+            onPressed: onShare,
+            style: TextButton.styleFrom(
+              foregroundColor: BrandColors.cian,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              alignment: Alignment.centerLeft,
+            ),
+            child: const Text('Compartir', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
+        ),
+        Expanded(
+          child: TextButton(
+            onPressed: onDelete,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              alignment: Alignment.centerLeft,
+            ),
+            child: const Text('Eliminar', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -873,23 +929,32 @@ class _VistaPreviaScreen extends StatelessWidget {
 /// Detalle nativo de una cotización guardada: cliente, RUC/DNI, fecha,
 /// vendedor/datos bancarios y el detalle completo de productos — con
 /// opción de ver el PDF ya generado o compartirlo directamente.
-class _CotizacionDetalleScreen extends StatelessWidget {
+class _CotizacionDetalleScreen extends StatefulWidget {
   final CotizacionGuardada cotizacion;
 
   const _CotizacionDetalleScreen({required this.cotizacion});
 
-  Future<bool> _verificarArchivo(BuildContext context) async {
+  @override
+  State<_CotizacionDetalleScreen> createState() => _CotizacionDetalleScreenState();
+}
+
+class _CotizacionDetalleScreenState extends State<_CotizacionDetalleScreen> {
+  bool _verTodos = false;
+
+  CotizacionGuardada get cotizacion => widget.cotizacion;
+
+  Future<bool> _verificarArchivo() async {
     if (await File(cotizacion.archivoPdf).exists()) return true;
-    if (!context.mounted) return false;
+    if (!mounted) return false;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Ese PDF ya no está disponible en el celular.')),
     );
     return false;
   }
 
-  Future<void> _verPdf(BuildContext context) async {
-    if (!await _verificarArchivo(context)) return;
-    if (!context.mounted) return;
+  Future<void> _verPdf() async {
+    if (!await _verificarArchivo()) return;
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -901,24 +966,47 @@ class _CotizacionDetalleScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _compartir(BuildContext context) async {
-    if (!await _verificarArchivo(context)) return;
+  Future<void> _compartir() async {
+    if (!await _verificarArchivo()) return;
     final bytes = await File(cotizacion.archivoPdf).readAsBytes();
     await Printing.sharePdf(bytes: bytes, filename: 'cotizacion_${cotizacion.numero}.pdf');
   }
 
-  Widget _filaDato(String etiqueta, String valor) {
+  Widget _parDato(String etiqueta, String valor, {bool alinearDerecha = false}) {
+    return Column(
+      crossAxisAlignment: alinearDerecha ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          etiqueta,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600, letterSpacing: 0.4),
+        ),
+        const SizedBox(height: 4),
+        Text(valor, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: BrandColors.azulMarino)),
+      ],
+    );
+  }
+
+  Widget _filaTotal(String etiqueta, String valor, ColorScheme colorScheme, {bool destacado = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          SizedBox(
-            width: 90,
-            child: Text(etiqueta, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          Text(
+            etiqueta,
+            style: TextStyle(
+              fontSize: destacado ? 15 : 13,
+              fontWeight: destacado ? FontWeight.bold : FontWeight.w500,
+              color: destacado ? BrandColors.azulMarino : colorScheme.onSurfaceVariant,
+            ),
           ),
-          Expanded(
-            child: Text(valor, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(
+            valor,
+            style: TextStyle(
+              fontSize: destacado ? 20 : 14,
+              fontWeight: FontWeight.bold,
+              color: destacado ? BrandColors.cian : colorScheme.onSurface,
+            ),
           ),
         ],
       ),
@@ -927,150 +1015,202 @@ class _CotizacionDetalleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formatoFecha = DateFormat('dd/MM/yyyy · HH:mm');
+    final moneda = NumberFormat.currency(locale: 'en_US', symbol: 'S/ ', decimalDigits: 0);
+    final formatoFecha = DateFormat('dd/MM/yyyy');
     final colorScheme = Theme.of(context).colorScheme;
-    final tieneDatosVendedor = (cotizacion.vendedor ?? '').isNotEmpty ||
-        (cotizacion.banco ?? '').isNotEmpty ||
-        (cotizacion.moneda ?? '').isNotEmpty ||
-        (cotizacion.nroCuenta ?? '').isNotEmpty ||
-        (cotizacion.cci ?? '').isNotEmpty;
 
-    return Scaffold(
-      appBar: AppBar(title: BrandAppBarTitle(subtitulo: 'Cotización ${cotizacion.numero}')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: BrandColors.azulMarino,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  cotizacion.cliente.isEmpty ? 'Cliente sin nombre' : cotizacion.cliente,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                if ((cotizacion.rucDni ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text('RUC/DNI: ${cotizacion.rucDni}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                ],
-                if ((cotizacion.telefono ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text('Tel: ${cotizacion.telefono}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                ],
-                const SizedBox(height: 8),
-                Text(formatoFecha.format(cotizacion.fecha), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              ],
-            ),
-          ),
-          if (tieneDatosVendedor) ...[
-            const SizedBox(height: 14),
+    final totalBruto = cotizacion.total;
+    final subtotal = totalBruto / 1.18;
+    final igv = totalBruto - subtotal;
+
+    final items = cotizacion.items;
+    final mostrados = _verTodos ? items : items.take(2).toList();
+    final restantes = items.length - mostrados.length;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        body: Column(
+          children: [
             Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if ((cotizacion.vendedor ?? '').isNotEmpty) _filaDato('Vendedor(a)', cotizacion.vendedor!),
-                  if ((cotizacion.banco ?? '').isNotEmpty) _filaDato('Banco', cotizacion.banco!),
-                  if ((cotizacion.moneda ?? '').isNotEmpty) _filaDato('Moneda', cotizacion.moneda!),
-                  if ((cotizacion.nroCuenta ?? '').isNotEmpty) _filaDato('Nro cuenta', cotizacion.nroCuenta!),
-                  if ((cotizacion.cci ?? '').isNotEmpty) _filaDato('CCI', cotizacion.cci!),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 10),
-            child: Text(
-              'Productos',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: BrandColors.azulMarino),
-            ),
-          ),
-          if (cotizacion.items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Esta cotización se guardó antes de registrar el detalle de productos.',
-                style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-              ),
-            )
-          else
-            ...cotizacion.items.map((item) => _FilaProductoDetalle(item: item)),
-          const SizedBox(height: 8),
-          Divider(color: colorScheme.outlineVariant),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Total',
-                style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-              ),
-              Text(
-                'S/ ${cotizacion.total.toStringAsFixed(2)}',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: BrandColors.azulMarino),
-              ),
-            ],
-          ),
-        ],
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _verPdf(context),
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                  label: const Text('Ver PDF'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: BrandColors.cian),
-                    foregroundColor: BrandColors.azulMarino,
+              width: double.infinity,
+              color: BrandColors.cian,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 4, 20, 20),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+                      ),
+                      const SizedBox(width: 4),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'COTIZACIÓN',
+                            style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                          ),
+                          Text(
+                            cotizacion.numero,
+                            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => _compartir(context),
-                  icon: const Icon(Icons.share_outlined),
-                  label: const Text('Compartir'),
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _parDato(
+                          'CLIENTE',
+                          cotizacion.cliente.isEmpty ? 'Cliente sin nombre' : cotizacion.cliente,
+                        ),
+                      ),
+                      Expanded(
+                        child: _parDato('FECHA', formatoFecha.format(cotizacion.fecha), alinearDerecha: true),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _parDato('RUC / DNI', (cotizacion.rucDni ?? '').isEmpty ? '-' : cotizacion.rucDni!),
+                      ),
+                      Expanded(
+                        child: _parDato(
+                          'VENDEDOR',
+                          (cotizacion.vendedor ?? '').isEmpty ? '-' : cotizacion.vendedor!,
+                          alinearDerecha: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'PRODUCTOS · ${items.length}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurfaceVariant,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (items.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'Esta cotización se guardó antes de registrar el detalle de productos.',
+                        style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                      ),
+                    )
+                  else ...[
+                    ...mostrados.map((item) => _FilaProductoDetalle(item: item, moneda: moneda)),
+                    if (restantes > 0)
+                      GestureDetector(
+                        onTap: () => setState(() => _verTodos = true),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            '+ $restantes productos más',
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: BrandColors.cian),
+                          ),
+                        ),
+                      )
+                    else if (_verTodos && items.length > 2)
+                      GestureDetector(
+                        onTap: () => setState(() => _verTodos = false),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            'Ver menos',
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: BrandColors.cian),
+                          ),
+                        ),
+                      ),
+                  ],
+                  const SizedBox(height: 16),
+                  Divider(color: colorScheme.outlineVariant),
+                  const SizedBox(height: 8),
+                  _filaTotal('Subtotal', moneda.format(subtotal), colorScheme),
+                  _filaTotal('IGV 18%', moneda.format(igv), colorScheme),
+                  const SizedBox(height: 6),
+                  _filaTotal('TOTAL', moneda.format(totalBruto), colorScheme, destacado: true),
+                ],
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _verPdf,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BrandColors.azulMarino,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('EXPORTAR PDF', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _compartir,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('Compartir cotización'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+String _cantidadCorta(double n) => n == n.truncateToDouble() ? n.toStringAsFixed(0) : n.toStringAsFixed(2);
+
 class _FilaProductoDetalle extends StatelessWidget {
   final ItemCotizacionGuardado item;
+  final NumberFormat moneda;
 
-  const _FilaProductoDetalle({required this.item});
+  const _FilaProductoDetalle({required this.item, required this.moneda});
 
   @override
   Widget build(BuildContext context) {
+    final unidad = (item.unidadMedida ?? '').trim();
+    final cantidadTexto = unidad.isEmpty ? _cantidadCorta(item.cantidad) : '${_cantidadCorta(item.cantidad)} $unidad';
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ProductoThumbnail(archivoImagen: item.archivoImagen, size: 44),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1079,20 +1219,18 @@ class _FilaProductoDetalle extends StatelessWidget {
                   item.nombre,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${item.cantidad.toStringAsFixed(2)} x S/ ${item.precioUnitario.toStringAsFixed(2)}',
-                  style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  '$cantidadTexto × S/ ${item.precioUnitario.toStringAsFixed(2)}',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
           ),
-          Text(
-            'S/ ${item.subtotal.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: BrandColors.azulMarino),
-          ),
+          const SizedBox(width: 8),
+          Text(moneda.format(item.subtotal), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         ],
       ),
     );

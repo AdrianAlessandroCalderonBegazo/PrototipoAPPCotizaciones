@@ -8,12 +8,14 @@ class ItemCotizacionGuardado {
   final double cantidad;
   final double precioUnitario;
   final String? archivoImagen;
+  final String? unidadMedida;
 
   ItemCotizacionGuardado({
     required this.nombre,
     required this.cantidad,
     required this.precioUnitario,
     this.archivoImagen,
+    this.unidadMedida,
   });
 
   double get subtotal => cantidad * precioUnitario;
@@ -24,6 +26,7 @@ class ItemCotizacionGuardado {
       cantidad: (json['cantidad'] as num?)?.toDouble() ?? 0,
       precioUnitario: (json['precio_unitario'] as num?)?.toDouble() ?? 0,
       archivoImagen: json['archivo_imagen'] as String?,
+      unidadMedida: json['unidad_medida'] as String?,
     );
   }
 
@@ -32,6 +35,7 @@ class ItemCotizacionGuardado {
         'cantidad': cantidad,
         'precio_unitario': precioUnitario,
         'archivo_imagen': archivoImagen,
+        'unidad_medida': unidadMedida,
       };
 }
 
