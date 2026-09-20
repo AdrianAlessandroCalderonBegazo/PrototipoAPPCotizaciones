@@ -369,6 +369,13 @@ class PdfService {
               style: const pw.TextStyle(fontSize: 9),
             ),
           ),
+          if (item.marcado) ...[
+            pw.SizedBox(width: 8),
+            pw.Text(
+              '× ${item.cantidad}',
+              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: BrandColors.pdfCian),
+            ),
+          ],
         ],
       ),
     );

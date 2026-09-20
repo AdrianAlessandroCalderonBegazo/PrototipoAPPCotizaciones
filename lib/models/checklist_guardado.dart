@@ -1,6 +1,6 @@
 /// Registro de un checklist de obra ya finalizado — lo que se muestra en
 /// la pestaña "Historial" (filtrado junto a las cotizaciones) y en su
-/// pantalla de detalle. [categoriasJson] guarda las 10 categorías con
+/// pantalla de detalle. [categoriasJson] guarda las categorías con
 /// cada ítem (marcado o no) tal como quedaron al guardar, para poder
 /// mostrar el detalle estructurado después (ver checklist_state.dart:
 /// categoriasDesdeJson / ChecklistCategoriaState.toJson).

@@ -8,23 +8,35 @@ import '../models/checklist_categoria.dart';
 /// base (Excel) o haberse agregado a mano desde "¿Te olvidaste de algo?"
 /// (en cuyo caso [esExtra] es true, y [esProducto] indica si vino del
 /// buscador del catálogo de productos en vez de ser una nota libre).
+///
+/// Esta es una lista de "qué llevar a la obra", no de "qué ya se revisó":
+/// marcar un ítem lo deja en [cantidad] 1 (se va a llevar al menos uno) y
+/// desde ahí se puede subir o bajar con un stepper — no siempre se lleva
+/// todo el catálogo. [marcado] queda como getter derivado (cantidad > 0)
+/// para no duplicar el estado.
 class ChecklistItemEntry {
   final String texto;
-  bool marcado;
+  int cantidad;
   final bool esExtra;
   final bool esProducto;
 
   ChecklistItemEntry({
     required this.texto,
-    this.marcado = false,
+    this.cantidad = 0,
     this.esExtra = false,
     this.esProducto = false,
   });
 
+  bool get marcado => cantidad > 0;
+
   factory ChecklistItemEntry.fromJson(Map<String, dynamic> json) {
+    final cantidadJson = json['cantidad'];
     return ChecklistItemEntry(
       texto: (json['texto'] ?? '').toString(),
-      marcado: json['marcado'] == true,
+      // Checklists guardados antes de que existiera "cantidad" solo tenían
+      // 'marcado' (true/false) — se traduce a cantidad 1/0 para no perder
+      // el detalle histórico.
+      cantidad: cantidadJson is num ? cantidadJson.toInt() : (json['marcado'] == true ? 1 : 0),
       esExtra: json['es_extra'] == true,
       esProducto: json['es_producto'] == true,
     );
@@ -32,7 +44,7 @@ class ChecklistItemEntry {
 
   Map<String, dynamic> toJson() => {
         'texto': texto,
-        'marcado': marcado,
+        'cantidad': cantidad,
         'es_extra': esExtra,
         'es_producto': esProducto,
       };
@@ -76,8 +88,8 @@ List<ChecklistCategoriaState> categoriasDesdeJson(String json) {
   }
 }
 
-/// Estado del checklist de obra: carga las 10 categorías base una sola vez
-/// y controla el avance secuencial (categoría por categoría, obligatorio
+/// Estado del checklist de obra: carga las categorías base una sola vez y
+/// controla el avance secuencial (categoría por categoría, obligatorio
 /// hacia adelante, libre hacia atrás) para que no se pase nada por alto.
 class ChecklistState extends ChangeNotifier {
   List<ChecklistCategoriaState> _categorias = [];
@@ -138,17 +150,25 @@ class ChecklistState extends ChangeNotifier {
 
   void toggleItem(int itemIndex) {
     final item = categoriaActual.items[itemIndex];
-    item.marcado = !item.marcado;
+    item.cantidad = item.marcado ? 0 : 1;
+    notifyListeners();
+  }
+
+  /// Ajusta cuántas unidades de un ítem se van a llevar — lo usa el stepper
+  /// que aparece junto al casillero una vez marcado. Bajar a 0 equivale a
+  /// desmarcarlo (sigue en la lista, solo que no se lleva).
+  void setCantidad(int categoriaIndex, int itemIndex, int cantidad) {
+    _categorias[categoriaIndex].items[itemIndex].cantidad = cantidad < 0 ? 0 : cantidad;
     notifyListeners();
   }
 
   /// Agrega un ítem nuevo a una categoría cualquiera (no solo la actual) —
-  /// lo usa el resumen final, donde se ven y editan las 10 a la vez.
+  /// lo usa el resumen final, donde se ven y editan todas a la vez.
   void agregarItemEn(int categoriaIndex, String texto, {bool esProducto = false}) {
     final limpio = texto.trim();
     if (limpio.isEmpty) return;
     _categorias[categoriaIndex].items.add(
-      ChecklistItemEntry(texto: limpio, marcado: true, esExtra: true, esProducto: esProducto),
+      ChecklistItemEntry(texto: limpio, cantidad: 1, esExtra: true, esProducto: esProducto),
     );
     notifyListeners();
   }
@@ -180,7 +200,7 @@ class ChecklistState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Serializa el estado actual de las 10 categorías (con lo marcado y los
+  /// Serializa el estado actual de las categorías (con las cantidades y los
   /// extras) para guardarlo junto con el registro del historial.
   String categoriasAJson() => jsonEncode(_categorias.map((c) => c.toJson()).toList());
 
@@ -210,10 +230,12 @@ class ChecklistState extends ChangeNotifier {
       buffer.writeln();
       buffer.writeln('${cat.nombre} (${cat.totalMarcados}/${cat.items.length})');
       for (final item in cat.items.where((i) => !i.esExtra)) {
-        buffer.writeln('${item.marcado ? '✅' : '⬜'} ${item.texto}');
+        final cantidad = item.marcado ? ' × ${item.cantidad}' : '';
+        buffer.writeln('${item.marcado ? '✅' : '⬜'} ${item.texto}$cantidad');
       }
       for (final item in cat.items.where((i) => i.esExtra)) {
-        buffer.writeln('➕ ${item.texto}${item.esProducto ? ' (catálogo)' : ''}');
+        final cantidad = item.marcado ? ' × ${item.cantidad}' : '';
+        buffer.writeln('➕ ${item.texto}$cantidad${item.esProducto ? ' (catálogo)' : ''}');
       }
     }
     return buffer.toString().trim();

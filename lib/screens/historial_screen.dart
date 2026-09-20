@@ -1385,11 +1385,24 @@ class _TarjetaCategoriaDetalle extends StatelessWidget {
                   color: item.marcado ? null : colorScheme.onSurfaceVariant,
                 ),
               ),
-              trailing: item.esExtra
-                  ? Icon(
-                      item.esProducto ? Icons.inventory_2_outlined : Icons.edit_note_outlined,
-                      size: 16,
-                      color: colorScheme.outline,
+              trailing: (item.marcado || item.esExtra)
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (item.marcado)
+                          Text(
+                            '× ${item.cantidad}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: BrandColors.cian),
+                          ),
+                        if (item.esExtra) ...[
+                          const SizedBox(width: 6),
+                          Icon(
+                            item.esProducto ? Icons.inventory_2_outlined : Icons.edit_note_outlined,
+                            size: 16,
+                            color: colorScheme.outline,
+                          ),
+                        ],
+                      ],
                     )
                   : null,
             );

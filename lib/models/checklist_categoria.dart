@@ -1,6 +1,7 @@
 /// Una categoría base del checklist de obra, tal como viene del catálogo
 /// semilla (assets/checklist_seed.json), extraído del Excel real de la
-/// empresa (10 categorías, 108 ítems en total).
+/// empresa (herramientas y materiales para instalación Victron — 5
+/// categorías, 89 ítems en total).
 class ChecklistCategoriaSeed {
   final int orden;
   final String categoria;

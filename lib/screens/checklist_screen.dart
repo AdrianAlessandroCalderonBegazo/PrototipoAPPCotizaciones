@@ -12,12 +12,13 @@ import '../widgets/animated_pressable.dart';
 import '../widgets/fade_slide_in.dart';
 import 'checklist_resumen_screen.dart';
 
-/// Pestaña "Checklist": recorrido obligatorio categoría por categoría (10
-/// en total, tomadas del Excel real de la empresa) para que antes de salir
-/// a obra no se quede nada por olvidar. Se puede retroceder libremente a
-/// una categoría ya vista, pero avanzar es siempre de una en una. Cada
-/// categoría permite agregar un ítem que se le haya olvidado; el resumen
-/// final (al terminar la última) muestra las categorías juntas.
+/// Pestaña "Checklist": recorrido obligatorio categoría por categoría
+/// (herramientas y materiales para instalación Victron, tomadas del Excel
+/// real de la empresa) para que antes de salir a obra no se quede nada por
+/// llevar. Se puede retroceder libremente a una categoría ya vista, pero
+/// avanzar es siempre de una en una. Cada categoría permite agregar un
+/// ítem que se le haya olvidado; el resumen final (al terminar la última)
+/// muestra las categorías juntas.
 class ChecklistScreen extends StatefulWidget {
   const ChecklistScreen({super.key});
 
@@ -140,7 +141,8 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       index: index,
                       child: _FilaItemChecklist(
                         item: item,
-                        onTap: () => checklist.toggleItem(index),
+                        onToggle: () => checklist.toggleItem(index),
+                        onCantidad: (c) => checklist.setCantidad(checklist.indice, index, c),
                       ),
                     );
                   }),
@@ -205,74 +207,114 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 }
 
+/// Fila de un ítem: casillero + nombre, y — a diferencia de un checklist de
+/// verificación simple — un stepper de cantidad que aparece al marcarlo,
+/// porque esta lista es de qué llevar a la obra y no siempre se lleva todo
+/// (mismo lenguaje visual que el casillero+stepper de Productos/Cotizar).
 class _FilaItemChecklist extends StatelessWidget {
   final ChecklistItemEntry item;
-  final VoidCallback onTap;
+  final VoidCallback onToggle;
+  final ValueChanged<int> onCantidad;
 
-  const _FilaItemChecklist({required this.item, required this.onTap});
+  const _FilaItemChecklist({required this.item, required this.onToggle, required this.onCantidad});
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return AnimatedPressable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
-          ),
+    final marcado = item.marcado;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
         ),
-        child: Row(
-          children: [
-            _Casillero(marcado: item.marcado),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                item.texto,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: item.marcado ? colorScheme.onSurfaceVariant : colorScheme.onSurface,
-                  decoration: item.marcado ? TextDecoration.lineThrough : TextDecoration.none,
-                  decorationColor: colorScheme.onSurfaceVariant,
-                ),
+      ),
+      child: Row(
+        children: [
+          _Casillero(marcado: marcado, onTap: onToggle),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              item.texto,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: marcado ? colorScheme.onSurfaceVariant : colorScheme.onSurface,
+                decoration: marcado ? TextDecoration.lineThrough : TextDecoration.none,
+                decorationColor: colorScheme.onSurfaceVariant,
               ),
             ),
-            if (item.esExtra) ...[
-              const SizedBox(width: 8),
-              Icon(
-                item.esProducto ? Icons.inventory_2_outlined : Icons.edit_note_outlined,
-                size: 16,
-                color: colorScheme.outline,
-              ),
-            ],
+          ),
+          if (item.esExtra) ...[
+            const SizedBox(width: 8),
+            Icon(
+              item.esProducto ? Icons.inventory_2_outlined : Icons.edit_note_outlined,
+              size: 16,
+              color: colorScheme.outline,
+            ),
           ],
+          if (marcado) ...[
+            const SizedBox(width: 6),
+            _botonStepper(Icons.remove, () => onCantidad(item.cantidad - 1)),
+            SizedBox(
+              width: 24,
+              child: Text(
+                '${item.cantidad}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+            _botonStepper(Icons.add, () => onCantidad(item.cantidad + 1)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _botonStepper(IconData icono, VoidCallback onTap) {
+    return AnimatedPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 26,
+        height: 26,
+        decoration: BoxDecoration(
+          color: BrandColors.azulMarino.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
         ),
+        child: Icon(icono, size: 15, color: BrandColors.azulMarino),
       ),
     );
   }
 }
 
+/// Casillero de selección — mismo lenguaje visual que el de Productos
+/// (cuadrado redondeado, se rellena de cian con un check al marcarlo). Es
+/// tappable por su cuenta (no toda la fila) para no chocar con el stepper.
 class _Casillero extends StatelessWidget {
   final bool marcado;
-  const _Casillero({required this.marcado});
+  final VoidCallback onTap;
+  const _Casillero({required this.marcado, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: marcado ? BrandColors.cian : Colors.transparent,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(
-          color: marcado ? BrandColors.cian : Theme.of(context).colorScheme.outline,
-          width: 1.6,
+    return AnimatedPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: marcado ? BrandColors.cian : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: marcado ? BrandColors.cian : Theme.of(context).colorScheme.outline,
+            width: 1.6,
+          ),
         ),
+        child: marcado ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
       ),
-      child: marcado ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
     );
   }
 }
@@ -322,7 +364,7 @@ class _BarraAvanzar extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: BrandColors.cian,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: const StadiumBorder(),
                 ),
                 child: Text(
                   esUltima ? 'IR AL RESUMEN' : 'SIGUIENTE PASO',
