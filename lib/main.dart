@@ -6,7 +6,6 @@ import 'state/cotizacion_state.dart';
 import 'state/navegacion_state.dart';
 import 'screens/main_tabs_screen.dart';
 import 'theme/brand_colors.dart';
-import 'widgets/lottie_gate_screen.dart';
 
 void main() {
   runApp(const CotizadorApp());
@@ -63,48 +62,66 @@ class CotizadorApp extends StatelessWidget {
   }
 }
 
-class _Splash extends StatelessWidget {
+class _Splash extends StatefulWidget {
   const _Splash();
+
+  @override
+  State<_Splash> createState() => _SplashState();
+}
+
+class _SplashState extends State<_Splash> {
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
 
   // Primer arranque: si el celular no tiene datos guardados aún, los toma
   // del catálogo que viene empaquetado dentro de la propia app
   // (assets/productos_seed.json) — así funciona sin red desde el día 1.
-  Future<bool> _cargar() async {
-    await DbHelper.instance.seedFromAssetsIfEmpty();
-    return true;
+  Future<void> _cargar() async {
+    try {
+      await DbHelper.instance.seedFromAssetsIfEmpty();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainTabsScreen()),
+      );
+    } catch (error) {
+      // Sin esto, un catálogo semilla corrupto deja la app en este
+      // spinner para siempre, sin ninguna pista de qué falló.
+      if (!mounted) return;
+      setState(() => _error = error);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return LottieGateScreen<bool>(
-      lottieAsset: 'assets/animations/solar_powered_house.lottie',
-      mensaje: 'Cargando catálogo...',
-      proceso: _cargar,
-      bloquearAtras: false,
-      alTerminar: (context, _) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainTabsScreen()),
-        );
-      },
-      alFallar: (context, error) {
-        // Sin esto, un catálogo semilla corrupto deja la app en este
-        // spinner para siempre, sin ninguna pista de qué falló.
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => Scaffold(
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'No se pudo cargar el catálogo inicial.\n\n$error',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
+    if (_error != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'No se pudo cargar el catálogo inicial.\n\n$_error',
+              textAlign: TextAlign.center,
             ),
           ),
-        );
-      },
+        ),
+      );
+    }
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: BrandColors.cian),
+            SizedBox(height: 16),
+            Text('Cargando catálogo...', style: TextStyle(color: BrandColors.azulMarino)),
+          ],
+        ),
+      ),
     );
   }
 }
