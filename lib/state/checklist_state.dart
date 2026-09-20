@@ -4,6 +4,14 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import '../models/checklist_categoria.dart';
 
+/// Estándar de formato para el nombre de un ítem: mayúscula inicial, resto
+/// tal cual — así se vean parejos sin importar cómo vengan del catálogo
+/// base o de lo que haya tipeado quien agrega uno a mano.
+String _capitalizarPrimeraLetra(String texto) {
+  if (texto.isEmpty) return texto;
+  return texto[0].toUpperCase() + texto.substring(1);
+}
+
 /// Un ítem dentro de una categoría del checklist: puede venir del catálogo
 /// base (Excel) o haberse agregado a mano desde "¿Te olvidaste de algo?"
 /// (en cuyo caso [esExtra] es true, y [esProducto] indica si vino del
@@ -115,6 +123,12 @@ class ChecklistState extends ChangeNotifier {
   int get totalMarcados =>
       _categorias.fold(0, (s, c) => s + c.totalMarcados);
 
+  /// Avance por CATEGORÍAS recorridas, no por ítems marcados: esto es una
+  /// revisión de qué llevar (no siempre se lleva todo), así que pasar de
+  /// categoría sube el % aunque no se haya marcado nada en ella.
+  int get porcentajeAvance =>
+      _categorias.isEmpty ? 0 : (((_indice + 1) / _categorias.length) * 100).round();
+
   Future<void> cargar() async {
     if (_categorias.isNotEmpty) return;
     await _cargarDesdeAssets();
@@ -133,7 +147,7 @@ class ChecklistState extends ChangeNotifier {
           .map(
             (c) => ChecklistCategoriaState(
               nombre: c.categoria,
-              items: c.items.map((texto) => ChecklistItemEntry(texto: texto)).toList(),
+              items: c.items.map((texto) => ChecklistItemEntry(texto: _capitalizarPrimeraLetra(texto))).toList(),
             ),
           )
           .toList();
@@ -168,7 +182,7 @@ class ChecklistState extends ChangeNotifier {
     final limpio = texto.trim();
     if (limpio.isEmpty) return;
     _categorias[categoriaIndex].items.add(
-      ChecklistItemEntry(texto: limpio, cantidad: 1, esExtra: true, esProducto: esProducto),
+      ChecklistItemEntry(texto: _capitalizarPrimeraLetra(limpio), cantidad: 1, esExtra: true, esProducto: esProducto),
     );
     notifyListeners();
   }

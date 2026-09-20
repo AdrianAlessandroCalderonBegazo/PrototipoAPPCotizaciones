@@ -9,12 +9,14 @@ import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../utils/checklist_estilo.dart';
 import '../widgets/lottie_gate_screen.dart';
+import '../widgets/porcentaje_animado.dart';
 import '../widgets/seccion_card.dart';
 import 'checklist_guardado_screen.dart';
 
 /// Resumen final del checklist, después de pasar por las categorías: un
 /// vistazo por categoría (tocar una vuelve a ella para revisar o agregar
-/// algo) y los ítems pendientes agrupados. Una vez conforme, "Guardar
+/// algo). No hay noción de "pendientes" — es una revisión de qué llevar,
+/// no siempre se lleva todo el catálogo. Una vez conforme, "Guardar
 /// checklist" lo manda al historial, genera el PDF y lleva a la pantalla
 /// de confirmación con la vista previa.
 class ChecklistResumenScreen extends StatefulWidget {
@@ -145,7 +147,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                         onPressed: () => _empezarNuevo(checklist),
                       ),
                       const SizedBox(width: 10),
-                      Text('$porcentaje%', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                      PorcentajeAnimado(valor: porcentaje),
                     ],
                   ),
                 ],
@@ -180,12 +182,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
     final checklist = context.watch<ChecklistState>();
     final responsable = _responsableController.text.trim();
     final total = checklist.categorias.length;
-    final porcentaje = checklist.totalItems == 0 ? 0 : ((checklist.totalMarcados / checklist.totalItems) * 100).round();
-    final pendientes = [
-      for (final cat in checklist.categorias)
-        for (final item in cat.items)
-          if (!item.marcado) item.texto,
-    ];
+    final porcentaje = checklist.porcentajeAvance;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -270,28 +267,6 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                       ],
                     ),
                   ),
-                  if (pendientes.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('PENDIENTES', style: AppTextStyles.etiqueta.copyWith(color: Colors.red.shade700)),
-                          const SizedBox(height: 6),
-                          Text(
-                            pendientes.join(' · '),
-                            style: TextStyle(fontSize: 12.5, color: Colors.red.shade700, height: 1.4),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),

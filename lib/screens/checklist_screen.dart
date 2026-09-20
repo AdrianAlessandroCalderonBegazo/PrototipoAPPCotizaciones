@@ -10,6 +10,7 @@ import '../utils/checklist_estilo.dart';
 import '../widgets/agregar_item_checklist.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/fade_slide_in.dart';
+import '../widgets/porcentaje_animado.dart';
 import 'checklist_resumen_screen.dart';
 
 /// Pestaña "Checklist": recorrido obligatorio categoría por categoría
@@ -68,7 +69,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('PASO ${checklist.indice + 1} DE $total', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
-                  Text('$porcentaje%', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  PorcentajeAnimado(valor: porcentaje),
                 ],
               ),
               const SizedBox(height: 10),
@@ -120,9 +121,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     }
 
     final categoria = checklist.categoriaActual;
-    final porcentaje = checklist.totalItems == 0
-        ? 0
-        : ((checklist.totalMarcados / checklist.totalItems) * 100).round();
+    final porcentaje = checklist.porcentajeAvance;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
