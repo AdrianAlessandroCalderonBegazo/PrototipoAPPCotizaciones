@@ -72,6 +72,10 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
           proceso: () => _procesoDeGuardado(checklist),
           alTerminar: (context, resultado) {
             final (bytes, _) = resultado;
+            // El checklist ya quedó guardado (PDF + registro en el
+            // historial) con los datos de arriba — recién ahora se puede
+            // limpiar todo para que el próximo empiece de cero.
+            checklist.reiniciar();
             Navigator.of(context).pop();
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
@@ -182,7 +186,10 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
     final checklist = context.watch<ChecklistState>();
     final responsable = _responsableController.text.trim();
     final total = checklist.categorias.length;
-    final porcentaje = checklist.porcentajeAvance;
+    // Llegar al resumen significa que ya se recorrieron todas las
+    // categorías — a diferencia de checklist.porcentajeAvance (que en la
+    // última categoría todavía marca el % de las anteriores), acá es 100%.
+    final porcentaje = total == 0 ? 0 : 100;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,

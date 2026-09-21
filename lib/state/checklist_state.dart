@@ -123,11 +123,13 @@ class ChecklistState extends ChangeNotifier {
   int get totalMarcados =>
       _categorias.fold(0, (s, c) => s + c.totalMarcados);
 
-  /// Avance por CATEGORÍAS recorridas, no por ítems marcados: esto es una
-  /// revisión de qué llevar (no siempre se lleva todo), así que pasar de
-  /// categoría sube el % aunque no se haya marcado nada en ella.
+  /// Avance por CATEGORÍAS ya completadas, no por ítems marcados: esto es
+  /// una revisión de qué llevar (no siempre se lleva todo), así que pasar
+  /// de categoría sube el % aunque no se haya marcado nada en ella. Arranca
+  /// en 0% en la primera categoría y solo llega a 100% al terminar la
+  /// última (en el resumen), no mientras aún se está en ella.
   int get porcentajeAvance =>
-      _categorias.isEmpty ? 0 : (((_indice + 1) / _categorias.length) * 100).round();
+      _categorias.isEmpty ? 0 : ((_indice / _categorias.length) * 100).round();
 
   Future<void> cargar() async {
     if (_categorias.isNotEmpty) return;
