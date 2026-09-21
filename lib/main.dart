@@ -33,7 +33,7 @@ class CotizadorApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NavegacionState()),
       ],
       child: MaterialApp(
-        title: 'Cotizador ICR',
+        title: 'ICR Energy',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,

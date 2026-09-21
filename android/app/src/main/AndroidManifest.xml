@@ -4,7 +4,7 @@
          debug/profile para las herramientas de desarrollo. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="cotizador_icr"
+        android:label="ICR Energy"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
