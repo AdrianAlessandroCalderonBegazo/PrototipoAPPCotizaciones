@@ -28,12 +28,7 @@ jobs:
         run: flutter pub get
 
       - name: Compilar el APK (release)
-        # GEMINI_API_KEY se lee de un secret del repositorio (Settings > Secrets
-        # and variables > Actions), nunca queda escrita en este archivo ni en el
-        # historial de git. Si el secret todavía no existe, --dart-define recibe
-        # un valor vacío y la app simplemente compila sin la función de voz
-        # habilitada (GeminiService.configurado queda en false).
-        run: flutter build apk --release --dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+        run: flutter build apk --release
 
       - name: Subir el APK como artefacto descargable
         uses: actions/upload-artifact@v4

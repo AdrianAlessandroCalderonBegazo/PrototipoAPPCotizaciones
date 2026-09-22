@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Se usa el micrófono para armar una cotización dictando el pedido por voz.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Se usa el reconocimiento de voz para convertir el pedido dictado en texto y buscarlo en el catálogo.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

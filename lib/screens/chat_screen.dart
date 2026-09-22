@@ -1,21 +1,20 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:record/record.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import '../services/buscador_voz.dart';
 import '../services/db_helper.dart';
-import '../services/gemini_service.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/lottie_gate_screen.dart';
 import 'revision_voz_screen.dart';
 
-/// Pestaña "Voz": arma una cotización dictando el pedido. Se graba un
-/// audio corto, se manda a Gemini junto con el catálogo real para que
-/// identifique qué productos se pidieron y cuántos, y antes de generar
-/// nada se pasa por RevisionVozScreen para confirmar o corregir.
+/// Pestaña "Voz": arma una cotización dictando el pedido. El propio
+/// celular transcribe la voz (sin mandar audio a ningún servicio) y ese
+/// texto se busca contra el catálogo local para identificar qué productos
+/// se pidieron y cuántos; antes de generar nada se pasa por
+/// RevisionVozScreen para confirmar o corregir.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
@@ -24,77 +23,87 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final _recorder = AudioRecorder();
+  final _speech = SpeechToText();
   bool _grabando = false;
+  String _texto = '';
   Duration _duracion = Duration.zero;
   Timer? _cronometro;
+  String? _localeId;
 
   @override
   void dispose() {
     _cronometro?.cancel();
-    _recorder.dispose();
+    _speech.stop();
     super.dispose();
+  }
+
+  Future<String?> _elegirLocaleEspanol() async {
+    final locales = await _speech.locales();
+    final espanol = locales.where((l) => l.localeId.toLowerCase().startsWith('es')).toList();
+    if (espanol.isEmpty) return null;
+    final pe = espanol.where((l) => l.localeId.toLowerCase().contains('pe'));
+    return (pe.isNotEmpty ? pe.first : espanol.first).localeId;
   }
 
   Future<void> _alternarGrabacion() async {
     if (_grabando) {
-      final ruta = await _recorder.stop();
+      await _speech.stop();
       _cronometro?.cancel();
       if (!mounted) return;
       setState(() => _grabando = false);
-      if (ruta != null) _procesar(ruta);
+      final texto = _texto.trim();
+      if (texto.isNotEmpty) _procesar(texto);
       return;
     }
 
-    if (!GeminiService.configurado) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La cotización por voz todavía no está configurada en esta versión.')),
-      );
-      return;
-    }
-
-    if (!await _recorder.hasPermission()) {
+    final disponible = await _speech.initialize();
+    if (!disponible) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Se necesita permiso del micrófono para grabar el pedido.')),
+        const SnackBar(content: Text('No se pudo activar el reconocimiento de voz en este celular (revisa el permiso de micrófono).')),
       );
       return;
     }
 
-    final carpeta = await getTemporaryDirectory();
-    final ruta = '${carpeta.path}/cotizacion_voz_${DateTime.now().millisecondsSinceEpoch}.m4a';
-    // AAC mono a 16kHz/64kbps: de sobra para que Gemini entienda voz, y un
-    // audio de un minuto pesa ~0.5MB en vez de los ~10MB de un WAV sin
-    // comprimir — eso es lo que estaba causando el timeout al subirlo.
-    await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 16000, numChannels: 1, bitRate: 64000),
-      path: ruta,
-    );
+    _localeId ??= await _elegirLocaleEspanol();
     if (!mounted) return;
+
     setState(() {
       _grabando = true;
       _duracion = Duration.zero;
+      _texto = '';
     });
     _cronometro = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _duracion += const Duration(seconds: 1));
     });
+
+    await _speech.listen(
+      onResult: (resultado) {
+        if (mounted) setState(() => _texto = resultado.recognizedWords);
+      },
+      listenOptions: SpeechListenOptions(
+        localeId: _localeId,
+        listenMode: ListenMode.dictation,
+        listenFor: const Duration(minutes: 2),
+        pauseFor: const Duration(seconds: 8),
+      ),
+    );
   }
 
-  Future<(String, List<ItemDetectado>)> _proceso(String rutaAudio) async {
-    final bytes = await File(rutaAudio).readAsBytes();
+  Future<(String, List<ItemDetectado>)> _proceso(String texto) async {
     final agrupado = await DbHelper.instance.getTodosAgrupados();
     final catalogo = agrupado.values.expand((lista) => lista).toList();
-    final resultado = await GeminiService.interpretarAudio(audioBytes: bytes, catalogo: catalogo);
-    return (resultado.transcripcion, resultado.items);
+    final items = BuscadorVoz.buscar(texto: texto, catalogo: catalogo);
+    return (texto, items);
   }
 
-  Future<void> _procesar(String rutaAudio) async {
+  Future<void> _procesar(String texto) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => LottieGateScreen<(String, List<ItemDetectado>)>(
           lottieAsset: 'assets/animations/verification.lottie',
-          mensaje: 'Entendiendo tu pedido...',
-          proceso: () => _proceso(rutaAudio),
+          mensaje: 'Buscando en el catálogo...',
+          proceso: () => _proceso(texto),
           alTerminar: (context, resultado) {
             final (transcripcion, items) = resultado;
             Navigator.of(context).pop();
@@ -107,7 +116,7 @@ class _ChatScreenState extends State<ChatScreen> {
           alFallar: (context, error) {
             Navigator.of(context).pop();
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('No se pudo entender el audio: $error')),
+              SnackBar(content: Text('No se pudo procesar el pedido: $error')),
             );
           },
         ),
@@ -191,9 +200,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       const SizedBox(height: 8),
                       Text(
                         _grabando
-                            ? 'Toca de nuevo para terminar'
+                            ? (_texto.isEmpty ? 'Escuchando...' : _texto)
                             : 'Menciona los productos y cantidades que necesitas — luego revisas antes de generar la cotización.',
                         textAlign: TextAlign.center,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.apoyo,
                       ),
                     ],

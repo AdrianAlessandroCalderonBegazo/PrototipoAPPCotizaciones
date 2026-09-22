@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../services/gemini_service.dart';
+import '../services/buscador_voz.dart';
 import '../state/cotizacion_state.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';

@@ -21,7 +21,6 @@ dependencies:
   cupertino_icons: ^1.0.6
   lottie: ^3.5.1
   flutter_svg: ^2.0.10+1
-  record: ^6.2.1
   speech_to_text: ^7.5.0
 
 dev_dependencies:
