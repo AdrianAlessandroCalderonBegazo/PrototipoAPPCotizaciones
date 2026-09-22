@@ -25,7 +25,9 @@ class ResultadoInterpretacionVoz {
 class GeminiService {
   GeminiService._();
 
-  static const String _modelo = 'gemini-2.5-flash';
+  // gemini-2.5-flash ya no está disponible para cuentas nuevas — Gemini
+  // recomienda este modelo con la Interactions API (ver interpretarAudio).
+  static const String _modelo = 'gemini-3.6-flash';
 
   // Se inyecta en tiempo de compilación con --dart-define=GEMINI_API_KEY=...
   // (ver .github/workflows/build_apk.yml) — nunca queda escrita en el
@@ -58,29 +60,25 @@ $catalogoTexto
 ''';
 
     final cuerpo = jsonEncode({
-      'contents': [
-        {
-          'parts': [
-            {'text': prompt},
-            {
-              'inline_data': {'mime_type': 'audio/wav', 'data': base64Encode(audioBytes)},
-            },
-          ],
-        },
+      'model': _modelo,
+      'input': [
+        {'type': 'text', 'text': prompt},
+        {'type': 'audio', 'data': base64Encode(audioBytes), 'mime_type': 'audio/wav'},
       ],
-      'generationConfig': {
-        'response_mime_type': 'application/json',
-        'response_schema': {
-          'type': 'OBJECT',
+      'response_format': {
+        'type': 'text',
+        'mime_type': 'application/json',
+        'schema': {
+          'type': 'object',
           'properties': {
-            'transcripcion': {'type': 'STRING'},
+            'transcripcion': {'type': 'string'},
             'items': {
-              'type': 'ARRAY',
+              'type': 'array',
               'items': {
-                'type': 'OBJECT',
+                'type': 'object',
                 'properties': {
-                  'producto_id': {'type': 'INTEGER'},
-                  'cantidad': {'type': 'INTEGER'},
+                  'producto_id': {'type': 'integer'},
+                  'cantidad': {'type': 'integer'},
                 },
                 'required': ['producto_id', 'cantidad'],
               },
@@ -93,8 +91,12 @@ $catalogoTexto
 
     final resp = await (client ?? http.Client())
         .post(
-          Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$_modelo:generateContent'),
-          headers: {'Content-Type': 'application/json', 'x-goog-api-key': _apiKey},
+          Uri.parse('https://generativelanguage.googleapis.com/v1beta/interactions'),
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': _apiKey,
+            'Api-Revision': '2026-05-20',
+          },
           body: cuerpo,
         )
         .timeout(const Duration(seconds: 45));
@@ -104,13 +106,25 @@ $catalogoTexto
     }
 
     final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
-    final candidatos = data['candidates'] as List<dynamic>?;
-    if (candidatos == null || candidatos.isEmpty) {
-      throw Exception('Gemini no devolvió ninguna respuesta para este audio.');
+    final pasos = data['steps'] as List<dynamic>? ?? [];
+
+    // Se busca el texto en el ÚLTIMO paso con contenido de tipo "text" —
+    // normalmente el único paso que devuelve un POST es el de salida del
+    // modelo, pero esto es robusto igual si algún día se incluyen más.
+    String? textoJson;
+    for (final paso in pasos.reversed) {
+      final contenido = (paso as Map<String, dynamic>)['content'] as List<dynamic>? ?? [];
+      for (final parte in contenido) {
+        final mapaParte = parte as Map<String, dynamic>;
+        if (mapaParte['type'] == 'text' && mapaParte['text'] != null) {
+          textoJson = mapaParte['text'].toString();
+          break;
+        }
+      }
+      if (textoJson != null) break;
     }
-    final partes = (candidatos.first['content']?['parts'] as List<dynamic>?) ?? [];
-    final textoJson = partes.map((p) => p['text']?.toString() ?? '').join();
-    if (textoJson.trim().isEmpty) {
+
+    if (textoJson == null || textoJson.trim().isEmpty) {
       throw Exception('Gemini no devolvió contenido para este audio.');
     }
 
