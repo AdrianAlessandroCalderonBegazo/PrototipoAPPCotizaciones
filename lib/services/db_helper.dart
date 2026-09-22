@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/checklist_guardado.dart';
 import '../models/cotizacion_guardada.dart';
@@ -23,15 +24,16 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'cotizador_icr.db');
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await _crearTablaProductos(db);
         await _crearTablaCotizacionesGuardadas(db);
         await _crearTablaChecklistsGuardados(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // No se toca la tabla productos: no hay que perder un catálogo que
-        // el usuario ya sincronizó con su servidor.
+        // No se borra la tabla productos: no hay que perder un catálogo que
+        // el usuario ya sincronizó con su servidor, ni lo que haya agregado
+        // a mano (ver columna "origen").
         if (oldVersion < 2) {
           await _crearTablaCotizacionesGuardadas(db);
         }
@@ -40,6 +42,9 @@ class DbHelper {
         }
         if (oldVersion < 4) {
           await _agregarColumnasDetalle(db);
+        }
+        if (oldVersion < 5) {
+          await _agregarColumnaOrigenProducto(db);
         }
       },
     );
@@ -56,7 +61,8 @@ class DbHelper {
         unidad_medida TEXT,
         categoria_producto TEXT,
         archivo_imagen TEXT,
-        imagen_url TEXT
+        imagen_url TEXT,
+        origen TEXT NOT NULL DEFAULT 'catalogo'
       )
     ''');
   }
@@ -126,37 +132,72 @@ class DbHelper {
     }
   }
 
+  /// Upgrade desde una versión anterior a la 5: todo lo que ya había en la
+  /// tabla productos (catálogo semilla o sincronizado con un servidor) pasa
+  /// a marcarse como "catalogo" — nadie había agregado nada a mano todavía,
+  /// porque esa función no existía antes de esta versión.
+  Future<void> _agregarColumnaOrigenProducto(Database db) async {
+    try {
+      await db.execute("ALTER TABLE productos ADD COLUMN origen TEXT NOT NULL DEFAULT 'catalogo'");
+    } catch (_) {
+      // La columna ya existe.
+    }
+  }
+
   Future<int> countTotal() async {
     final db = await database;
     final result = await db.rawQuery('SELECT COUNT(*) as c FROM productos');
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
-  /// Borra todo lo anterior y guarda la lista nueva (usado tanto por el
-  /// seed inicial como por la sincronización con el servidor).
+  /// Reemplaza el catálogo (usado tanto por el seed inicial como por la
+  /// sincronización con el servidor) — SOLO los productos de origen
+  /// "catalogo". Lo que el usuario haya agregado a mano desde la app
+  /// (origen "local") nunca se toca acá, para no perderlo.
   Future<void> replaceAll(List<Producto> productos) async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.delete('productos');
+      await txn.delete('productos', where: "origen = 'catalogo'");
       final batch = txn.batch();
       for (final p in productos) {
-        batch.insert('productos', p.toMap());
+        batch.insert('productos', {...p.toMap(), 'origen': 'catalogo'});
       }
       await batch.commit(noResult: true);
     });
   }
 
-  /// La primera vez que se abre la app (base local vacía), la llena con
-  /// el catálogo empaquetado dentro del propio instalador.
-  Future<void> seedFromAssetsIfEmpty() async {
-    final count = await countTotal();
-    if (count > 0) return;
+  /// Sube este número cada vez que se reemplace assets/productos_seed.json
+  /// con un catálogo nuevo — así los celulares que YA tenían la app
+  /// instalada (no solo las instalaciones nuevas) reciben el catálogo
+  /// actualizado la próxima vez que abran la app.
+  static const int _versionCatalogo = 1;
+
+  /// Sincroniza el catálogo base con lo que viene empaquetado en el
+  /// instalador: la primera vez llena la base vacía, y en instalaciones que
+  /// ya tenían un catálogo viejo lo reemplaza si _versionCatalogo subió —
+  /// en ambos casos sin tocar los productos agregados a mano (ver
+  /// [replaceAll]).
+  Future<void> actualizarCatalogoBase() async {
+    final prefs = await SharedPreferences.getInstance();
+    final versionInstalada = prefs.getInt('version_catalogo_productos') ?? 0;
+    if (versionInstalada >= _versionCatalogo) return;
+
     final raw = await rootBundle.loadString('assets/productos_seed.json');
     final List<dynamic> data = jsonDecode(raw);
     final productos = data
         .map((e) => Producto.fromMap(Map<String, dynamic>.from(e)))
         .toList();
     await replaceAll(productos);
+
+    await prefs.setInt('version_catalogo_productos', _versionCatalogo);
+  }
+
+  /// Agrega un producto nuevo escrito a mano desde la app (no del catálogo
+  /// empaquetado ni de una sincronización) — se marca como origen "local"
+  /// para que nunca se borre al actualizar el catálogo base.
+  Future<void> agregarProductoManual(Producto producto) async {
+    final db = await database;
+    await db.insert('productos', {...producto.toMap(), 'origen': 'local'});
   }
 
   Future<List<String>> getCategorias() async {

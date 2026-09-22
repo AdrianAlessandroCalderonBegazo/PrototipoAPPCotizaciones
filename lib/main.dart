@@ -81,9 +81,11 @@ class _SplashState extends State<_Splash> {
   // Primer arranque: si el celular no tiene datos guardados aún, los toma
   // del catálogo que viene empaquetado dentro de la propia app
   // (assets/productos_seed.json) — así funciona sin red desde el día 1.
+  // También se ejecuta en arranques posteriores, por si el catálogo
+  // empaquetado se actualizó desde la última vez que se abrió la app.
   Future<void> _cargar() async {
     try {
-      await DbHelper.instance.seedFromAssetsIfEmpty();
+      await DbHelper.instance.actualizarCatalogoBase();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainTabsScreen()),

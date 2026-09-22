@@ -8,7 +8,7 @@ import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/producto_thumbnail.dart';
-import 'config_screen.dart';
+import 'agregar_producto_screen.dart';
 import 'generar_cotizacion_screen.dart';
 
 /// Pestaña "Cotizar": categorías como píldoras horizontales — al tocar una
@@ -107,11 +107,15 @@ class _ProductosScreenState extends State<ProductosScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.sync, color: Colors.white),
-                    tooltip: 'Sincronizar / configurar',
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    tooltip: 'Agregar producto',
                     onPressed: () async {
-                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const ConfigScreen()));
-                      _cargar();
+                      final categorias = _porCategoria.keys.toList()..sort();
+                      final agregado = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(builder: (_) => AgregarProductoScreen(categorias: categorias)),
+                      );
+                      if (agregado == true) _cargar();
                     },
                   ),
                 ],

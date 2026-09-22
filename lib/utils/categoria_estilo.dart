@@ -58,6 +58,9 @@ CategoriaEstilo estiloDeCategoria(String categoria) {
   if (tiene(['MOVIL'])) {
     return const CategoriaEstilo(Icons.phone_android, Color(0xFF475569));
   }
+  if (tiene(['SERVICIOS'])) {
+    return const CategoriaEstilo(Icons.miscellaneous_services, Color(0xFF14B8A6));
+  }
   if (tiene(['SERCO', 'ACC Y ASIST', 'ESTRUCTURA', 'REVISAR'])) {
     return const CategoriaEstilo(Icons.build, Color(0xFF57534E));
   }
