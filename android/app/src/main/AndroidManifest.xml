@@ -3,6 +3,8 @@
          también en builds release; Flutter solo la agrega por defecto en
          debug/profile para las herramientas de desarrollo. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Para grabar el pedido por voz en la pestaña "Voz" (cotización por IA). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="ICR Energy"
         android:name="${applicationName}"

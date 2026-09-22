@@ -8,7 +8,7 @@ class TabsApp {
   static const cotizar = 1;
   static const home = 2;
   static const checklist = 3;
-  static const chat = 4;
+  static const voz = 4;
 }
 
 /// Controla qué pestaña está activa en MainTabsScreen. Al vivir en un

@@ -127,9 +127,9 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
             label: 'Checklist',
           ),
           NavigationDestination(
-            icon: BrandIcon('chat.svg', color: colorInactivo),
-            selectedIcon: const BrandIcon('chat.svg', color: Colors.white),
-            label: 'Chat',
+            icon: BrandIcon('voz.svg', color: colorInactivo),
+            selectedIcon: const BrandIcon('voz.svg', color: Colors.white),
+            label: 'Voz',
           ),
         ],
       ),
