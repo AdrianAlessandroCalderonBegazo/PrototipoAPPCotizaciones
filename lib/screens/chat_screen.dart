@@ -62,8 +62,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     final carpeta = await getTemporaryDirectory();
-    final ruta = '${carpeta.path}/cotizacion_voz_${DateTime.now().millisecondsSinceEpoch}.wav';
-    await _recorder.start(const RecordConfig(encoder: AudioEncoder.wav), path: ruta);
+    final ruta = '${carpeta.path}/cotizacion_voz_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    // AAC mono a 16kHz/64kbps: de sobra para que Gemini entienda voz, y un
+    // audio de un minuto pesa ~0.5MB en vez de los ~10MB de un WAV sin
+    // comprimir — eso es lo que estaba causando el timeout al subirlo.
+    await _recorder.start(
+      const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 16000, numChannels: 1, bitRate: 64000),
+      path: ruta,
+    );
     if (!mounted) return;
     setState(() {
       _grabando = true;

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/producto.dart';
 
@@ -63,7 +65,7 @@ $catalogoTexto
       'model': _modelo,
       'input': [
         {'type': 'text', 'text': prompt},
-        {'type': 'audio', 'data': base64Encode(audioBytes), 'mime_type': 'audio/wav'},
+        {'type': 'audio', 'data': base64Encode(audioBytes), 'mime_type': 'audio/aac'},
       ],
       'response_format': {
         'type': 'text',
@@ -89,17 +91,28 @@ $catalogoTexto
       },
     });
 
-    final resp = await (client ?? http.Client())
-        .post(
-          Uri.parse('https://generativelanguage.googleapis.com/v1beta/interactions'),
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': _apiKey,
-            'Api-Revision': '2026-05-20',
-          },
-          body: cuerpo,
-        )
-        .timeout(const Duration(seconds: 45));
+    http.Response resp;
+    try {
+      resp = await (client ?? http.Client())
+          .post(
+            Uri.parse('https://generativelanguage.googleapis.com/v1beta/interactions'),
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': _apiKey,
+              'Api-Revision': '2026-05-20',
+            },
+            body: cuerpo,
+          )
+          // El audio ya viaja comprimido (ver chat_screen.dart), así que este
+          // margen es sobre todo para el procesamiento de Gemini, no la subida.
+          .timeout(const Duration(seconds: 90));
+    } on TimeoutException {
+      throw Exception('El servicio de voz tardó demasiado en responder. Revisa tu conexión a internet e inténtalo de nuevo.');
+    } on SocketException {
+      throw Exception('No se pudo conectar con el servicio de voz. Revisa tu conexión a internet.');
+    } on http.ClientException {
+      throw Exception('No se pudo conectar con el servicio de voz. Revisa tu conexión a internet.');
+    }
 
     if (resp.statusCode != 200) {
       throw Exception('Gemini respondió ${resp.statusCode}: ${resp.body}');
