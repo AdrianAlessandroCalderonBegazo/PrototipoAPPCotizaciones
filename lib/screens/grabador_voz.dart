@@ -124,7 +124,7 @@ class _GrabadorVozState extends State<GrabadorVoz> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => LottieGateScreen<(String, List<ItemDetectado>)>(
-          lottieAsset: 'assets/animations/verification.lottie',
+          lottieAsset: 'assets/animations/buscando.lottie',
           mensaje: 'Buscando en el catálogo...',
           proceso: () => _proceso(texto),
           alTerminar: (context, resultado) {

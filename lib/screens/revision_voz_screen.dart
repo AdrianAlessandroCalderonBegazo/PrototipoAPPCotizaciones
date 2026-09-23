@@ -7,8 +7,8 @@ import '../state/cotizacion_state.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
+import 'agregar_por_voz_modal.dart';
 import 'generar_cotizacion_screen.dart';
-import 'grabador_voz.dart';
 
 /// Antes de generar cualquier cotización por voz se muestra qué se
 /// entendió — la transcripción y los productos que se identificaron del
@@ -79,17 +79,14 @@ class _RevisionVozScreenState extends State<RevisionVozScreen> {
   }
 
   /// Abre el micrófono de nuevo para dictar más productos y los suma a la
-  /// lista que ya se había identificado (sin perderla).
+  /// lista que ya se había identificado (sin perderla) — todo dentro de
+  /// esta misma pantalla, mediante una hoja modal (nunca navega afuera).
   Future<void> _agregarMasPorVoz() async {
-    final resultado = await Navigator.of(context).push<(String, List<ItemDetectado>)>(
-      MaterialPageRoute(
-        builder: (_) => GrabadorVoz(
-          subtitulo: 'Agrega más productos',
-          onResultado: (r) {
-            if (mounted) Navigator.of(context).pop(r);
-          },
-        ),
-      ),
+    final resultado = await showModalBottomSheet<(String, List<ItemDetectado>)>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => const AgregarPorVozModal(),
     );
     if (resultado == null || !mounted) return;
     final (transcripcionNueva, nuevosItems) = resultado;
@@ -177,8 +174,7 @@ class _RevisionVozScreenState extends State<RevisionVozScreen> {
                       ),
                     ),
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
+                  Center(
                     child: TextButton.icon(
                       onPressed: _buscando ? null : _buscarDeNuevo,
                       icon: const Icon(Icons.refresh, size: 16),
