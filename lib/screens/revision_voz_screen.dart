@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/buscador_voz.dart';
+import '../services/db_helper.dart';
 import '../state/cotizacion_state.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
 import 'generar_cotizacion_screen.dart';
+import 'grabador_voz.dart';
 
 /// Antes de generar cualquier cotización por voz se muestra qué se
-/// entendió del audio — la transcripción y los productos que Gemini
-/// identificó del catálogo real, con su cantidad — para poder corregir o
-/// quitar algo antes de seguir. Nunca se crea una cotización directo
-/// desde el audio sin pasar por acá.
+/// entendió — la transcripción y los productos que se identificaron del
+/// catálogo real, con su cantidad — para poder corregir o quitar algo
+/// antes de seguir. Nunca se crea una cotización directo desde lo dictado
+/// sin pasar por acá. La transcripción es editable (por si el reconocedor
+/// de voz entendió mal una palabra) y se puede volver a grabar para sumar
+/// más productos sin perder lo que ya se identificó.
 class RevisionVozScreen extends StatefulWidget {
   final String transcripcion;
   final List<ItemDetectado> items;
@@ -24,7 +28,15 @@ class RevisionVozScreen extends StatefulWidget {
 }
 
 class _RevisionVozScreenState extends State<RevisionVozScreen> {
-  late final List<ItemDetectado> _items = List.of(widget.items);
+  late List<ItemDetectado> _items = List.of(widget.items);
+  late final _controladorTranscripcion = TextEditingController(text: widget.transcripcion);
+  bool _buscando = false;
+
+  @override
+  void dispose() {
+    _controladorTranscripcion.dispose();
+    super.dispose();
+  }
 
   void _quitar(int index) => setState(() => _items.removeAt(index));
 
@@ -35,6 +47,58 @@ class _RevisionVozScreenState extends State<RevisionVozScreen> {
       } else {
         _items[index].cantidad = cantidad;
       }
+    });
+  }
+
+  void _fusionarItems(List<ItemDetectado> nuevos) {
+    for (final nuevo in nuevos) {
+      final indice = _items.indexWhere((i) => i.producto.id == nuevo.producto.id);
+      if (indice >= 0) {
+        _items[indice].cantidad += nuevo.cantidad;
+      } else {
+        _items.add(nuevo);
+      }
+    }
+  }
+
+  /// Vuelve a buscar en el catálogo con el texto de la transcripción tal
+  /// como haya quedado editado — para cuando el reconocedor de voz
+  /// entendió mal una palabra y conviene corregirla a mano.
+  Future<void> _buscarDeNuevo() async {
+    final texto = _controladorTranscripcion.text.trim();
+    if (texto.isEmpty || _buscando) return;
+    setState(() => _buscando = true);
+    final agrupado = await DbHelper.instance.getTodosAgrupados();
+    final catalogo = agrupado.values.expand((lista) => lista).toList();
+    final nuevosItems = BuscadorVoz.buscar(texto: texto, catalogo: catalogo);
+    if (!mounted) return;
+    setState(() {
+      _items = nuevosItems;
+      _buscando = false;
+    });
+  }
+
+  /// Abre el micrófono de nuevo para dictar más productos y los suma a la
+  /// lista que ya se había identificado (sin perderla).
+  Future<void> _agregarMasPorVoz() async {
+    final resultado = await Navigator.of(context).push<(String, List<ItemDetectado>)>(
+      MaterialPageRoute(
+        builder: (_) => GrabadorVoz(
+          subtitulo: 'Agrega más productos',
+          onResultado: (r) {
+            if (mounted) Navigator.of(context).pop(r);
+          },
+        ),
+      ),
+    );
+    if (resultado == null || !mounted) return;
+    final (transcripcionNueva, nuevosItems) = resultado;
+    setState(() {
+      if (transcripcionNueva.isNotEmpty) {
+        final actual = _controladorTranscripcion.text.trim();
+        _controladorTranscripcion.text = actual.isEmpty ? transcripcionNueva : '$actual / $transcripcionNueva';
+      }
+      _fusionarItems(nuevosItems);
     });
   }
 
@@ -92,21 +156,37 @@ class _RevisionVozScreenState extends State<RevisionVozScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 children: [
-                  Text('TRANSCRIPCIÓN', style: AppTextStyles.etiqueta.copyWith(color: BrandColors.azulMarino)),
+                  Text('TRANSCRIPCIÓN (toca para corregir)', style: AppTextStyles.etiqueta.copyWith(color: BrandColors.azulMarino)),
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
                       color: BrandColors.celeste,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Text(
-                      widget.transcripcion.isEmpty ? '(no se detectó nada en el audio)' : '"${widget.transcripcion}"',
+                    child: TextField(
+                      controller: _controladorTranscripcion,
+                      maxLines: null,
                       style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 13.5, color: BrandColors.azulMarino),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                        hintText: '(no se detectó nada — puedes escribirlo a mano)',
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _buscando ? null : _buscarDeNuevo,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Volver a buscar con este texto'),
+                      style: TextButton.styleFrom(foregroundColor: BrandColors.azulMarino, visualDensity: VisualDensity.compact),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     'PRODUCTOS IDENTIFICADOS · ${_items.length}',
                     style: AppTextStyles.etiqueta.copyWith(color: BrandColors.azulMarino),
@@ -116,7 +196,7 @@ class _RevisionVozScreenState extends State<RevisionVozScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Text(
-                        'No reconocimos ningún producto del catálogo en el audio. Vuelve a intentarlo o agrégalos a mano desde Cotizar.',
+                        'No reconocimos ningún producto del catálogo en lo dictado. Corrige el texto de arriba, agrega más por voz, o agrégalos a mano desde Cotizar.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.apoyo,
                       ),
@@ -130,6 +210,21 @@ class _RevisionVozScreenState extends State<RevisionVozScreen> {
                         onQuitar: () => _quitar(i),
                       ),
                     ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _agregarMasPorVoz,
+                      icon: const Icon(Icons.mic, size: 18),
+                      label: const Text('Agregar más por voz'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BrandColors.cian,
+                        side: const BorderSide(color: BrandColors.cian),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: const StadiumBorder(),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
