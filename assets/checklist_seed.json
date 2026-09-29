@@ -34,7 +34,13 @@
       "Mid-clamps",
       "End-clamps",
       "Patas coplanares",
-      "Rieles continuos"
+      "Rieles continuos",
+      "Conector MC4",
+      "Estructura coplanar",
+      "Estructura angular",
+      "Cable PV Solar 10 mm",
+      "Cable PV Solar 4 mm",
+      "Cable para batería"
     ]
   },
   {
@@ -52,7 +58,8 @@
       "Terminal ojal 16 mm",
       "Terminal tubular",
       "Barra de paralelaje",
-      "Cintillos"
+      "Cintillos",
+      "Cable termo-contraible"
     ]
   },
   {
@@ -66,7 +73,10 @@
       "Tiner",
       "Sika Flex café",
       "Sika Flex gris",
-      "Calamina roja"
+      "Calamina roja",
+      "Maderas",
+      "Escalera tijeral",
+      "Escalera telescópica"
     ]
   },
   {
