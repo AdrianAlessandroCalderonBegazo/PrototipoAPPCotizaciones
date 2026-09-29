@@ -6,38 +6,47 @@ import '../state/navegacion_state.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 
-/// Pantalla de confirmación al guardar un checklist: banner de éxito,
-/// vista previa embebida del PDF ya creado, y las salidas naturales —
-/// copiarlo como mensaje, compartir el PDF, o volver al inicio.
-class ChecklistGuardadoScreen extends StatelessWidget {
+/// Pantalla de confirmación al crear un documento de almacén (requerimiento
+/// o salida de herramientas): banner de éxito, vista previa embebida del
+/// PDF ya creado, y las salidas naturales — compartir el PDF, copiarlo como
+/// mensaje, ver su detalle, o volver al inicio.
+class DocumentoCreadoScreen extends StatelessWidget {
+  final String titulo;
+  final String detalle;
   final Uint8List bytes;
-  final String textoResumen;
-  final int totalMarcados;
-  final int totalItems;
+  final String nombreArchivo;
+  final String textoBotonCompartir;
+  final String textoMensaje;
+  final String? textoVerDetalle;
+  final void Function(BuildContext context)? alVerDetalle;
 
-  const ChecklistGuardadoScreen({
+  const DocumentoCreadoScreen({
     super.key,
+    required this.titulo,
+    required this.detalle,
     required this.bytes,
-    required this.textoResumen,
-    required this.totalMarcados,
-    required this.totalItems,
+    required this.nombreArchivo,
+    required this.textoBotonCompartir,
+    required this.textoMensaje,
+    this.textoVerDetalle,
+    this.alVerDetalle,
   });
 
   Future<void> _compartir() {
-    return Printing.sharePdf(bytes: bytes, filename: 'checklist_de_obra.pdf');
+    return Printing.sharePdf(bytes: bytes, filename: nombreArchivo);
   }
 
   Future<void> _copiarMensaje(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: textoResumen));
+    await Clipboard.setData(ClipboardData(text: textoMensaje));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Checklist copiado — pégalo donde quieras enviarlo.')),
+      const SnackBar(content: Text('Copiado — pégalo donde quieras enviarlo.')),
     );
   }
 
   void _volverAlInicio(BuildContext context) {
     Navigator.of(context).popUntil((route) => route.isFirst);
-    context.read<NavegacionState>().irA(TabsApp.home);
+    context.read<NavegacionState>().irA(TabsApp.inicio);
   }
 
   @override
@@ -67,10 +76,11 @@ class ChecklistGuardadoScreen extends StatelessWidget {
                       child: const Icon(Icons.check_rounded, color: Colors.white, size: 32),
                     ),
                     const SizedBox(height: 12),
-                    Text('Checklist guardado', style: AppTextStyles.subtitulo.copyWith(color: Colors.white, fontSize: 18)),
+                    Text(titulo, style: AppTextStyles.subtitulo.copyWith(color: Colors.white, fontSize: 18)),
                     const SizedBox(height: 4),
                     Text(
-                      '$totalMarcados de $totalItems ítems marcados',
+                      detalle,
+                      textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                     ),
                   ],
@@ -122,7 +132,8 @@ class ChecklistGuardadoScreen extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: const StadiumBorder(),
                         ),
-                        child: const Text('COMPARTIR CHECKLIST', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
+                        child: Text(textoBotonCompartir,
+                            style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -139,6 +150,22 @@ class ChecklistGuardadoScreen extends StatelessWidget {
                         child: const Text('Copiar como mensaje'),
                       ),
                     ),
+                    if (alVerDetalle != null && textoVerDetalle != null) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () => alVerDetalle!(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            foregroundColor: BrandColors.azulMarino,
+                            side: const BorderSide(color: BrandColors.azulMarino),
+                            shape: const StadiumBorder(),
+                          ),
+                          child: Text(textoVerDetalle!),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,

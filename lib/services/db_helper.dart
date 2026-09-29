@@ -3,9 +3,13 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import '../models/checklist_categoria.dart';
 import '../models/checklist_guardado.dart';
+import '../models/checklist_herramientas.dart';
 import '../models/cotizacion_guardada.dart';
+import '../models/item_catalogo_checklist.dart';
 import '../models/producto.dart';
+import '../models/requerimiento.dart';
 
 /// Toda la app le pide productos a este helper, sin saber si vienen del
 /// JSON semilla (primer arranque) o de una sincronización con el servidor.
@@ -24,11 +28,12 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'cotizador_icr.db');
     return openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: (db, version) async {
         await _crearTablaProductos(db);
         await _crearTablaCotizacionesGuardadas(db);
         await _crearTablaChecklistsGuardados(db);
+        await _crearTablasAlmacen(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         // No se borra la tabla productos: no hay que perder un catálogo que
@@ -45,6 +50,9 @@ class DbHelper {
         }
         if (oldVersion < 5) {
           await _agregarColumnaOrigenProducto(db);
+        }
+        if (oldVersion < 6) {
+          await _crearTablasAlmacen(db);
         }
       },
     );
@@ -99,6 +107,55 @@ class DbHelper {
         resumen_texto TEXT NOT NULL,
         archivo_pdf TEXT,
         categorias_json TEXT
+      )
+    ''');
+  }
+
+  /// Pestaña Almacén: requerimientos de materiales, salidas de herramientas
+  /// y los ítems que se agregan a la lista base de esos checklists. Con IF
+  /// NOT EXISTS porque se llama tanto al crear la base desde cero como al
+  /// actualizar desde una versión anterior (donde no existían).
+  Future<void> _crearTablasAlmacen(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS requerimientos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        numero TEXT NOT NULL,
+        obra TEXT NOT NULL,
+        solicitante TEXT NOT NULL,
+        urgente INTEGER NOT NULL DEFAULT 0,
+        estado TEXT NOT NULL,
+        fecha_creacion TEXT NOT NULL,
+        fecha_aprobacion TEXT,
+        aprobado_por TEXT,
+        fecha_entrega TEXT,
+        recibido_por TEXT,
+        observaciones TEXT,
+        categorias_json TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS checklists_herramientas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        numero TEXT NOT NULL,
+        obra TEXT NOT NULL,
+        responsable TEXT NOT NULL,
+        estado TEXT NOT NULL,
+        fecha_salida TEXT NOT NULL,
+        fecha_devolucion TEXT,
+        encargado TEXT,
+        observaciones TEXT,
+        observaciones_devolucion TEXT,
+        categorias_json TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS checklist_catalogo (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT NOT NULL,
+        categoria TEXT NOT NULL,
+        nombre TEXT NOT NULL,
+        unidad TEXT,
+        fecha TEXT NOT NULL
       )
     ''');
   }
@@ -184,9 +241,7 @@ class DbHelper {
 
     final raw = await rootBundle.loadString('assets/productos_seed.json');
     final List<dynamic> data = jsonDecode(raw);
-    final productos = data
-        .map((e) => Producto.fromMap(Map<String, dynamic>.from(e)))
-        .toList();
+    final productos = data.map((e) => Producto.fromMap(Map<String, dynamic>.from(e))).toList();
     await replaceAll(productos);
 
     await prefs.setInt('version_catalogo_productos', _versionCatalogo);
@@ -198,6 +253,25 @@ class DbHelper {
   Future<void> agregarProductoManual(Producto producto) async {
     final db = await database;
     await db.insert('productos', {...producto.toMap(), 'origen': 'local'});
+  }
+
+  /// Solo para productos de origen "local": los del catálogo se reemplazan
+  /// enteros al actualizar/sincronizar, así que un cambio a mano sobre ellos
+  /// se perdería sin aviso.
+  Future<void> actualizarProductoManual(Producto producto) async {
+    final db = await database;
+    final datos = producto.toMap()..remove('id');
+    await db.update(
+      'productos',
+      datos,
+      where: "id = ? AND origen = 'local'",
+      whereArgs: [producto.id],
+    );
+  }
+
+  Future<void> eliminarProductoManual(int id) async {
+    final db = await database;
+    await db.delete('productos', where: "id = ? AND origen = 'local'", whereArgs: [id]);
   }
 
   Future<List<String>> getCategorias() async {
@@ -290,5 +364,96 @@ class DbHelper {
     final db = await database;
     final result = await db.query('checklists_guardados', orderBy: 'fecha DESC');
     return result.map((e) => ChecklistGuardado.fromMap(e)).toList();
+  }
+
+  Future<int> countChecklistsGuardados() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as c FROM checklists_guardados');
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ---------------------------------------------------------------------
+  // Almacén: requerimientos
+  // ---------------------------------------------------------------------
+
+  Future<int> insertarRequerimiento(Requerimiento requerimiento) async {
+    final db = await database;
+    return db.insert('requerimientos', requerimiento.toMap());
+  }
+
+  Future<void> actualizarRequerimiento(Requerimiento requerimiento) async {
+    final db = await database;
+    await db.update(
+      'requerimientos',
+      requerimiento.toMap(),
+      where: 'id = ?',
+      whereArgs: [requerimiento.id],
+    );
+  }
+
+  Future<void> eliminarRequerimiento(int id) async {
+    final db = await database;
+    await db.delete('requerimientos', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<Requerimiento>> getRequerimientos() async {
+    final db = await database;
+    final result = await db.query('requerimientos', orderBy: 'fecha_creacion DESC');
+    return result.map((e) => Requerimiento.fromMap(e)).toList();
+  }
+
+  // ---------------------------------------------------------------------
+  // Almacén: checklists de herramientas
+  // ---------------------------------------------------------------------
+
+  Future<int> insertarChecklistHerramientas(ChecklistHerramientas checklist) async {
+    final db = await database;
+    return db.insert('checklists_herramientas', checklist.toMap());
+  }
+
+  Future<void> actualizarChecklistHerramientas(ChecklistHerramientas checklist) async {
+    final db = await database;
+    await db.update(
+      'checklists_herramientas',
+      checklist.toMap(),
+      where: 'id = ?',
+      whereArgs: [checklist.id],
+    );
+  }
+
+  Future<void> eliminarChecklistHerramientas(int id) async {
+    final db = await database;
+    await db.delete('checklists_herramientas', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<ChecklistHerramientas>> getChecklistsHerramientas() async {
+    final db = await database;
+    final result = await db.query('checklists_herramientas', orderBy: 'fecha_salida DESC');
+    return result.map((e) => ChecklistHerramientas.fromMap(e)).toList();
+  }
+
+  // ---------------------------------------------------------------------
+  // Ítems agregados a la lista base de los checklists
+  // ---------------------------------------------------------------------
+
+  Future<List<ItemCatalogoChecklist>> getItemsCatalogoChecklist(TipoChecklist tipo) async {
+    final db = await database;
+    final result = await db.query(
+      'checklist_catalogo',
+      where: 'tipo = ?',
+      whereArgs: [tipo.name],
+      orderBy: 'id',
+    );
+    return result.map((e) => ItemCatalogoChecklist.fromMap(e)).toList();
+  }
+
+  Future<int> agregarItemCatalogoChecklist(ItemCatalogoChecklist item) async {
+    final db = await database;
+    return db.insert('checklist_catalogo', item.toMap());
+  }
+
+  Future<void> eliminarItemCatalogoChecklist(int id) async {
+    final db = await database;
+    await db.delete('checklist_catalogo', where: 'id = ?', whereArgs: [id]);
   }
 }

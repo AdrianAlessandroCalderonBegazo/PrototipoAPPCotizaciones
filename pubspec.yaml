@@ -1,7 +1,7 @@
 name: cotizador_icr
 description: App móvil para armar cotizaciones por checklist de productos, con datos locales y sincronización opcional desde el servidor local.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

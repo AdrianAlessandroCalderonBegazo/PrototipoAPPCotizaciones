@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/db_helper.dart';
+import 'services/notificaciones_service.dart';
+import 'state/almacen_state.dart';
 import 'state/checklist_state.dart';
 import 'state/cotizacion_state.dart';
 import 'state/navegacion_state.dart';
 import 'screens/main_tabs_screen.dart';
 import 'theme/brand_colors.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificacionesService.inicializar();
   runApp(const CotizadorApp());
 }
 
@@ -29,7 +33,8 @@ class CotizadorApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => CotizacionState()),
-        ChangeNotifierProvider(create: (_) => ChecklistState()),
+        Provider(create: (_) => BorradoresChecklist()),
+        ChangeNotifierProvider(create: (_) => AlmacenState()),
         ChangeNotifierProvider(create: (_) => NavegacionState()),
       ],
       child: MaterialApp(
@@ -50,9 +55,7 @@ class CotizadorApp extends StatelessWidget {
           navigationBarTheme: NavigationBarThemeData(
             indicatorColor: BrandColors.cian,
             iconTheme: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.selected)
-                  ? const IconThemeData(color: Colors.white)
-                  : null,
+              (states) => states.contains(WidgetState.selected) ? const IconThemeData(color: Colors.white) : null,
             ),
           ),
         ),
@@ -83,9 +86,12 @@ class _SplashState extends State<_Splash> {
   // (assets/productos_seed.json) — así funciona sin red desde el día 1.
   // También se ejecuta en arranques posteriores, por si el catálogo
   // empaquetado se actualizó desde la última vez que se abrió la app.
+  // Además deja cargado Almacén, para que el Inicio ya muestre lo pendiente.
   Future<void> _cargar() async {
     try {
       await DbHelper.instance.actualizarCatalogoBase();
+      if (!mounted) return;
+      await context.read<AlmacenState>().cargar();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainTabsScreen()),

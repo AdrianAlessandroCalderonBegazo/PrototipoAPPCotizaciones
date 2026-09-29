@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
+import '../models/checklist_categoria.dart';
 import '../state/checklist_state.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
@@ -13,13 +14,52 @@ import '../widgets/fade_slide_in.dart';
 import '../widgets/porcentaje_animado.dart';
 import 'checklist_resumen_screen.dart';
 
-/// Pestaña "Checklist": recorrido obligatorio categoría por categoría
-/// (herramientas y materiales para instalación Victron, tomadas del Excel
-/// real de la empresa) para que antes de salir a obra no se quede nada por
-/// llevar. Se puede retroceder libremente a una categoría ya vista, pero
-/// avanzar es siempre de una en una. Cada categoría permite agregar un
-/// ítem que se le haya olvidado; el resumen final (al terminar la última)
-/// muestra las categorías juntas.
+/// Ruta a una pantalla del recorrido del checklist, entregándole el
+/// borrador con el que trabaja — las rutas empujadas no heredan los
+/// providers de la pantalla anterior, así que cada una lo recibe acá.
+Route<T> rutaConChecklist<T>(ChecklistState checklist, Widget pantalla) {
+  return MaterialPageRoute<T>(
+    builder: (_) => ChangeNotifierProvider<ChecklistState>.value(value: checklist, child: pantalla),
+  );
+}
+
+/// Abre el checklist de siempre para armar un requerimiento de materiales o
+/// una salida de herramientas. Si ya había uno a medias, pregunta si
+/// continuarlo o empezar de cero (antes se perdía sin preguntar).
+Future<void> abrirChecklist(BuildContext context, TipoChecklist tipo) async {
+  final checklist = context.read<BorradoresChecklist>().de(tipo);
+  await checklist.cargar();
+  if (!context.mounted) return;
+
+  if (checklist.tieneProgreso) {
+    final continuar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title:
+            Text(tipo == TipoChecklist.materiales ? 'Tienes un requerimiento a medias' : 'Tienes una salida a medias'),
+        content: Text(
+          'Ibas en el paso ${checklist.indice + 1} de ${checklist.categorias.length} con '
+          '${checklist.totalMarcados} ítems marcados. ¿Lo continúas o empiezas uno nuevo?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Empezar nuevo')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Continuar')),
+        ],
+      ),
+    );
+    if (continuar == null) return;
+    if (!continuar) await checklist.reiniciar();
+  }
+  if (!context.mounted) return;
+  await Navigator.of(context).push(rutaConChecklist<void>(checklist, const ChecklistScreen()));
+}
+
+/// Recorrido obligatorio categoría por categoría (herramientas y materiales
+/// para instalación Victron, tomadas del Excel real de la empresa) para que
+/// no se quede nada por pedir o por llevar. Se puede retroceder libremente
+/// a una categoría ya vista, pero avanzar es siempre de una en una. Cada
+/// categoría permite agregar un ítem que se haya olvidado; el resumen final
+/// (al terminar la última) muestra las categorías juntas.
 class ChecklistScreen extends StatefulWidget {
   const ChecklistScreen({super.key});
 
@@ -41,17 +81,16 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (_, __, ___) => const _OverlayCompletado(),
-      transitionBuilder: (_, animation, __, child) =>
-          FadeTransition(opacity: animation, child: child),
+      transitionBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
     );
     if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ChecklistResumenScreen()),
-    );
+    Navigator.of(context).push(rutaConChecklist<void>(checklist, const ChecklistResumenScreen()));
   }
 
-  Widget _encabezado(BuildContext context, ChecklistState checklist, ChecklistCategoriaState categoria, int porcentaje) {
+  Widget _encabezado(
+      BuildContext context, ChecklistState checklist, ChecklistCategoriaState categoria, int porcentaje) {
     final total = checklist.categorias.length;
+    final esMateriales = checklist.tipo == TipoChecklist.materiales;
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -61,40 +100,66 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: const EdgeInsets.fromLTRB(4, 4, 20, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('PASO ${checklist.indice + 1} DE $total', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    tooltip: 'Salir (se guarda lo avanzado)',
+                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${esMateriales ? 'REQUERIMIENTO' : 'HERRAMIENTAS'} · PASO ${checklist.indice + 1} DE $total',
+                      style: AppTextStyles.etiqueta.copyWith(color: Colors.white70),
+                    ),
+                  ),
                   PorcentajeAnimado(valor: porcentaje),
                 ],
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: List.generate(total, (i) {
-                  final alcanzado = i <= checklist.indice;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: alcanzado ? () => checklist.irACategoria(i) : null,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: alcanzado ? BrandColors.cian : Colors.white.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(3),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Row(
+                  children: List.generate(total, (i) {
+                    final alcanzado = i <= checklist.indice;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: alcanzado ? () => checklist.irACategoria(i) : null,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: alcanzado ? BrandColors.cian : Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
               const SizedBox(height: 16),
-              Text(quitarNumeroCategoria(categoria.nombre), style: AppTextStyles.titulo.copyWith(color: Colors.white)),
-              const SizedBox(height: 4),
-              Text('Marca lo que ya está verificado', style: AppTextStyles.apoyo.copyWith(color: Colors.white70)),
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(quitarNumeroCategoria(categoria.nombre),
+                        style: AppTextStyles.titulo.copyWith(color: Colors.white)),
+                    const SizedBox(height: 4),
+                    Text(
+                      esMateriales
+                          ? 'Marca los materiales que necesitas pedir'
+                          : 'Marca las herramientas que salen a obra',
+                      style: AppTextStyles.apoyo.copyWith(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -109,12 +174,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
     if (checklist.cargando) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (checklist.error != null) {
+    if (checklist.error != null || checklist.categorias.isEmpty) {
       return Scaffold(
+        appBar: AppBar(),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(checklist.error!, textAlign: TextAlign.center),
+            child: Text(checklist.error ?? 'Este checklist no tiene categorías.', textAlign: TextAlign.center),
           ),
         ),
       );
@@ -151,7 +217,6 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
                       context,
                       checklist: checklist,
                       categoriaIndex: checklist.indice,
-                      nombreCategoria: quitarNumeroCategoria(categoria.nombre),
                     ),
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
@@ -388,8 +453,7 @@ class _OverlayCompletado extends StatefulWidget {
   State<_OverlayCompletado> createState() => _OverlayCompletadoState();
 }
 
-class _OverlayCompletadoState extends State<_OverlayCompletado>
-    with SingleTickerProviderStateMixin {
+class _OverlayCompletadoState extends State<_OverlayCompletado> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(vsync: this);
 
   @override

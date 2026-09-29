@@ -6,18 +6,25 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../state/checklist_state.dart';
+import '../models/checklist_categoria.dart';
+import '../models/checklist_herramientas.dart';
+import '../models/producto.dart';
+import '../models/requerimiento.dart';
 import '../state/cotizacion_state.dart';
 import '../theme/brand_colors.dart';
+import '../utils/checklist_estilo.dart';
 
 const _firmaAsset = 'assets/fonts/DancingScript-Bold.ttf';
 
 const _logoAsset = 'assets/icon/icon.png';
 
-/// Genera la cotización en PDF con el formato oficial de Inversiones ICR:
+/// Genera los PDFs con el formato oficial de Inversiones ICR. La cotización:
 /// encabezado con logo/RUC/Nro, fila de cliente (+ RUC/DNI opcional) /
 /// total/fecha, vendedor/email, tabla de productos, y el bloque de
-/// Banco/Moneda/Cuenta/CCI + Subtotal/Impuestos/Total al final.
+/// Banco/Moneda/Cuenta/CCI + Subtotal/Impuestos/Total al final. Los
+/// documentos de almacén (requerimiento, checklist de herramientas) usan el
+/// mismo encabezado de marca, las secciones por categoría del checklist y
+/// firmas al pie.
 class PdfService {
   static const _empresa = 'INVERSIONES ICR S.R.L.';
   static const _direccion = 'Calle Pizarro 325 C, Arequipa';
@@ -84,12 +91,12 @@ class PdfService {
         ),
         build: (context) => [
           ...items.asMap().entries.map(
-            (e) => _filaProducto(
-              index: e.key,
-              item: e.value,
-              imagen: imagenes[e.value.producto.archivoImagen],
-            ),
-          ),
+                (e) => _filaProducto(
+                  index: e.key,
+                  item: e.value,
+                  imagen: imagenes[e.value.producto.archivoImagen],
+                ),
+              ),
           pw.SizedBox(height: 16),
           _bancoYTotales(
             banco: banco,
@@ -121,71 +128,143 @@ class PdfService {
     return archivo.path;
   }
 
-  /// PDF del checklist de obra: mismo encabezado de marca, una sección por
-  /// categoría con sus ítems marcados/sin marcar, y la firma del
-  /// responsable al final (en la tipografía cursiva, simulando una firma).
-  static Future<Uint8List> generarChecklist({
-    required List<ChecklistCategoriaState> categorias,
-    required String responsable,
-  }) async {
-    final logo = pw.MemoryImage((await rootBundle.load(_logoAsset)).buffer.asUint8List());
-    pw.Font? firmaFont;
-    try {
-      firmaFont = pw.Font.ttf(await rootBundle.load(_firmaAsset));
-    } catch (_) {
-      firmaFont = null;
-    }
-
-    final fecha = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
-    final totalItems = categorias.fold<int>(0, (s, c) => s + c.items.length);
-    final totalMarcados = categorias.fold<int>(0, (s, c) => s + c.totalMarcados);
+  /// PDF formal de un requerimiento de materiales: el mismo encabezado de
+  /// marca que la cotización (con su recuadro de RUC / tipo de documento /
+  /// Nro), los datos del pedido, una sección por categoría con lo pedido
+  /// —el casillero se marca recién cuando se entregó— y las firmas de quien
+  /// pide, quien aprueba (jefe de obra) y quien recibe.
+  static Future<Uint8List> generarRequerimiento(Requerimiento r) async {
+    final logo = await _cargarLogo();
+    final firmaFont = await _cargarFuenteFirma();
+    final fecha = DateFormat('dd/MM/yyyy HH:mm');
 
     final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
         margin: const pw.EdgeInsets.all(24),
-        header: (context) => _encabezadoChecklist(
+        header: (context) => _encabezadoDocumento(
           context: context,
           logo: logo,
-          responsable: responsable,
-          fecha: fecha,
-          totalItems: totalItems,
-          totalMarcados: totalMarcados,
+          tipoDocumento: 'REQUERIMIENTO',
+          numero: r.numero,
+          datos: [
+            ('Obra / proyecto', r.obra),
+            ('Fecha de solicitud', fecha.format(r.fechaCreacion)),
+            ('Solicitante', r.solicitante),
+            ('Estado', r.estado.etiqueta),
+          ],
+          destacado: r.urgente ? 'PRIORIDAD: URGENTE' : null,
         ),
         build: (context) => [
-          for (final cat in categorias) ..._seccionCategoriaChecklist(cat),
-          pw.SizedBox(height: 24),
-          _firmaChecklist(responsable, firmaFont),
+          _resumenCantidades('Materiales solicitados', r.totalItems, r.totalUnidades),
+          _leyendaCasillas(marcada: 'Entregado', vacia: 'Pendiente de entrega'),
+          for (final cat in r.categorias) ..._seccionCategoriaDocumento(cat, marcado: r.entregado),
+          ..._bloqueObservaciones('Observaciones', r.observaciones),
+          pw.SizedBox(height: 30),
+          _firmas(
+            [
+              _Firma(
+                nombre: r.solicitante,
+                cargo: 'Solicitante',
+                detalle: fecha.format(r.fechaCreacion),
+                completada: true,
+              ),
+              _Firma(
+                nombre: r.aprobadoPor,
+                cargo: 'Aprobado por jefe de obra',
+                detalle: r.fechaAprobacion == null ? 'Pendiente de aprobación' : fecha.format(r.fechaAprobacion!),
+                completada: r.fechaAprobacion != null,
+                textoSinNombre: 'Aprobado',
+              ),
+              _Firma(
+                nombre: r.recibidoPor,
+                cargo: 'Recibido por',
+                detalle: r.fechaEntrega == null ? 'Pendiente de entrega' : fecha.format(r.fechaEntrega!),
+                completada: r.fechaEntrega != null,
+                textoSinNombre: 'Entregado',
+              ),
+            ],
+            firmaFont,
+          ),
         ],
       ),
     );
-
     return doc.save();
   }
 
-  /// Guarda el PDF del checklist en su propia carpeta (aparte de las
-  /// cotizaciones), con un nombre único por fecha/hora.
-  static Future<String> guardarChecklistEnDisco(Uint8List bytes) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final carpeta = Directory('${dir.path}/checklists');
-    if (!await carpeta.exists()) {
-      await carpeta.create(recursive: true);
-    }
-    final marca = DateTime.now().millisecondsSinceEpoch;
-    final archivo = File('${carpeta.path}/checklist_$marca.pdf');
-    await archivo.writeAsBytes(bytes);
-    return archivo.path;
+  /// PDF formal de un checklist de herramientas: mismo formato que el
+  /// requerimiento; el casillero de cada herramienta se marca cuando el
+  /// encargado confirmó que volvió (estado Conforme).
+  static Future<Uint8List> generarChecklistHerramientas(ChecklistHerramientas h) async {
+    final logo = await _cargarLogo();
+    final firmaFont = await _cargarFuenteFirma();
+    final fecha = DateFormat('dd/MM/yyyy HH:mm');
+
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        margin: const pw.EdgeInsets.all(24),
+        header: (context) => _encabezadoDocumento(
+          context: context,
+          logo: logo,
+          tipoDocumento: 'CHECKLIST DE HERRAMIENTAS',
+          numero: h.numero,
+          datos: [
+            ('Obra / proyecto', h.obra),
+            ('Fecha de salida', fecha.format(h.fechaSalida)),
+            ('Responsable', h.responsable),
+            ('Estado', h.estado.etiqueta),
+          ],
+        ),
+        build: (context) => [
+          _resumenCantidades('Herramientas registradas', h.totalItems, h.totalUnidades),
+          _leyendaCasillas(marcada: 'Devuelta', vacia: 'Pendiente de devolución'),
+          for (final cat in h.categorias) ..._seccionCategoriaDocumento(cat, marcado: h.conforme),
+          ..._bloqueObservaciones('Observaciones de la salida', h.observaciones),
+          ..._bloqueObservaciones('Observaciones de la devolución', h.observacionesDevolucion),
+          pw.SizedBox(height: 30),
+          _firmas(
+            [
+              _Firma(
+                nombre: h.responsable,
+                cargo: 'Responsable (retira)',
+                detalle: fecha.format(h.fechaSalida),
+                completada: true,
+              ),
+              _Firma(
+                nombre: h.encargado,
+                cargo: 'Encargado (recibe la devolución)',
+                detalle: h.fechaDevolucion == null ? 'Pendiente de devolución' : fecha.format(h.fechaDevolucion!),
+                completada: h.fechaDevolucion != null,
+                textoSinNombre: 'Conforme',
+              ),
+            ],
+            firmaFont,
+          ),
+        ],
+      ),
+    );
+    return doc.save();
   }
 
-  static pw.Widget _encabezadoChecklist({
-    required pw.Context context,
-    required pw.MemoryImage logo,
-    required String responsable,
-    required String fecha,
-    required int totalItems,
-    required int totalMarcados,
-  }) {
-    final tarjetaEmpresa = pw.Row(
+  static Future<pw.MemoryImage> _cargarLogo() async =>
+      pw.MemoryImage((await rootBundle.load(_logoAsset)).buffer.asUint8List());
+
+  /// La firma se escribe en la tipografía cursiva, simulando una firma; si
+  /// no se pudiera cargar, sale con la tipografía normal.
+  static Future<pw.Font?> _cargarFuenteFirma() async {
+    try {
+      return pw.Font.ttf(await rootBundle.load(_firmaAsset));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fila de marca de la empresa (logo + razón social + dirección), igual en
+  /// todos los documentos, más el recuadro de la derecha con el RUC y el
+  /// tipo/número del documento.
+  static pw.Widget _tarjetaEmpresa(pw.MemoryImage logo, String tipoDocumento, String numero) {
+    return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
@@ -228,7 +307,12 @@ class PdfService {
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
               pw.Text(
-                'CHECKLIST DE OBRA',
+                'RUC: $_ruc',
+                style: const pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                tipoDocumento,
                 style: pw.TextStyle(
                   fontSize: 10,
                   fontWeight: pw.FontWeight.bold,
@@ -236,73 +320,154 @@ class PdfService {
                 ),
               ),
               pw.SizedBox(height: 2),
-              pw.Text(fecha, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+              pw.Text(
+                'Nro $numero',
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+              ),
             ],
           ),
         ),
       ],
     );
+  }
 
+  /// Encabezado de requerimientos y checklists de herramientas: en la
+  /// primera página, la tarjeta de la empresa más el recuadro con los datos
+  /// del documento (y el aviso de urgente si corresponde); en las demás,
+  /// solo la tarjeta, igual que en la cotización.
+  static pw.Widget _encabezadoDocumento({
+    required pw.Context context,
+    required pw.MemoryImage logo,
+    required String tipoDocumento,
+    required String numero,
+    required List<(String, String)> datos,
+    String? destacado,
+  }) {
+    final tarjeta = _tarjetaEmpresa(logo, tipoDocumento, numero);
     if (context.pageNumber != 1) {
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [tarjetaEmpresa, pw.SizedBox(height: 10)],
+        children: [tarjeta, pw.SizedBox(height: 10)],
+      );
+    }
+
+    pw.Widget par((String, String) dato) {
+      final (etiqueta, valor) = dato;
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(etiqueta, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+          pw.Text(
+            valor.trim().isEmpty ? '-' : valor.trim(),
+            style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+          ),
+        ],
+      );
+    }
+
+    final filas = <pw.Widget>[];
+    for (var i = 0; i < datos.length; i += 2) {
+      if (filas.isNotEmpty) filas.add(pw.SizedBox(height: 8));
+      filas.add(
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(child: par(datos[i])),
+            pw.SizedBox(width: 12),
+            pw.Expanded(child: i + 1 < datos.length ? par(datos[i + 1]) : pw.SizedBox()),
+          ],
+        ),
       );
     }
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        tarjetaEmpresa,
+        tarjeta,
         pw.SizedBox(height: 14),
         pw.Container(
+          width: double.infinity,
           padding: const pw.EdgeInsets.all(10),
           decoration: pw.BoxDecoration(
             border: pw.Border.all(color: PdfColors.grey300),
             borderRadius: pw.BorderRadius.circular(4),
           ),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'Responsable',
-                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                  ),
-                  pw.Text(
-                    responsable.trim().isEmpty ? '-' : responsable.trim(),
-                    style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
-                  ),
-                ],
-              ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text(
-                    'Ítems marcados',
-                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                  ),
-                  pw.Text(
-                    '$totalMarcados / $totalItems',
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 13,
-                      color: BrandColors.pdfCian,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          child: pw.Column(children: filas),
         ),
+        if (destacado != null) ...[
+          pw.SizedBox(height: 8),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.red50,
+              border: pw.Border.all(color: PdfColors.red300),
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Text(
+              destacado,
+              style: const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.red800),
+            ),
+          ),
+        ],
         pw.SizedBox(height: 10),
       ],
     );
   }
 
-  static List<pw.Widget> _seccionCategoriaChecklist(ChecklistCategoriaState cat) {
+  static pw.Widget _resumenCantidades(String titulo, int items, int unidades) {
+    final textoItems = items == 1 ? '1 ítem' : '$items ítems';
+    final textoUnidades = unidades == 1 ? '1 unidad' : '$unidades unidades';
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 4),
+      child: pw.Text(
+        '$titulo: $textoItems · $textoUnidades',
+        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: BrandColors.pdfAzulMarino),
+      ),
+    );
+  }
+
+  static pw.Widget _leyendaCasillas({required String marcada, required String vacia}) {
+    pw.Widget muestra(bool marcado, String texto) => pw.Row(
+          mainAxisSize: pw.MainAxisSize.min,
+          children: [
+            _casilla(marcado, tamano: 9),
+            pw.SizedBox(width: 4),
+            pw.Text(texto, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+          ],
+        );
+    return pw.Row(
+      children: [muestra(true, marcada), pw.SizedBox(width: 14), muestra(false, vacia)],
+    );
+  }
+
+  static pw.Widget _casilla(bool marcado, {double tamano = 12}) {
+    return pw.Container(
+      width: tamano,
+      height: tamano,
+      alignment: pw.Alignment.center,
+      decoration: pw.BoxDecoration(
+        color: marcado ? BrandColors.pdfCian : PdfColors.white,
+        border: pw.Border.all(color: marcado ? BrandColors.pdfCian : PdfColors.grey400),
+        borderRadius: pw.BorderRadius.circular(3),
+      ),
+      child: marcado
+          ? pw.Text(
+              'X',
+              style: pw.TextStyle(
+                fontSize: tamano * 0.66,
+                color: PdfColors.white,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            )
+          : null,
+    );
+  }
+
+  /// Misma sección por categoría que tenía el checklist de obra: franja
+  /// cian con el nombre y filas alternadas con casillero, ítem y cantidad.
+  static List<pw.Widget> _seccionCategoriaDocumento(ChecklistCategoriaState cat, {required bool marcado}) {
+    final cantidad = cat.items.length == 1 ? '1 ítem' : '${cat.items.length} ítems';
     return [
       pw.Container(
         margin: const pw.EdgeInsets.only(top: 12, bottom: 4),
@@ -313,7 +478,7 @@ class PdfService {
           children: [
             pw.Expanded(
               child: pw.Text(
-                cat.nombre,
+                quitarNumeroCategoria(cat.nombre),
                 style: const pw.TextStyle(
                   fontSize: 10,
                   fontWeight: pw.FontWeight.bold,
@@ -321,111 +486,143 @@ class PdfService {
                 ),
               ),
             ),
-            pw.Text(
-              '${cat.totalMarcados}/${cat.items.length}',
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.white),
-            ),
+            pw.Text(cantidad, style: const pw.TextStyle(fontSize: 9, color: PdfColors.white)),
           ],
         ),
       ),
-      ...cat.items.asMap().entries.map((e) => _filaItemChecklist(e.key, e.value)),
+      ...cat.items.asMap().entries.map((e) {
+        final item = e.value;
+        return pw.Container(
+          color: e.key.isEven ? PdfColors.white : BrandColors.pdfTint(BrandColors.pdfCian, 0.94),
+          padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+          child: pw.Row(
+            children: [
+              _casilla(marcado),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: pw.Text(
+                  item.esExtra ? '${item.texto} (agregado${item.esProducto ? ' · catálogo' : ''})' : item.texto,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Text(
+                item.cantidadTexto,
+                style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: BrandColors.pdfCian),
+              ),
+            ],
+          ),
+        );
+      }),
     ];
   }
 
-  static pw.Widget _filaItemChecklist(int index, ChecklistItemEntry item) {
-    return pw.Container(
-      color: index.isEven ? PdfColors.white : BrandColors.pdfTint(BrandColors.pdfCian, 0.94),
-      padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 8),
-      child: pw.Row(
-        children: [
-          pw.Container(
-            width: 12,
-            height: 12,
-            alignment: pw.Alignment.center,
-            decoration: pw.BoxDecoration(
-              color: item.marcado ? BrandColors.pdfCian : PdfColors.white,
-              border: pw.Border.all(
-                color: item.marcado ? BrandColors.pdfCian : PdfColors.grey400,
-              ),
-              borderRadius: pw.BorderRadius.circular(3),
-            ),
-            child: item.marcado
-                ? pw.Text(
-                    'X',
-                    style: const pw.TextStyle(
-                      fontSize: 8,
-                      color: PdfColors.white,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  )
-                : null,
-          ),
-          pw.SizedBox(width: 8),
-          pw.Expanded(
-            child: pw.Text(
-              item.esExtra
-                  ? '${item.texto} (agregado${item.esProducto ? ' · catálogo' : ''})'
-                  : item.texto,
-              style: const pw.TextStyle(fontSize: 9),
-            ),
-          ),
-          if (item.marcado) ...[
-            pw.SizedBox(width: 8),
-            pw.Text(
-              '× ${item.cantidad}',
-              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: BrandColors.pdfCian),
-            ),
+  static List<pw.Widget> _bloqueObservaciones(String titulo, String? texto) {
+    final limpio = (texto ?? '').trim();
+    if (limpio.isEmpty) return const [];
+    return [
+      pw.SizedBox(height: 14),
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.all(8),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey300),
+          borderRadius: pw.BorderRadius.circular(4),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(titulo, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+            pw.SizedBox(height: 2),
+            pw.Text(limpio, style: const pw.TextStyle(fontSize: 9)),
           ],
-        ],
+        ),
       ),
-    );
+    ];
   }
 
-  static pw.Widget _firmaChecklist(String responsable, pw.Font? firmaFont) {
-    if (responsable.trim().isEmpty) return pw.SizedBox();
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(
-          responsable.trim(),
-          style: pw.TextStyle(font: firmaFont, fontSize: 26, color: BrandColors.pdfAzulMarino),
-        ),
-        pw.Container(
-          width: 180,
-          height: 0.8,
-          color: PdfColors.grey400,
-          margin: const pw.EdgeInsets.only(top: 2, bottom: 4),
-        ),
-        pw.Text(
-          'Responsable en terreno',
-          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-        ),
-      ],
-    );
+  /// Fila de firmas al pie: cada una con el nombre en cursiva (o, si ese paso
+  /// ya se hizo sin anotar nombre, el texto del estado), la línea, el cargo y
+  /// la fecha — o en blanco con "Pendiente..." mientras no se haya hecho.
+  static pw.Widget _firmas(List<_Firma> firmas, pw.Font? firmaFont) {
+    pw.Widget firma(_Firma f) {
+      final nombre = (f.nombre ?? '').trim();
+      final pw.Widget trazo;
+      if (!f.completada) {
+        trazo = pw.SizedBox(height: 30);
+      } else if (nombre.isNotEmpty) {
+        trazo = pw.SizedBox(
+          height: 30,
+          child: pw.Align(
+            alignment: pw.Alignment.bottomLeft,
+            child: pw.Text(
+              nombre,
+              maxLines: 1,
+              style: pw.TextStyle(font: firmaFont, fontSize: 20, color: BrandColors.pdfAzulMarino),
+            ),
+          ),
+        );
+      } else {
+        trazo = pw.SizedBox(
+          height: 30,
+          child: pw.Align(
+            alignment: pw.Alignment.bottomLeft,
+            child: pw.Text(
+              f.textoSinNombre,
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: BrandColors.pdfCian),
+            ),
+          ),
+        );
+      }
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          trazo,
+          pw.Container(
+            height: 0.8,
+            color: PdfColors.grey400,
+            margin: const pw.EdgeInsets.only(top: 2, bottom: 4),
+          ),
+          pw.Text(f.cargo, style: const pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            f.detalle,
+            style: pw.TextStyle(fontSize: 8, color: f.completada ? PdfColors.grey600 : PdfColors.orange800),
+          ),
+        ],
+      );
+    }
+
+    final hijos = <pw.Widget>[];
+    for (final f in firmas) {
+      if (hijos.isNotEmpty) hijos.add(pw.SizedBox(width: 18));
+      hijos.add(pw.Expanded(child: firma(f)));
+    }
+    return pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: hijos);
   }
 
   /// Las fotos van empaquetadas en la propia app (assets/productos/), así
-  /// que esto no depende de red ni de servidor: si un producto puntual no
-  /// trae imagen, o el archivo no está en el bundle, esa celda simplemente
-  /// queda en blanco — no debe impedir que se genere el resto del PDF.
+  /// que esto no depende de red ni de servidor; las de productos agregados
+  /// desde el celular se leen de su archivo. Si un producto puntual no trae
+  /// imagen, o el archivo ya no está, esa celda simplemente queda en blanco
+  /// — no debe impedir que se genere el resto del PDF.
   static Future<Map<String, Uint8List>> _cargarImagenes(
     List<ItemCotizacion> items,
   ) async {
     final resultado = <String, Uint8List>{};
 
-    final archivos = items
-        .map((i) => i.producto.archivoImagen)
-        .whereType<String>()
-        .where((a) => a.isNotEmpty)
-        .toSet();
+    final archivos = items.map((i) => i.producto.archivoImagen).whereType<String>().where((a) => a.isNotEmpty).toSet();
 
     await Future.wait(
       archivos.map((archivo) async {
         try {
-          final data = await rootBundle.load('assets/productos/$archivo');
-          resultado[archivo] = data.buffer.asUint8List();
+          if (esRutaDeArchivo(archivo)) {
+            resultado[archivo] = await File(archivo).readAsBytes();
+          } else {
+            final data = await rootBundle.load('assets/productos/$archivo');
+            resultado[archivo] = data.buffer.asUint8List();
+          }
         } catch (_) {
-          // No está empaquetada esta foto en particular: se omite.
+          // No está disponible esta foto en particular: se omite.
         }
       }),
     );
@@ -711,9 +908,7 @@ class PdfService {
           pw.SizedBox(
             width: _anchoImagen,
             height: _anchoImagen,
-            child: imagen != null
-                ? pw.Image(pw.MemoryImage(imagen), fit: pw.BoxFit.contain)
-                : null,
+            child: imagen != null ? pw.Image(pw.MemoryImage(imagen), fit: pw.BoxFit.contain) : null,
           ),
           _espacio(),
           pw.Expanded(
@@ -844,4 +1039,24 @@ class PdfService {
       ),
     );
   }
+}
+
+/// Una firma del pie de un documento de almacén (ver PdfService._firmas).
+class _Firma {
+  final String? nombre;
+  final String cargo;
+  final String detalle;
+  final bool completada;
+
+  /// Lo que se escribe sobre la línea si ese paso ya se hizo pero sin anotar
+  /// un nombre (ej. "Aprobado").
+  final String textoSinNombre;
+
+  const _Firma({
+    required this.nombre,
+    required this.cargo,
+    required this.detalle,
+    required this.completada,
+    this.textoSinNombre = '',
+  });
 }

@@ -7,16 +7,23 @@ import '../state/cotizacion_state.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/animated_pressable.dart';
+import '../widgets/brand_icon.dart';
 import '../widgets/producto_thumbnail.dart';
 import 'agregar_producto_screen.dart';
+import 'chat_screen.dart';
 import 'generar_cotizacion_screen.dart';
+import 'historial_cotizaciones_screen.dart';
 
-/// Pestaña "Cotizar": categorías como píldoras horizontales — al tocar una
-/// se muestran sus productos, cada uno con un casillero (como en el
-/// checklist) que al marcarlo revela un stepper de cantidad. La búsqueda
-/// filtra tanto por nombre de categoría como por nombre/referencia de
-/// producto. Al elegir productos, "Generar cotización" empuja el
-/// formulario final.
+/// Píldora que muestra el catálogo completo, todas las categorías juntas.
+const _todos = '__todos__';
+
+/// Pestaña "Cotización": categorías como píldoras horizontales — la primera,
+/// "Todos", muestra el catálogo completo; al tocar otra se muestran solo sus
+/// productos, cada uno con un casillero (como en el checklist) que al
+/// marcarlo revela un stepper de cantidad. La búsqueda filtra tanto por
+/// nombre de categoría como por nombre/referencia de producto. Arriba están
+/// la cotización por voz, el historial de cotizaciones y agregar producto.
+/// Al elegir productos, "Generar cotización" empuja el formulario final.
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
 
@@ -29,7 +36,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
   bool _cargando = true;
   String _busqueda = '';
   final _busquedaController = TextEditingController();
-  String? _categoriaActiva;
+  String _categoriaActiva = _todos;
 
   @override
   void initState() {
@@ -65,8 +72,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
           : entry.value
               .where(
                 (p) =>
-                    p.nombre.toLowerCase().contains(query) ||
-                    (p.referenciaInterna ?? '').toLowerCase().contains(query),
+                    p.nombre.toLowerCase().contains(query) || (p.referenciaInterna ?? '').toLowerCase().contains(query),
               )
               .toList();
       if (productos.isNotEmpty) {
@@ -74,6 +80,94 @@ class _ProductosScreenState extends State<ProductosScreen> {
       }
     }
     return resultado;
+  }
+
+  Future<void> _agregarProducto() async {
+    final categorias = _porCategoria.keys.toList()..sort();
+    final agregado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => AgregarProductoScreen(categorias: categorias)),
+    );
+    if (agregado == true) _cargar();
+  }
+
+  /// Solo los productos agregados desde la app se pueden editar o quitar:
+  /// los del catálogo se reemplazan al sincronizar.
+  Future<void> _opcionesProducto(Producto producto) async {
+    if (!producto.esLocal) return;
+    final accion = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Text(
+                  producto.nombre,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: BrandColors.azulMarino),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: BrandColors.cian),
+                title: const Text('Editar producto'),
+                onTap: () => Navigator.pop(ctx, 'editar'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                title: const Text('Eliminar producto', style: TextStyle(color: Colors.redAccent)),
+                onTap: () => Navigator.pop(ctx, 'eliminar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || accion == null) return;
+    if (accion == 'editar') {
+      final categorias = _porCategoria.keys.toList()..sort();
+      final cambiado = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => AgregarProductoScreen(categorias: categorias, producto: producto)),
+      );
+      if (cambiado == true) _cargar();
+    } else {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('¿Eliminar este producto?'),
+          content: Text('"${producto.nombre}" ya no aparecerá en el catálogo. Las cotizaciones ya hechas no cambian.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true || !mounted) return;
+      final cotizacion = context.read<CotizacionState>();
+      if (cotizacion.estaEnCotizacion(producto)) cotizacion.quitar(producto);
+      await eliminarProductoLocal(producto);
+      _cargar();
+    }
+  }
+
+  Widget _botonEncabezado(Widget icono, String tooltip, VoidCallback onPressed) {
+    return IconButton(icon: icono, tooltip: tooltip, onPressed: onPressed);
   }
 
   Widget _encabezado(BuildContext context) {
@@ -94,33 +188,29 @@ class _ProductosScreenState extends State<ProductosScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('COTIZACIONES', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Selecciona productos',
-                          style: AppTextStyles.titulo.copyWith(color: Colors.white),
-                        ),
-                      ],
+                    child: Text('COTIZACIONES', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
+                  ),
+                  _botonEncabezado(
+                    const BrandIcon('voz.svg', color: Colors.white, size: 22),
+                    'Cotizar por voz',
+                    () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatScreen())),
+                  ),
+                  _botonEncabezado(
+                    const BrandIcon('historial.svg', color: Colors.white, size: 22),
+                    'Historial de cotizaciones',
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HistorialCotizacionesScreen()),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.add, color: Colors.white),
-                    tooltip: 'Agregar producto',
-                    onPressed: () async {
-                      final categorias = _porCategoria.keys.toList()..sort();
-                      final agregado = await Navigator.push<bool>(
-                        context,
-                        MaterialPageRoute(builder: (_) => AgregarProductoScreen(categorias: categorias)),
-                      );
-                      if (agregado == true) _cargar();
-                    },
-                  ),
+                  _botonEncabezado(const Icon(Icons.add, color: Colors.white), 'Agregar producto', _agregarProducto),
                 ],
               ),
-              const SizedBox(height: 8),
+              Text(
+                'Selecciona productos',
+                style: AppTextStyles.titulo.copyWith(color: Colors.white),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _busquedaController,
                 onChanged: (v) => setState(() => _busqueda = v),
@@ -162,8 +252,12 @@ class _ProductosScreenState extends State<ProductosScreen> {
     final activoBusqueda = _busqueda.trim().isNotEmpty;
     final categoriasFiltradas = _filtrado;
     final categorias = categoriasFiltradas.keys.toList();
+    final totalProductos = categoriasFiltradas.values.fold<int>(0, (s, l) => s + l.length);
     final categoriaActiva =
-        categoriasFiltradas.containsKey(_categoriaActiva) ? _categoriaActiva : (categorias.isNotEmpty ? categorias.first : null);
+        _categoriaActiva == _todos || categoriasFiltradas.containsKey(_categoriaActiva) ? _categoriaActiva : _todos;
+    final productosActivos = categoriaActiva == _todos
+        ? categoriasFiltradas.values.expand((l) => l).toList()
+        : categoriasFiltradas[categoriaActiva]!;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -174,13 +268,14 @@ class _ProductosScreenState extends State<ProductosScreen> {
             if (!_cargando && categorias.isNotEmpty)
               _FilaCategorias(
                 categorias: categorias,
+                totalProductos: totalProductos,
                 activa: categoriaActiva,
                 onSeleccionar: (c) => setState(() => _categoriaActiva = c),
               ),
             Expanded(
               child: _cargando
                   ? const Center(child: CircularProgressIndicator())
-                  : categorias.isEmpty || categoriaActiva == null
+                  : categorias.isEmpty
                       ? Center(
                           child: Text(
                             activoBusqueda
@@ -191,9 +286,11 @@ class _ProductosScreenState extends State<ProductosScreen> {
                         )
                       : _ListaProductosCategoria(
                           key: ValueKey(categoriaActiva),
-                          categoria: categoriaActiva,
-                          productos: categoriasFiltradas[categoriaActiva]!,
+                          titulo: categoriaActiva == _todos ? 'Todos los productos · $totalProductos' : categoriaActiva,
+                          mostrarCategoria: categoriaActiva == _todos,
+                          productos: productosActivos,
                           cotizacion: cotizacion,
+                          onOpciones: _opcionesProducto,
                         ),
             ),
           ],
@@ -211,15 +308,21 @@ class _ProductosScreenState extends State<ProductosScreen> {
   }
 }
 
-/// Píldoras horizontales de categoría — reemplazan el acordeón: solo se
-/// ven los productos de la categoría activa, más liviano con 40 categorías
-/// reales en el catálogo.
+/// Píldoras horizontales de categoría — "Todos" primero (el catálogo
+/// completo) y después cada categoría, para ir directo a una entre las 40
+/// reales del catálogo.
 class _FilaCategorias extends StatelessWidget {
   final List<String> categorias;
-  final String? activa;
+  final int totalProductos;
+  final String activa;
   final ValueChanged<String> onSeleccionar;
 
-  const _FilaCategorias({required this.categorias, required this.activa, required this.onSeleccionar});
+  const _FilaCategorias({
+    required this.categorias,
+    required this.totalProductos,
+    required this.activa,
+    required this.onSeleccionar,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -228,10 +331,10 @@ class _FilaCategorias extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        itemCount: categorias.length,
+        itemCount: categorias.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final categoria = categorias[index];
+          final categoria = index == 0 ? _todos : categorias[index - 1];
           final esActiva = categoria == activa;
           return AnimatedPressable(
             onTap: () => onSeleccionar(categoria),
@@ -245,7 +348,7 @@ class _FilaCategorias extends StatelessWidget {
                 border: esActiva ? null : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               child: Text(
-                categoria,
+                categoria == _todos ? 'Todos · $totalProductos' : categoria,
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.bold,
@@ -261,15 +364,19 @@ class _FilaCategorias extends StatelessWidget {
 }
 
 class _ListaProductosCategoria extends StatelessWidget {
-  final String categoria;
+  final String titulo;
+  final bool mostrarCategoria;
   final List<Producto> productos;
   final CotizacionState cotizacion;
+  final ValueChanged<Producto> onOpciones;
 
   const _ListaProductosCategoria({
     super.key,
-    required this.categoria,
+    required this.titulo,
+    required this.mostrarCategoria,
     required this.productos,
     required this.cotizacion,
+    required this.onOpciones,
   });
 
   @override
@@ -288,7 +395,7 @@ class _ListaProductosCategoria extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    categoria,
+                    titulo,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: BrandColors.azulMarino),
                   ),
                 ),
@@ -301,7 +408,13 @@ class _ListaProductosCategoria extends StatelessWidget {
             ),
           );
         }
-        return _FilaProducto(producto: productos[index - 1], cotizacion: cotizacion);
+        final producto = productos[index - 1];
+        return _FilaProducto(
+          producto: producto,
+          cotizacion: cotizacion,
+          mostrarCategoria: mostrarCategoria,
+          onOpciones: producto.esLocal ? () => onOpciones(producto) : null,
+        );
       },
     );
   }
@@ -310,8 +423,17 @@ class _ListaProductosCategoria extends StatelessWidget {
 class _FilaProducto extends StatelessWidget {
   final Producto producto;
   final CotizacionState cotizacion;
+  final bool mostrarCategoria;
 
-  const _FilaProducto({required this.producto, required this.cotizacion});
+  /// Solo para productos agregados desde la app (editar/eliminar).
+  final VoidCallback? onOpciones;
+
+  const _FilaProducto({
+    required this.producto,
+    required this.cotizacion,
+    required this.mostrarCategoria,
+    this.onOpciones,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -319,51 +441,64 @@ class _FilaProducto extends StatelessWidget {
     final cantidad = cotizacion.cantidadDe(producto);
     final precio = producto.precioVenta ?? 0;
     final unidad = (producto.unidadMedida ?? '').trim();
+    final detalle = [
+      'S/ ${precio.toStringAsFixed(2)}',
+      if (unidad.isNotEmpty) unidad,
+      if (mostrarCategoria) producto.categoriaProducto,
+    ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6))),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _CasilleroProducto(marcado: seleccionado, onTap: () => cotizacion.toggle(producto)),
-          const SizedBox(width: 10),
-          ProductoThumbnail(archivoImagen: producto.archivoImagen, size: 44),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  producto.nombre,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.cuerpo,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  unidad.isEmpty ? 'S/ ${precio.toStringAsFixed(2)}' : 'S/ ${precio.toStringAsFixed(2)} · $unidad',
-                  style: AppTextStyles.apoyo,
-                ),
-              ],
-            ),
-          ),
-          if (seleccionado) ...[
-            const SizedBox(width: 6),
-            _botonStepper(Icons.remove, () => cotizacion.setCantidad(producto, cantidad - 1)),
-            SizedBox(
-              width: 26,
-              child: Text(
-                '$cantidad',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+    return GestureDetector(
+      onLongPress: onOpciones,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border:
+              Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6))),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _CasilleroProducto(marcado: seleccionado, onTap: () => cotizacion.toggle(producto)),
+            const SizedBox(width: 10),
+            ProductoThumbnail(archivoImagen: producto.archivoImagen, size: 44),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    producto.nombre,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.cuerpo,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(detalle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.apoyo),
+                ],
               ),
             ),
-            _botonStepper(Icons.add, () => cotizacion.setCantidad(producto, cantidad + 1)),
+            if (onOpciones != null)
+              IconButton(
+                icon: const Icon(Icons.more_vert, size: 18),
+                tooltip: 'Editar o eliminar',
+                visualDensity: VisualDensity.compact,
+                onPressed: onOpciones,
+              ),
+            if (seleccionado) ...[
+              const SizedBox(width: 6),
+              _botonStepper(Icons.remove, () => cotizacion.setCantidad(producto, cantidad - 1)),
+              SizedBox(
+                width: 26,
+                child: Text(
+                  '$cantidad',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+              _botonStepper(Icons.add, () => cotizacion.setCantidad(producto, cantidad + 1)),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -461,7 +596,8 @@ class _BarraResumen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: const StadiumBorder(),
                 ),
-                child: const Text('GENERAR COTIZACIÓN', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
+                child:
+                    const Text('GENERAR COTIZACIÓN', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
               ),
             ),
           ],

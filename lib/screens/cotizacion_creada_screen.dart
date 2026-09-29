@@ -27,7 +27,7 @@ class CotizacionCreadaScreen extends StatelessWidget {
 
   void _volverAlInicio(BuildContext context) {
     Navigator.of(context).popUntil((route) => route.isFirst);
-    context.read<NavegacionState>().irA(TabsApp.home);
+    context.read<NavegacionState>().irA(TabsApp.inicio);
   }
 
   @override

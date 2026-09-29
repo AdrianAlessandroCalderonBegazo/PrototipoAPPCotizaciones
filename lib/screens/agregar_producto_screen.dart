@@ -1,19 +1,45 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/producto.dart';
 import '../services/db_helper.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
+import '../widgets/producto_thumbnail.dart';
 
 const _unidadesMedida = ['Unidades', 'm', 'Otra'];
 
+/// Borra un producto agregado desde la app, junto con la foto que se le
+/// haya tomado (que vive en el almacenamiento propio de la app).
+Future<void> eliminarProductoLocal(Producto producto) async {
+  if (producto.id == null) return;
+  await DbHelper.instance.eliminarProductoManual(producto.id!);
+  await _borrarFoto(producto.archivoImagen);
+}
+
+Future<void> _borrarFoto(String? ruta) async {
+  if (!esRutaDeArchivo(ruta)) return;
+  try {
+    final archivo = File(ruta!);
+    if (await archivo.exists()) await archivo.delete();
+  } catch (_) {
+    // Si ya no estaba, no pasa nada.
+  }
+}
+
 /// Formulario para agregar un producto nuevo a la base local — para lo que
-/// no está en el catálogo empaquetado. Queda marcado como origen "local"
-/// (ver DbHelper.agregarProductoManual), así nunca se borra si más adelante
-/// se actualiza el catálogo base o se sincroniza con un servidor.
+/// no está en el catálogo empaquetado — con todos sus datos: foto, nombre,
+/// categoría, precio de venta, costo, unidad y referencia. Queda marcado
+/// como origen "local" (ver DbHelper.agregarProductoManual), así nunca se
+/// borra si más adelante se actualiza el catálogo base o se sincroniza con
+/// un servidor. Con [producto] sirve también para editar uno ya agregado.
 class AgregarProductoScreen extends StatefulWidget {
   final List<String> categorias;
-  const AgregarProductoScreen({super.key, required this.categorias});
+  final Producto? producto;
+
+  const AgregarProductoScreen({super.key, required this.categorias, this.producto});
 
   @override
   State<AgregarProductoScreen> createState() => _AgregarProductoScreenState();
@@ -30,6 +56,108 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
   String? _categoriaSeleccionada;
   String _unidadSeleccionada = 'Unidades';
   bool _guardando = false;
+
+  /// Ruta de la foto elegida (ya copiada al almacenamiento de la app).
+  String? _foto;
+
+  bool get _editando => widget.producto != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.producto;
+    if (p == null) return;
+    _nombreController.text = p.nombre;
+    _categoriaSeleccionada = widget.categorias.contains(p.categoriaProducto) ? p.categoriaProducto : 'Otra';
+    if (_categoriaSeleccionada == 'Otra') _categoriaOtraController.text = p.categoriaProducto;
+    _precioController.text = p.precioVenta?.toStringAsFixed(2) ?? '';
+    _costoController.text = p.costo?.toStringAsFixed(2) ?? '';
+    _referenciaController.text = p.referenciaInterna ?? '';
+    final unidad = (p.unidadMedida ?? '').trim();
+    if (unidad.isEmpty || _unidadesMedida.contains(unidad)) {
+      _unidadSeleccionada = unidad.isEmpty ? 'Unidades' : unidad;
+    } else {
+      _unidadSeleccionada = 'Otra';
+      _unidadOtraController.text = unidad;
+    }
+    _foto = p.archivoImagen;
+  }
+
+  /// La foto se copia a la carpeta propia de la app: la del caché de la
+  /// cámara o de la galería puede desaparecer en cualquier momento.
+  Future<void> _elegirFoto(ImageSource origen) async {
+    try {
+      final elegida = await ImagePicker().pickImage(source: origen, maxWidth: 1200, imageQuality: 80);
+      if (elegida == null) return;
+      final dir = await getApplicationDocumentsDirectory();
+      final carpeta = Directory('${dir.path}/productos_locales');
+      if (!await carpeta.exists()) await carpeta.create(recursive: true);
+      final extension = elegida.path.contains('.') ? elegida.path.split('.').last : 'jpg';
+      final destino = '${carpeta.path}/producto_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      await File(elegida.path).copy(destino);
+      if (!mounted) return;
+      setState(() => _foto = destino);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo obtener la foto: $e')),
+      );
+    }
+  }
+
+  Future<void> _mostrarOpcionesFoto() async {
+    final origen = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined, color: BrandColors.cian),
+                title: const Text('Tomar foto'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: BrandColors.cian),
+                title: const Text('Elegir de la galería'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (origen != null) await _elegirFoto(origen);
+  }
+
+  Future<void> _eliminar() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Eliminar este producto?'),
+        content: const Text('Ya no aparecerá en el catálogo. Las cotizaciones ya hechas no cambian.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    await eliminarProductoLocal(widget.producto!);
+    if (mounted) Navigator.of(context).pop(true);
+  }
 
   @override
   void dispose() {
@@ -71,6 +199,9 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
 
     setState(() => _guardando = true);
     final producto = Producto(
+      id: widget.producto?.id,
+      origen: 'local',
+      archivoImagen: _foto,
       nombre: _nombreController.text.trim(),
       categoriaProducto: categoria,
       precioVenta: _numero(_precioController.text),
@@ -80,7 +211,13 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
     );
 
     try {
-      await DbHelper.instance.agregarProductoManual(producto);
+      if (_editando) {
+        await DbHelper.instance.actualizarProductoManual(producto);
+        // Si se cambió la foto, la anterior ya no la usa nadie.
+        if (widget.producto!.archivoImagen != _foto) await _borrarFoto(widget.producto!.archivoImagen);
+      } else {
+        await DbHelper.instance.agregarProductoManual(producto);
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -156,9 +293,11 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
           decoration: _decoracionCampo(),
           items: [
             ...widget.categorias.map(
-              (c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+              (c) => DropdownMenuItem(
+                  value: c, child: Text(c, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
             ),
-            const DropdownMenuItem(value: 'Otra', child: Text('Otra (nueva categoría)', style: TextStyle(fontSize: 13))),
+            const DropdownMenuItem(
+                value: 'Otra', child: Text('Otra (nueva categoría)', style: TextStyle(fontSize: 13))),
           ],
           onChanged: (v) => setState(() => _categoriaSeleccionada = v),
         ),
@@ -183,7 +322,9 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
           initialValue: _unidadSeleccionada,
           isExpanded: true,
           decoration: _decoracionCampo(),
-          items: _unidadesMedida.map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 13)))).toList(),
+          items: _unidadesMedida
+              .map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 13))))
+              .toList(),
           onChanged: (v) {
             if (v != null) setState(() => _unidadSeleccionada = v);
           },
@@ -228,10 +369,19 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('CATÁLOGO LOCAL', style: AppTextStyles.etiqueta.copyWith(color: Colors.white70)),
-                            Text('Agregar producto', style: AppTextStyles.titulo.copyWith(color: Colors.white)),
+                            Text(
+                              _editando ? 'Editar producto' : 'Agregar producto',
+                              style: AppTextStyles.titulo.copyWith(color: Colors.white),
+                            ),
                           ],
                         ),
                       ),
+                      if (_editando)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.white),
+                          tooltip: 'Eliminar producto',
+                          onPressed: _eliminar,
+                        ),
                     ],
                   ),
                 ),
@@ -244,6 +394,39 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                   children: [
                     _tituloSeccion('DATOS DEL PRODUCTO'),
+                    _etiqueta('FOTO (sale en el PDF de la cotización)'),
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: _mostrarOpcionesFoto,
+                          child: ProductoThumbnail(archivoImagen: _foto, size: 84),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _mostrarOpcionesFoto,
+                                icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                                label: Text(_foto == null ? 'Agregar foto' : 'Cambiar foto'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: BrandColors.azulMarino,
+                                  side: const BorderSide(color: BrandColors.cian),
+                                ),
+                              ),
+                              if (_foto != null)
+                                TextButton(
+                                  onPressed: () => setState(() => _foto = null),
+                                  style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                                  child: const Text('Quitar foto'),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
                     _campo(
                       'NOMBRE',
                       _nombreController,
@@ -284,7 +467,7 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
                         Expanded(child: _campoUnidad()),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _campo('REFERENCIA (opcional)', _referenciaController),
+                          child: _campo('REFERENCIA INTERNA (opcional)', _referenciaController),
                         ),
                       ],
                     ),
@@ -315,7 +498,10 @@ class _AgregarProductoScreenState extends State<AgregarProductoScreen> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('GUARDAR PRODUCTO', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6)),
+                        : Text(
+                            _editando ? 'GUARDAR CAMBIOS' : 'GUARDAR PRODUCTO',
+                            style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6),
+                          ),
                   ),
                 ),
               ),

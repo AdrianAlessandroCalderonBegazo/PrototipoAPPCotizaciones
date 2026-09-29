@@ -1,23 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../state/checklist_state.dart';
+import '../services/notificaciones_service.dart';
+import '../state/almacen_state.dart';
 import '../state/cotizacion_state.dart';
 import '../state/navegacion_state.dart';
 import '../widgets/brand_icon.dart';
-import 'chat_screen.dart';
-import 'checklist_screen.dart';
-import 'historial_screen.dart';
-import 'home_screen.dart';
+import 'almacen_screen.dart';
+import 'inicio_screen.dart';
 import 'productos_screen.dart';
+import 'requerimiento_detalle_screen.dart';
 
-/// Barra de navegación de abajo con las cinco pestañas de la app. Usa
-/// IndexedStack para que cada pestaña conserve su estado (lo que
-/// escribiste, qué categorías tenías desplegadas, en qué categoría del
-/// checklist ibas) al cambiar de una a otra. El índice activo vive en
-/// NavegacionState (no como estado local) para que una pantalla empujada
-/// en profundidad — como la confirmación al crear una cotización o
-/// guardar un checklist — pueda pedir "volver al inicio" sin necesitar un
-/// callback pasado a mano por cada nivel de navegación.
+/// Barra de navegación de abajo con las tres pestañas: Cotización a la
+/// izquierda, Inicio al centro y Almacén a la derecha. Usa IndexedStack para
+/// que cada pestaña conserve su estado (lo marcado, lo buscado) al cambiar
+/// de una a otra. El índice activo vive en NavegacionState para que una
+/// pantalla empujada en profundidad pueda pedir "volver al inicio".
 class MainTabsScreen extends StatefulWidget {
   const MainTabsScreen({super.key});
 
@@ -26,73 +23,39 @@ class MainTabsScreen extends StatefulWidget {
 }
 
 class _MainTabsScreenState extends State<MainTabsScreen> {
-  late final List<Widget> _pantallas = [
-    HistorialScreen(
-      onIrAProductos: () => context.read<NavegacionState>().irA(TabsApp.cotizar),
-      onNuevaCotizacion: _iniciarNuevaCotizacion,
-      onNuevoChecklist: _iniciarNuevoChecklist,
-    ),
-    const ProductosScreen(),
-    const HomeScreen(),
-    const ChecklistScreen(),
-    const ChatScreen(),
+  static const _pantallas = [
+    ProductosScreen(),
+    InicioScreen(),
+    AlmacenScreen(),
   ];
 
-  Future<void> _iniciarNuevaCotizacion() async {
-    final cotizacion = context.read<CotizacionState>();
-    if (cotizacion.totalItems > 0) {
-      final confirmar = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('¿Empezar una cotización nueva?'),
-          content: const Text('Se vaciará la cotización que tienes armada ahora.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Empezar nueva'),
-            ),
-          ],
-        ),
-      );
-      if (confirmar != true) return;
-      cotizacion.limpiar();
-    }
-    if (mounted) context.read<NavegacionState>().irA(TabsApp.cotizar);
+  @override
+  void initState() {
+    super.initState();
+    NotificacionesService.requerimientoTocado.addListener(_abrirRequerimientoTocado);
+    // Si la app se abrió justamente tocando la notificación, ya viene
+    // anotado cuál requerimiento mostrar.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _abrirRequerimientoTocado());
   }
 
-  Future<void> _iniciarNuevoChecklist() async {
-    final checklist = context.read<ChecklistState>();
-    if (checklist.tieneProgreso) {
-      final confirmar = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('¿Empezar un checklist nuevo?'),
-          content: const Text('Se perderá el progreso del checklist que tienes a medias ahora.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Empezar nuevo'),
-            ),
-          ],
-        ),
-      );
-      if (confirmar != true) return;
-      await checklist.reiniciar();
-    }
-    if (mounted) context.read<NavegacionState>().irA(TabsApp.checklist);
+  @override
+  void dispose() {
+    NotificacionesService.requerimientoTocado.removeListener(_abrirRequerimientoTocado);
+    super.dispose();
+  }
+
+  void _abrirRequerimientoTocado() {
+    final id = NotificacionesService.requerimientoTocado.value;
+    if (id == null || !mounted) return;
+    NotificacionesService.requerimientoTocado.value = null;
+    context.read<NavegacionState>().irA(TabsApp.almacen);
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => RequerimientoDetalleScreen(id: id)));
   }
 
   @override
   Widget build(BuildContext context) {
     final totalItems = context.watch<CotizacionState>().totalItems;
+    final porAprobar = context.watch<AlmacenState>().pendientesAprobacion.length;
     final indice = context.watch<NavegacionState>().indice;
     final colorInactivo = Theme.of(context).colorScheme.onSurfaceVariant;
 
@@ -103,33 +66,27 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
         onDestinationSelected: (i) => context.read<NavegacionState>().irA(i),
         destinations: [
           NavigationDestination(
-            icon: BrandIcon('historial.svg', color: colorInactivo),
-            selectedIcon: const BrandIcon('historial.svg', color: Colors.white),
-            label: 'Historial',
-          ),
-          NavigationDestination(
             icon: Badge(
               isLabelVisible: totalItems > 0,
               label: Text('$totalItems'),
               child: BrandIcon('documents.svg', color: colorInactivo),
             ),
             selectedIcon: const BrandIcon('documents.svg', color: Colors.white),
-            label: 'Cotizar',
+            label: 'Cotización',
           ),
           NavigationDestination(
             icon: BrandIcon('home_add.svg', color: colorInactivo),
             selectedIcon: const BrandIcon('home_add.svg', color: Colors.white),
-            label: 'Home',
+            label: 'Inicio',
           ),
           NavigationDestination(
-            icon: BrandIcon('clipboard.svg', color: colorInactivo),
-            selectedIcon: const BrandIcon('clipboard.svg', color: Colors.white),
-            label: 'Checklist',
-          ),
-          NavigationDestination(
-            icon: BrandIcon('voz.svg', color: colorInactivo),
-            selectedIcon: const BrandIcon('voz.svg', color: Colors.white),
-            label: 'Voz',
+            icon: Badge(
+              isLabelVisible: porAprobar > 0,
+              label: Text('$porAprobar'),
+              child: Icon(Icons.warehouse_outlined, color: colorInactivo),
+            ),
+            selectedIcon: const Icon(Icons.warehouse, color: Colors.white),
+            label: 'Almacén',
           ),
         ],
       ),
