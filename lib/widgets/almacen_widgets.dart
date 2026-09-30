@@ -498,6 +498,32 @@ class BotonPrincipal extends StatelessWidget {
   }
 }
 
+/// Acción principal de una lista (Nuevo requerimiento, Registrar salida):
+/// fija abajo de la pantalla, siempre a la vista aunque se desplace la
+/// lista. Va en el bottomNavigationBar del Scaffold.
+class BotonInferiorFijo extends StatelessWidget {
+  final String texto;
+  final IconData icono;
+  final VoidCallback onPressed;
+
+  const BotonInferiorFijo({super.key, required this.texto, required this.icono, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: BotonPrincipal(texto: texto, icono: icono, color: BrandColors.cian, onPressed: onPressed),
+      ),
+    );
+  }
+}
+
 /// Hoja base de las confirmaciones de Almacén (misma forma que la de
 /// "¿Qué quieres crear?" del historial): blanca, esquinas de arriba
 /// redondeadas, y se sube con el teclado.

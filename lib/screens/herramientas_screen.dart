@@ -121,13 +121,11 @@ class _HerramientasScreenState extends State<HerramientasScreen> {
               child: RefreshIndicator(
                 onRefresh: almacen.cargar,
                 child: todos.isEmpty
-                    ? EstadoVacio(
+                    ? const EstadoVacio(
                         icono: Icons.handyman_outlined,
                         titulo: 'Aún no hay salidas de herramientas',
                         subtitulo:
                             'Registra la primera con el checklist de siempre: queda pendiente hasta que se devuelva.',
-                        textoBoton: 'Registrar salida',
-                        onBoton: () => abrirChecklist(context, TipoChecklist.herramientas),
                       )
                     : lista.isEmpty
                         ? EstadoVacio(
@@ -142,7 +140,7 @@ class _HerramientasScreenState extends State<HerramientasScreen> {
                             }),
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                             itemCount: lista.length,
                             itemBuilder: (context, index) {
                               final h = lista[index];
@@ -164,10 +162,10 @@ class _HerramientasScreenState extends State<HerramientasScreen> {
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
+        bottomNavigationBar: BotonInferiorFijo(
+          texto: 'REGISTRAR SALIDA',
+          icono: Icons.add,
           onPressed: () => abrirChecklist(context, TipoChecklist.herramientas),
-          icon: const Icon(Icons.add),
-          label: const Text('Registrar salida'),
         ),
       ),
     );

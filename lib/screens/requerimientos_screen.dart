@@ -127,13 +127,11 @@ class _RequerimientosScreenState extends State<RequerimientosScreen> {
               child: RefreshIndicator(
                 onRefresh: almacen.cargar,
                 child: todos.isEmpty
-                    ? EstadoVacio(
+                    ? const EstadoVacio(
                         icono: Icons.assignment_outlined,
                         titulo: 'Aún no hay requerimientos',
                         subtitulo:
                             'Crea el primero: marcas los materiales en el checklist de siempre y se envía para aprobación.',
-                        textoBoton: 'Nuevo requerimiento',
-                        onBoton: () => abrirChecklist(context, TipoChecklist.materiales),
                       )
                     : lista.isEmpty
                         ? EstadoVacio(
@@ -148,7 +146,7 @@ class _RequerimientosScreenState extends State<RequerimientosScreen> {
                             }),
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                             itemCount: lista.length,
                             itemBuilder: (context, index) {
                               final r = lista[index];
@@ -170,10 +168,10 @@ class _RequerimientosScreenState extends State<RequerimientosScreen> {
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
+        bottomNavigationBar: BotonInferiorFijo(
+          texto: 'NUEVO REQUERIMIENTO',
+          icono: Icons.add,
           onPressed: () => abrirChecklist(context, TipoChecklist.materiales),
-          icon: const Icon(Icons.add),
-          label: const Text('Nuevo requerimiento'),
         ),
       ),
     );
