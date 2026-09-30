@@ -16,8 +16,9 @@ import '../widgets/encabezado_curvo.dart';
 import 'vista_previa_pdf_screen.dart';
 
 /// Detalle de un checklist de herramientas: quién se las llevó, a qué obra,
-/// qué salió, y — mientras esté pendiente — la confirmación de devolución
-/// con el encargado que las recibe, que lo deja "Conforme".
+/// qué salió, y la acción que toca según el estado — confirmar la salida
+/// (almacén, recién registrado) o confirmar la devolución con el encargado
+/// que las recibe, que lo deja "Conforme".
 class HerramientasDetalleScreen extends StatelessWidget {
   final int id;
 
@@ -48,6 +49,32 @@ class HerramientasDetalleScreen extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
           content: Text('Checklist copiado — pégalo donde quieras enviarlo.'), duration: Duration(seconds: 2)),
+    );
+  }
+
+  Future<void> _confirmarSalida(BuildContext context, ChecklistHerramientas h) async {
+    final confirmadaPor = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => HojaConfirmacionNombre(
+        titulo: '¿Salieron las herramientas?',
+        texto:
+            'Confirma que las ${cantidadConPalabra(h.totalItems, 'herramienta', 'herramientas')} de ${h.numero} salieron a obra con ${h.responsable}. Quedarán pendientes de devolución.',
+        etiquetaNombre: 'Entregado por (almacén)',
+        textoBoton: 'SÍ, SALIERON',
+        color: ColoresEstado.pendiente,
+        clavePreferencia: 'ultimo_almacenero',
+      ),
+    );
+    if (confirmadaPor == null || !context.mounted) return;
+    await context.read<AlmacenState>().confirmarSalida(
+          h,
+          confirmadaPor: confirmadaPor.isEmpty ? null : confirmadaPor,
+        );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${h.numero}: salida confirmada, pendiente de devolución.')),
     );
   }
 
@@ -104,6 +131,7 @@ class HerramientasDetalleScreen extends StatelessWidget {
     final observaciones = (h.observaciones ?? '').trim();
     final observacionesDevolucion = (h.observacionesDevolucion ?? '').trim();
     final encargado = (h.encargado ?? '').trim();
+    final salidaConfirmadaPor = (h.salidaConfirmadaPor ?? '').trim();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -145,7 +173,7 @@ class HerramientasDetalleScreen extends StatelessWidget {
                       Expanded(child: ParDato(etiqueta: 'RESPONSABLE', valor: h.responsable)),
                       Expanded(
                         child: ParDato(
-                          etiqueta: 'FECHA DE SALIDA',
+                          etiqueta: 'REGISTRADO',
                           valor: DateFormat('dd/MM/yyyy').format(h.fechaSalida),
                           alinearDerecha: true,
                         ),
@@ -156,14 +184,25 @@ class HerramientasDetalleScreen extends StatelessWidget {
                   LineaTiempoEstados(
                     pasos: [
                       PasoEstado(
-                        titulo: 'Registrado · pendiente de devolución',
-                        detalle: 'Salida ${_formatoFecha.format(h.fechaSalida)} · ${h.responsable}',
+                        titulo: 'Registrado',
+                        detalle: '${_formatoFecha.format(h.fechaSalida)} · retira ${h.responsable}',
                         hecho: true,
                       ),
                       PasoEstado(
-                        titulo: 'Conforme',
+                        titulo: 'Salida confirmada',
+                        detalle: h.fechaConfirmacionSalida != null
+                            ? '${_formatoFecha.format(h.fechaConfirmacionSalida!)}${salidaConfirmadaPor.isEmpty ? '' : ' · entregó $salidaConfirmadaPor'}'
+                            : h.salidaConfirmada
+                                ? 'Salió a obra'
+                                : 'Cuando almacén confirme que las herramientas salieron',
+                        hecho: h.salidaConfirmada,
+                      ),
+                      PasoEstado(
+                        titulo: h.conforme ? 'Devolución confirmada · Conforme' : 'Pendiente de devolución',
                         detalle: h.fechaDevolucion == null
-                            ? 'Cuando un encargado confirme que volvieron todas'
+                            ? h.salidaConfirmada
+                                ? 'Cuando un encargado confirme que volvieron todas'
+                                : 'Después de la salida, se espera que vuelvan todas'
                             : '${_formatoFecha.format(h.fechaDevolucion!)}${encargado.isEmpty ? '' : ' · recibió $encargado'}',
                         hecho: h.conforme,
                       ),
@@ -193,7 +232,15 @@ class HerramientasDetalleScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 child: Column(
                   children: [
-                    if (!h.conforme) ...[
+                    if (h.estado == EstadoHerramientas.registrado) ...[
+                      BotonPrincipal(
+                        texto: 'CONFIRMAR SALIDA',
+                        icono: Icons.outbox_outlined,
+                        color: ColoresEstado.pendiente,
+                        onPressed: () => _confirmarSalida(context, h),
+                      ),
+                      const SizedBox(height: 10),
+                    ] else if (!h.conforme) ...[
                       BotonPrincipal(
                         texto: 'CONFIRMAR DEVOLUCIÓN',
                         icono: Icons.assignment_return_outlined,

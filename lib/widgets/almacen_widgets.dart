@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/checklist_categoria.dart';
 import '../models/checklist_herramientas.dart';
 import '../models/requerimiento.dart';
@@ -9,8 +10,8 @@ import '../utils/formato.dart';
 import 'animated_pressable.dart';
 
 /// Colores de estado de Almacén — aparte de los de marca, porque tienen que
-/// leerse de un vistazo: ámbar = falta algo, azul = aprobado, verde = listo,
-/// rojo = urgente.
+/// leerse de un vistazo: ámbar = falta algo, azul = aprobado / registrado,
+/// violeta = listo para entrega, verde = terminado, rojo = urgente.
 class ColoresEstado {
   ColoresEstado._();
 
@@ -18,6 +19,8 @@ class ColoresEstado {
   static const pendienteFondo = Color(0xFFFEF3C7);
   static const aprobado = BrandColors.azulOscuro;
   static const aprobadoFondo = Color(0xFFDBEAFE);
+  static const preparado = Color(0xFF6D28D9);
+  static const preparadoFondo = Color(0xFFEDE9FE);
   static const listo = Color(0xFF047857);
   static const listoFondo = Color(0xFFD1FAE5);
   static const urgente = Color(0xFFB91C1C);
@@ -26,10 +29,12 @@ class ColoresEstado {
   static (Color, Color) deRequerimiento(EstadoRequerimiento estado) => switch (estado) {
         EstadoRequerimiento.pendiente => (pendiente, pendienteFondo),
         EstadoRequerimiento.aprobado => (aprobado, aprobadoFondo),
+        EstadoRequerimiento.listo => (preparado, preparadoFondo),
         EstadoRequerimiento.entregado => (listo, listoFondo),
       };
 
   static (Color, Color) deHerramientas(EstadoHerramientas estado) => switch (estado) {
+        EstadoHerramientas.registrado => (aprobado, aprobadoFondo),
         EstadoHerramientas.pendiente => (pendiente, pendienteFondo),
         EstadoHerramientas.conforme => (listo, listoFondo),
       };
@@ -53,6 +58,15 @@ class PildoraEstado extends StatelessWidget {
     final (color, fondo) = ColoresEstado.deHerramientas(estado);
     return PildoraEstado(texto: estado.etiqueta, color: color, fondo: fondo);
   }
+
+  /// Recordatorio para el almacenero mientras un requerimiento aprobado no
+  /// se ha alistado.
+  factory PildoraEstado.porAlistar() => const PildoraEstado(
+        texto: 'Pendiente de alistar',
+        color: ColoresEstado.pendiente,
+        fondo: ColoresEstado.pendienteFondo,
+        icono: Icons.inventory_2_outlined,
+      );
 
   factory PildoraEstado.urgente() => const PildoraEstado(
         texto: 'Urgente',
@@ -183,6 +197,7 @@ class TarjetaRequerimiento extends StatelessWidget {
           '${r.numero} · ${cantidadConPalabra(r.totalItems, 'ítem', 'ítems')} · ${fechaCorta(r.fechaCreacion)} · ${r.solicitante}',
       pildoras: [
         PildoraEstado.requerimiento(r.estado),
+        if (r.pendienteDeAlistar) PildoraEstado.porAlistar(),
         if (urgenteActivo) PildoraEstado.urgente(),
       ],
       onTap: onTap,
@@ -520,6 +535,98 @@ class BotonInferiorFijo extends StatelessWidget {
         top: false,
         child: BotonPrincipal(texto: texto, icono: icono, color: BrandColors.cian, onPressed: onPressed),
       ),
+    );
+  }
+}
+
+/// Confirmación de un paso de Almacén que solo pide el nombre de quien lo
+/// hace (Listo para entrega, Confirmar salida). Recuerda el último nombre
+/// escrito en [clavePreferencia] para no tipearlo cada vez. Devuelve el
+/// nombre (puede ser vacío) o null si se canceló.
+class HojaConfirmacionNombre extends StatefulWidget {
+  final String titulo;
+  final String texto;
+  final String etiquetaNombre;
+  final String textoBoton;
+  final Color color;
+  final String clavePreferencia;
+
+  const HojaConfirmacionNombre({
+    super.key,
+    required this.titulo,
+    required this.texto,
+    required this.etiquetaNombre,
+    required this.textoBoton,
+    required this.color,
+    required this.clavePreferencia,
+  });
+
+  @override
+  State<HojaConfirmacionNombre> createState() => _HojaConfirmacionNombreState();
+}
+
+class _HojaConfirmacionNombreState extends State<HojaConfirmacionNombre> {
+  final _nombreController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      if (mounted && _nombreController.text.isEmpty) {
+        _nombreController.text = prefs.getString(widget.clavePreferencia) ?? '';
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _confirmar() async {
+    final nombre = _nombreController.text.trim();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(widget.clavePreferencia, nombre);
+    if (mounted) Navigator.of(context).pop(nombre);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HojaAlmacen(
+      titulo: widget.titulo,
+      texto: widget.texto,
+      children: [
+        TextField(
+          controller: _nombreController,
+          textCapitalization: TextCapitalization.words,
+          decoration: decoracionCampoHoja(widget.etiquetaNombre, icono: Icons.person_outline),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: estiloBotonSecundario,
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: _confirmar,
+                style: FilledButton.styleFrom(
+                  backgroundColor: widget.color,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: const StadiumBorder(),
+                ),
+                child: Text(widget.textoBoton, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

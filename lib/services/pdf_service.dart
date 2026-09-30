@@ -177,6 +177,19 @@ class PdfService {
                 textoSinNombre: 'Aprobado',
               ),
               _Firma(
+                nombre: r.alistadoPor,
+                cargo: 'Alistado por (almacén)',
+                detalle: r.fechaListo != null
+                    ? fecha.format(r.fechaListo!)
+                    : r.entregado
+                        ? 'Alistado'
+                        : r.fechaAprobacion == null
+                            ? 'Pendiente de aprobación'
+                            : 'Pendiente de alistar',
+                completada: r.fechaListo != null || r.entregado,
+                textoSinNombre: 'Listo',
+              ),
+              _Firma(
                 nombre: r.recibidoPor,
                 cargo: 'Recibido por',
                 detalle: r.fechaEntrega == null ? 'Pendiente de entrega' : fecha.format(r.fechaEntrega!),
@@ -211,7 +224,8 @@ class PdfService {
           numero: h.numero,
           datos: [
             ('Obra / proyecto', h.obra),
-            ('Fecha de salida', fecha.format(h.fechaSalida)),
+            ('Fecha de registro', fecha.format(h.fechaSalida)),
+            if (h.fechaConfirmacionSalida != null) ('Salida confirmada', fecha.format(h.fechaConfirmacionSalida!)),
             ('Responsable', h.responsable),
             ('Estado', h.estado.etiqueta),
           ],
@@ -230,6 +244,17 @@ class PdfService {
                 cargo: 'Responsable (retira)',
                 detalle: fecha.format(h.fechaSalida),
                 completada: true,
+              ),
+              _Firma(
+                nombre: h.salidaConfirmadaPor,
+                cargo: 'Entregó (almacén)',
+                detalle: h.fechaConfirmacionSalida != null
+                    ? fecha.format(h.fechaConfirmacionSalida!)
+                    : h.salidaConfirmada
+                        ? 'Salida confirmada'
+                        : 'Salida por confirmar',
+                completada: h.salidaConfirmada,
+                textoSinNombre: 'Salió',
               ),
               _Firma(
                 nombre: h.encargado,

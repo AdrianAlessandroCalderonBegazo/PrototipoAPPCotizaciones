@@ -28,7 +28,7 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'cotizador_icr.db');
     return openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await _crearTablaProductos(db);
         await _crearTablaCotizacionesGuardadas(db);
@@ -53,6 +53,9 @@ class DbHelper {
         }
         if (oldVersion < 6) {
           await _crearTablasAlmacen(db);
+        }
+        if (oldVersion < 7) {
+          await _agregarColumnasEstadosAlmacen(db);
         }
       },
     );
@@ -127,6 +130,8 @@ class DbHelper {
         fecha_creacion TEXT NOT NULL,
         fecha_aprobacion TEXT,
         aprobado_por TEXT,
+        fecha_listo TEXT,
+        alistado_por TEXT,
         fecha_entrega TEXT,
         recibido_por TEXT,
         observaciones TEXT,
@@ -141,6 +146,8 @@ class DbHelper {
         responsable TEXT NOT NULL,
         estado TEXT NOT NULL,
         fecha_salida TEXT NOT NULL,
+        fecha_confirmacion_salida TEXT,
+        salida_confirmada_por TEXT,
         fecha_devolucion TEXT,
         encargado TEXT,
         observaciones TEXT,
@@ -158,6 +165,27 @@ class DbHelper {
         fecha TEXT NOT NULL
       )
     ''');
+  }
+
+  /// Upgrade desde una versión anterior a la 7: los estados nuevos
+  /// ("listo para entrega" en requerimientos, "salida confirmada" en
+  /// herramientas) guardan cuándo y quién. Las salidas que ya existían
+  /// siguen como estaban (pendientes de devolución o conformes). Si la
+  /// columna ya existe (tabla recién creada con el esquema nuevo) se ignora.
+  Future<void> _agregarColumnasEstadosAlmacen(Database db) async {
+    const columnas = [
+      ('requerimientos', 'fecha_listo'),
+      ('requerimientos', 'alistado_por'),
+      ('checklists_herramientas', 'fecha_confirmacion_salida'),
+      ('checklists_herramientas', 'salida_confirmada_por'),
+    ];
+    for (final (tabla, columna) in columnas) {
+      try {
+        await db.execute('ALTER TABLE $tabla ADD COLUMN $columna TEXT');
+      } catch (_) {
+        // La columna ya existe.
+      }
+    }
   }
 
   /// Upgrade desde una versión anterior a la 4: agrega las columnas nuevas
