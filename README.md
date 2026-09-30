@@ -79,18 +79,32 @@ Elige tu celular conectado (o un emulador) cuando te lo pregunte.
 
 ## 5. Usarla
 
-1. Abre la app — ya vas a ver las categorías con los 800 productos, sin
-   tocar nada.
-2. Entra a una categoría, marca los productos del checklist y ajusta
-   cantidades con los botones + / -.
-3. Toca el botón flotante "Cotización" para revisar lo seleccionado,
-   pon el nombre del cliente si quieres, y dale a **Generar y compartir
-   PDF** — se abre el menú nativo para compartir por WhatsApp, correo,
-   guardar, etc.
-4. Si necesitas traer productos nuevos que agregaste en tu base de datos
-   después, toca el ícono de sincronizar (🔄) arriba, escribe la IP de tu
-   PC (la ves con `ipconfig` en Windows) y el puerto (3000), y dale a
-   Sincronizar ahora.
+La app tiene tres pestañas abajo:
+
+- **Cotización** (izquierda): los 800 productos del catálogo ("Todos" o
+  por categoría). Marca productos, ajusta cantidades y toca **Generar
+  cotización** para armar el PDF con el formato de Inversiones ICR. Arriba
+  están la **cotización por voz** (micrófono), el **historial de
+  cotizaciones** (reloj: buscar, ver detalle, compartir o eliminar) y
+  **agregar producto** (+, con foto, precio, costo, unidad y referencia).
+  Los productos agregados a mano se pueden editar o eliminar (⋮).
+- **Inicio** (centro): lo que requiere atención — requerimientos urgentes o
+  pendientes de aprobación, aprobados que falta entregar y herramientas por
+  devolver — más accesos directos a Almacén y Cotización.
+- **Almacén** (derecha):
+  - **Requerimientos**: se crean con el checklist de siempre (categoría por
+    categoría). Estados: *Pendiente aprobación* (llega una notificación al
+    celular) → *Aprobado por jefe de obra* (pide el código **1234**) →
+    *Entregado*. Cada uno tiene su PDF formal para ver o compartir.
+  - **Checklist de herramientas**: se registra la salida (queda *Pendiente
+    devolución*) y, cuando un encargado confirma que volvió todo, queda
+    *Conforme*. También con su PDF.
+  - Con el ícono de lista (arriba) se agregan ítems nuevos a la lista base
+    de materiales o de herramientas.
+
+Para traer productos nuevos de tu servidor: en Inicio toca el engranaje,
+escribe la IP de tu PC (la ves con `ipconfig` en Windows) y el puerto
+(3000), y dale a Sincronizar ahora.
 
 ## Nota sobre la IP
 
