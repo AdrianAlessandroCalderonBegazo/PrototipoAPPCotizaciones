@@ -21,6 +21,11 @@ String textoRequerimiento(Requerimiento r) {
     final quien = (r.aprobadoPor ?? '').trim();
     buffer.writeln('Aprobado: ${_formatoFecha.format(r.fechaAprobacion!)}${quien.isEmpty ? '' : ' por $quien'}');
   }
+  if (r.pendienteDeAlistar) buffer.writeln('Pendiente de alistar');
+  if (r.fechaListo != null) {
+    final quien = (r.alistadoPor ?? '').trim();
+    buffer.writeln('Listo para entrega: ${_formatoFecha.format(r.fechaListo!)}${quien.isEmpty ? '' : ' · alistó $quien'}');
+  }
   if (r.fechaEntrega != null) {
     final quien = (r.recibidoPor ?? '').trim();
     buffer.writeln('Entregado: ${_formatoFecha.format(r.fechaEntrega!)}${quien.isEmpty ? '' : ' a $quien'}');
@@ -34,9 +39,15 @@ String textoHerramientas(ChecklistHerramientas h) {
   final buffer = StringBuffer()
     ..writeln('🧰 SALIDA DE HERRAMIENTAS ${h.numero} — Inversiones ICR')
     ..writeln('Obra: ${h.obra}')
-    ..writeln('Responsable: ${h.responsable}')
-    ..writeln('Salida: ${_formatoFecha.format(h.fechaSalida)}')
+    ..writeln('Responsable: ${h.responsable}');
+  if (h.maleta != null) buffer.writeln('Maleta: ${h.maleta}');
+  buffer
+    ..writeln('Registrado: ${_formatoFecha.format(h.fechaSalida)}')
     ..writeln('Estado: ${h.estado.etiqueta}');
+  if (h.fechaConfirmacionSalida != null) {
+    final quien = (h.salidaConfirmadaPor ?? '').trim();
+    buffer.writeln('Salida: ${_formatoFecha.format(h.fechaConfirmacionSalida!)}${quien.isEmpty ? '' : ' · entregó $quien'}');
+  }
   if (h.fechaDevolucion != null) {
     final quien = (h.encargado ?? '').trim();
     buffer.writeln('Devuelto: ${_formatoFecha.format(h.fechaDevolucion!)}${quien.isEmpty ? '' : ' · recibió $quien'}');

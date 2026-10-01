@@ -21,12 +21,12 @@ import 'documento_creado_screen.dart';
 import 'herramientas_detalle_screen.dart';
 import 'requerimiento_detalle_screen.dart';
 
-/// Resumen final del checklist, después de pasar por las categorías: un
-/// vistazo por categoría (tocar una vuelve a ella para revisar o agregar
-/// algo) y los datos del documento. Para materiales, "Enviar para
+/// Resumen final del checklist, después de pasar por las categorías: lo
+/// marcado en cada categoría con su cantidad (tocar una vuelve a ella para
+/// corregir o agregar algo) y los datos del documento. Para materiales, "Enviar para
 /// aprobación" crea el requerimiento (pendiente, con aviso en el celular);
-/// para herramientas, "Registrar salida" deja las herramientas pendientes
-/// de devolución. En ambos casos se genera el PDF y se muestra la
+/// para herramientas, "Registrar checklist" lo deja registrado, a la espera
+/// de que almacén confirme la salida. En ambos casos se genera el PDF y se muestra la
 /// confirmación con su vista previa.
 class ChecklistResumenScreen extends StatefulWidget {
   const ChecklistResumenScreen({super.key});
@@ -193,9 +193,9 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(
                 builder: (_) => DocumentoCreadoScreen(
-                  titulo: 'Salida registrada',
+                  titulo: 'Checklist registrado',
                   detalle:
-                      '${salida.numero} · ${cantidadConPalabra(salida.totalItems, 'herramienta', 'herramientas')} · pendiente de devolución',
+                      '${salida.numero} · ${cantidadConPalabra(salida.totalItems, 'herramienta', 'herramientas')} · falta confirmar la salida',
                   bytes: bytes,
                   nombreArchivo: 'herramientas_${salida.numero}.pdf',
                   textoBotonCompartir: 'COMPARTIR CHECKLIST',
@@ -388,15 +388,20 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                       ),
                       if (_esMateriales) ...[
                         const SizedBox(height: 6),
-                        SwitchListTile(
-                          value: _urgente,
-                          onChanged: (v) => setState(() => _urgente = v),
-                          contentPadding: EdgeInsets.zero,
-                          activeThumbColor: Colors.white,
-                          activeTrackColor: ColoresEstado.urgente,
-                          title: const Text('Marcar como urgente',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                          subtitle: const Text('Aparece primero en el Inicio, en rojo', style: TextStyle(fontSize: 12)),
+                        // Material propio: el fondo de la tarjeta taparía el efecto al tocar.
+                        Material(
+                          type: MaterialType.transparency,
+                          child: SwitchListTile(
+                            value: _urgente,
+                            onChanged: (v) => setState(() => _urgente = v),
+                            contentPadding: EdgeInsets.zero,
+                            activeThumbColor: Colors.white,
+                            activeTrackColor: ColoresEstado.urgente,
+                            title: const Text('Marcar como urgente',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                            subtitle:
+                                const Text('Aparece primero en el Inicio, en rojo', style: TextStyle(fontSize: 12)),
+                          ),
                         ),
                       ],
                     ],
@@ -404,7 +409,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 10),
-                    child: Text('RESUMEN POR CATEGORÍA',
+                    child: Text('LO QUE MARCASTE · TOCA UNA CATEGORÍA PARA CORREGIR',
                         style: AppTextStyles.etiqueta.copyWith(color: BrandColors.azulMarino)),
                   ),
                   Container(
@@ -453,7 +458,7 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
                             : Text(
-                                _esMateriales ? 'ENVIAR PARA APROBACIÓN' : 'REGISTRAR SALIDA',
+                                _esMateriales ? 'ENVIAR PARA APROBACIÓN' : 'REGISTRAR CHECKLIST',
                                 style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.6),
                               ),
                       ),
@@ -483,9 +488,10 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
   }
 }
 
-/// Fila plana de una categoría en el resumen: nombre + cuántos se marcaron.
-/// Tocarla vuelve a esa categoría (útil junto con "+ Añadir objeto a este
-/// paso" de cada pantalla).
+/// Una categoría en el resumen: nombre + cuántos se marcaron, y debajo el
+/// detalle de lo marcado con su cantidad, para revisar todo antes de
+/// enviar. Tocar el encabezado vuelve a esa categoría para corregir o
+/// agregar algo (útil junto con "+ Añadir objeto a este paso").
 class _FilaResumenCategoria extends StatelessWidget {
   final ChecklistCategoriaState categoria;
   final bool esUltima;
@@ -496,34 +502,83 @@ class _FilaResumenCategoria extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final marcados = categoria.totalMarcados;
+    final marcados = categoria.items.where((i) => i.marcado).toList();
 
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          border: esUltima ? null : Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                quitarNumeroCategoria(categoria.nombre),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+    return Container(
+      decoration: BoxDecoration(
+        border: esUltima ? null : Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      quitarNumeroCategoria(categoria.nombre),
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                    ),
+                  ),
+                  Text(
+                    '${marcados.length} / ${categoria.items.length}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                      color: marcados.isNotEmpty ? BrandColors.cian : colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.edit_outlined, size: 17, color: colorScheme.onSurfaceVariant),
+                ],
               ),
             ),
-            Text(
-              '$marcados / ${categoria.items.length}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13.5,
-                color: marcados > 0 ? BrandColors.cian : colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: marcados.isEmpty
+                ? Text(
+                    'Nada marcado en esta categoría',
+                    style: TextStyle(fontSize: 12.5, color: colorScheme.onSurfaceVariant),
+                  )
+                : Column(
+                    children: [
+                      for (final item in marcados)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.only(top: 2),
+                                child: Icon(Icons.check_circle, size: 15, color: BrandColors.cian),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  item.texto,
+                                  style: const TextStyle(fontSize: 13, height: 1.3),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                item.cantidadTexto,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: BrandColors.azulMarino,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }

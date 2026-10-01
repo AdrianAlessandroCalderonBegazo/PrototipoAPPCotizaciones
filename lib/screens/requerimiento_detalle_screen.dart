@@ -18,7 +18,8 @@ import 'vista_previa_pdf_screen.dart';
 
 /// Detalle de un requerimiento: datos, recorrido de estados, lo pedido por
 /// categoría, y la acción que toca según el estado — aprobarlo (solo con el
-/// código del jefe de obra) o confirmar que se entregó. El PDF se arma en el
+/// código del jefe de obra), marcarlo listo para entrega (el almacenero, al
+/// terminar de alistarlo) o confirmar que se entregó. El PDF se arma en el
 /// momento con el estado actual, así nunca queda desactualizado.
 class RequerimientoDetalleScreen extends StatelessWidget {
   final int id;
@@ -72,6 +73,32 @@ class RequerimientoDetalleScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _marcarListo(BuildContext context, Requerimiento r) async {
+    final alistadoPor = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => HojaConfirmacionNombre(
+        titulo: '¿Está listo para entrega?',
+        texto:
+            'Confirma que ya se alistaron los materiales de ${r.numero} (${cantidadConPalabra(r.totalItems, 'ítem', 'ítems')}). Pasará a estado Listo para entrega.',
+        etiquetaNombre: 'Alistado por (almacenero)',
+        textoBoton: 'SÍ, ESTÁ LISTO',
+        color: ColoresEstado.preparado,
+        clavePreferencia: 'ultimo_almacenero',
+      ),
+    );
+    if (alistadoPor == null || !context.mounted) return;
+    await context.read<AlmacenState>().marcarListoParaEntrega(
+          r,
+          alistadoPor: alistadoPor.isEmpty ? null : alistadoPor,
+        );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${r.numero} listo para entrega.')),
+    );
+  }
+
   Future<void> _entregar(BuildContext context, Requerimiento r) async {
     final recibidoPor = await showModalBottomSheet<String>(
       context: context,
@@ -114,7 +141,9 @@ class RequerimientoDetalleScreen extends StatelessWidget {
 
   List<PasoEstado> _pasos(Requerimiento r) {
     final aprobadoPor = (r.aprobadoPor ?? '').trim();
+    final alistadoPor = (r.alistadoPor ?? '').trim();
     final recibidoPor = (r.recibidoPor ?? '').trim();
+    final alistado = r.estado == EstadoRequerimiento.listo || r.entregado;
     return [
       PasoEstado(
         titulo: 'Pendiente aprobación',
@@ -127,6 +156,26 @@ class RequerimientoDetalleScreen extends StatelessWidget {
             ? 'Falta que el jefe de obra lo apruebe con su código'
             : '${_formatoFecha.format(r.fechaAprobacion!)}${aprobadoPor.isEmpty ? '' : ' · $aprobadoPor'}',
         hecho: r.fechaAprobacion != null,
+      ),
+      // Empieza junto con la aprobación: es el recordatorio para el
+      // almacenero de que tiene que preparar los materiales.
+      PasoEstado(
+        titulo: 'Pendiente de alistar',
+        detalle: alistado
+            ? 'Materiales alistados por almacén'
+            : r.fechaAprobacion == null
+                ? 'Después de la aprobación, almacén prepara los materiales'
+                : 'Almacén debe preparar los materiales',
+        hecho: alistado,
+      ),
+      PasoEstado(
+        titulo: 'Listo para entrega',
+        detalle: r.fechaListo != null
+            ? '${_formatoFecha.format(r.fechaListo!)}${alistadoPor.isEmpty ? '' : ' · $alistadoPor'}'
+            : alistado
+                ? 'Alistado'
+                : 'Cuando el almacenero confirme que está todo preparado',
+        hecho: alistado,
       ),
       PasoEstado(
         titulo: 'Entregado',
@@ -186,6 +235,7 @@ class RequerimientoDetalleScreen extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       PildoraEstado.requerimiento(r.estado),
+                      if (r.pendienteDeAlistar) PildoraEstado.porAlistar(),
                       if (r.urgente && !r.entregado) PildoraEstado.urgente(),
                     ],
                   ),
@@ -232,6 +282,13 @@ class RequerimientoDetalleScreen extends StatelessWidget {
                         onPressed: () => _aprobar(context, r),
                       )
                     else if (r.estado == EstadoRequerimiento.aprobado)
+                      BotonPrincipal(
+                        texto: 'LISTO PARA ENTREGA',
+                        icono: Icons.inventory_2_outlined,
+                        color: ColoresEstado.preparado,
+                        onPressed: () => _marcarListo(context, r),
+                      )
+                    else if (r.estado == EstadoRequerimiento.listo)
                       BotonPrincipal(
                         texto: 'CONFIRMAR ENTREGA',
                         icono: Icons.local_shipping_outlined,

@@ -177,6 +177,19 @@ class PdfService {
                 textoSinNombre: 'Aprobado',
               ),
               _Firma(
+                nombre: r.alistadoPor,
+                cargo: 'Alistado por (almacén)',
+                detalle: r.fechaListo != null
+                    ? fecha.format(r.fechaListo!)
+                    : r.entregado
+                        ? 'Alistado'
+                        : r.fechaAprobacion == null
+                            ? 'Pendiente de aprobación'
+                            : 'Pendiente de alistar',
+                completada: r.fechaListo != null || r.entregado,
+                textoSinNombre: 'Listo',
+              ),
+              _Firma(
                 nombre: r.recibidoPor,
                 cargo: 'Recibido por',
                 detalle: r.fechaEntrega == null ? 'Pendiente de entrega' : fecha.format(r.fechaEntrega!),
@@ -198,6 +211,7 @@ class PdfService {
   static Future<Uint8List> generarChecklistHerramientas(ChecklistHerramientas h) async {
     final logo = await _cargarLogo();
     final firmaFont = await _cargarFuenteFirma();
+    final fotos = await _cargarFotosItems(h.categorias);
     final fecha = DateFormat('dd/MM/yyyy HH:mm');
 
     final doc = pw.Document();
@@ -211,7 +225,9 @@ class PdfService {
           numero: h.numero,
           datos: [
             ('Obra / proyecto', h.obra),
-            ('Fecha de salida', fecha.format(h.fechaSalida)),
+            if (h.maleta != null) ('Maleta', h.maleta!),
+            ('Fecha de registro', fecha.format(h.fechaSalida)),
+            if (h.fechaConfirmacionSalida != null) ('Salida confirmada', fecha.format(h.fechaConfirmacionSalida!)),
             ('Responsable', h.responsable),
             ('Estado', h.estado.etiqueta),
           ],
@@ -219,7 +235,7 @@ class PdfService {
         build: (context) => [
           _resumenCantidades('Herramientas registradas', h.totalItems, h.totalUnidades),
           _leyendaCasillas(marcada: 'Devuelta', vacia: 'Pendiente de devolución'),
-          for (final cat in h.categorias) ..._seccionCategoriaDocumento(cat, marcado: h.conforme),
+          for (final cat in h.categorias) ..._seccionCategoriaDocumento(cat, marcado: h.conforme, fotos: fotos),
           ..._bloqueObservaciones('Observaciones de la salida', h.observaciones),
           ..._bloqueObservaciones('Observaciones de la devolución', h.observacionesDevolucion),
           pw.SizedBox(height: 30),
@@ -230,6 +246,17 @@ class PdfService {
                 cargo: 'Responsable (retira)',
                 detalle: fecha.format(h.fechaSalida),
                 completada: true,
+              ),
+              _Firma(
+                nombre: h.salidaConfirmadaPor,
+                cargo: 'Entregó (almacén)',
+                detalle: h.fechaConfirmacionSalida != null
+                    ? fecha.format(h.fechaConfirmacionSalida!)
+                    : h.salidaConfirmada
+                        ? 'Salida confirmada'
+                        : 'Salida por confirmar',
+                completada: h.salidaConfirmada,
+                textoSinNombre: 'Salió',
               ),
               _Firma(
                 nombre: h.encargado,
@@ -466,7 +493,28 @@ class PdfService {
 
   /// Misma sección por categoría que tenía el checklist de obra: franja
   /// cian con el nombre y filas alternadas con casillero, ítem y cantidad.
-  static List<pw.Widget> _seccionCategoriaDocumento(ChecklistCategoriaState cat, {required bool marcado}) {
+  /// Fotos de las herramientas de una salida por maleta (vienen en los
+  /// assets); si alguna no carga, esa fila queda sin foto.
+  static Future<Map<String, pw.MemoryImage>> _cargarFotosItems(List<ChecklistCategoriaState> categorias) async {
+    final fotos = <String, pw.MemoryImage>{};
+    for (final ruta in categorias.expand((c) => c.items).map((i) => i.imagen).whereType<String>().toSet()) {
+      try {
+        fotos[ruta] = pw.MemoryImage((await rootBundle.load(ruta)).buffer.asUint8List());
+      } catch (_) {
+        // Foto no disponible: se omite.
+      }
+    }
+    return fotos;
+  }
+
+  /// [fotos] solo para salidas por maleta: cada fila lleva la foto de la
+  /// herramienta (o el recuadro vacío si esa no tiene).
+  static List<pw.Widget> _seccionCategoriaDocumento(
+    ChecklistCategoriaState cat, {
+    required bool marcado,
+    Map<String, pw.MemoryImage>? fotos,
+  }) {
+    final conFotos = fotos != null && fotos.isNotEmpty;
     final cantidad = cat.items.length == 1 ? '1 ítem' : '${cat.items.length} ítems';
     return [
       pw.Container(
@@ -499,6 +547,21 @@ class PdfService {
             children: [
               _casilla(marcado),
               pw.SizedBox(width: 8),
+              if (conFotos) ...[
+                pw.Container(
+                  width: 26,
+                  height: 26,
+                  alignment: pw.Alignment.center,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.white,
+                    border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  child: fotos[item.imagen] == null
+                      ? null
+                      : pw.Image(fotos[item.imagen]!, width: 24, height: 24, fit: pw.BoxFit.contain),
+                ),
+                pw.SizedBox(width: 8),
+              ],
               pw.Expanded(
                 child: pw.Text(
                   item.esExtra ? '${item.texto} (agregado${item.esProducto ? ' · catálogo' : ''})' : item.texto,
