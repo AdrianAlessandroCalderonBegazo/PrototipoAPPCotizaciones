@@ -63,12 +63,17 @@ class ChecklistItemEntry {
   /// la traen, así que es opcional y se muestra solo si existe.
   final String? unidad;
 
+  /// Foto de la herramienta (ruta del asset), para las que salen en una
+  /// maleta armada; las del checklist no la tienen.
+  final String? imagen;
+
   ChecklistItemEntry({
     required this.texto,
     this.cantidad = 0,
     this.esExtra = false,
     this.esProducto = false,
     this.unidad,
+    this.imagen,
   });
 
   bool get marcado => cantidad > 0;
@@ -90,6 +95,7 @@ class ChecklistItemEntry {
       esExtra: json['es_extra'] == true,
       esProducto: json['es_producto'] == true,
       unidad: json['unidad'] as String?,
+      imagen: json['imagen'] as String?,
     );
   }
 
@@ -99,6 +105,7 @@ class ChecklistItemEntry {
         'es_extra': esExtra,
         'es_producto': esProducto,
         if (unidad != null) 'unidad': unidad,
+        if (imagen != null) 'imagen': imagen,
       };
 }
 

@@ -220,7 +220,7 @@ class TarjetaHerramientas extends StatelessWidget {
       colorIcono: colorEstado,
       titulo: h.obra.isEmpty ? 'Obra sin nombre' : h.obra,
       subtitulo:
-          '${h.numero} · ${cantidadConPalabra(h.totalItems, 'herramienta', 'herramientas')} · ${fechaCorta(h.fechaSalida)} · ${h.responsable}',
+          '${h.numero}${h.maleta == null ? '' : ' · ${h.maleta}'} · ${cantidadConPalabra(h.totalItems, 'herramienta', 'herramientas')} · ${fechaCorta(h.fechaSalida)} · ${h.responsable}',
       pildoras: [PildoraEstado.herramientas(h.estado)],
       onTap: onTap,
     );
@@ -345,6 +345,8 @@ class ListaItemsPorCategoria extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // Las salidas por maleta traen foto de cada herramienta.
+    final conFotos = categorias.any((c) => c.items.any((i) => i.imagen != null));
     return Column(
       children: [
         for (final categoria in categorias)
@@ -385,6 +387,10 @@ class ListaItemsPorCategoria extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
+                        if (conFotos) ...[
+                          FotoHerramienta(ruta: item.imagen, titulo: item.texto, tamano: 40),
+                          const SizedBox(width: 10),
+                        ],
                         Icon(
                           completado ? Icons.check_circle : Icons.radio_button_unchecked,
                           size: 18,
@@ -507,6 +513,78 @@ class BotonPrincipal extends StatelessWidget {
           backgroundColor: color,
           padding: const EdgeInsets.symmetric(vertical: 15),
           shape: const StadiumBorder(),
+        ),
+      ),
+    );
+  }
+}
+
+/// Foto de una herramienta (las de las maletas vienen en los assets). Sin
+/// foto muestra un ícono; con foto, tocarla la abre en grande.
+class FotoHerramienta extends StatelessWidget {
+  final String? ruta;
+  final double tamano;
+  final String titulo;
+
+  const FotoHerramienta({super.key, required this.ruta, required this.titulo, this.tamano = 48});
+
+  void _ampliar(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(ruta!, fit: BoxFit.contain, height: 280),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                titulo,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: BrandColors.azulMarino),
+              ),
+              const SizedBox(height: 4),
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cerrar')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final sinFoto = Container(
+      width: tamano,
+      height: tamano,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(Icons.handyman_outlined, size: tamano * 0.45, color: colorScheme.outline),
+    );
+    if (ruta == null) return sinFoto;
+    return GestureDetector(
+      onTap: () => _ampliar(context),
+      child: Container(
+        width: tamano,
+        height: tamano,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(7),
+          child: Image.asset(ruta!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => sinFoto),
         ),
       ),
     );

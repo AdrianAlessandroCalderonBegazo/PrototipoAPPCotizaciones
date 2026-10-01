@@ -173,11 +173,13 @@ class AlmacenState extends ChangeNotifier {
     required String responsable,
     String? observaciones,
     required List<ChecklistCategoriaState> categorias,
+    String? maleta,
   }) async {
     final nuevo = ChecklistHerramientas(
       numero: await _siguienteNumero('herramientas_correlativo', 'HER'),
       obra: obra,
       responsable: responsable,
+      maleta: maleta,
       fechaSalida: DateTime.now(),
       observaciones: observaciones,
       categoriasJson: categoriasAJson(soloMarcados(categorias)),

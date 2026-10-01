@@ -20,6 +20,9 @@ class ChecklistHerramientas {
   final String numero;
   final String obra;
   final String responsable;
+
+  /// Si salió una maleta armada (ej. "Maleta 1") en vez del checklist.
+  final String? maleta;
   final EstadoHerramientas estado;
 
   /// Cuándo se registró el checklist (antes de que salgan las herramientas).
@@ -39,6 +42,7 @@ class ChecklistHerramientas {
     required this.numero,
     required this.obra,
     required this.responsable,
+    this.maleta,
     this.estado = EstadoHerramientas.registrado,
     required this.fechaSalida,
     this.fechaConfirmacionSalida,
@@ -73,6 +77,7 @@ class ChecklistHerramientas {
       numero: numero,
       obra: obra,
       responsable: responsable,
+      maleta: maleta,
       estado: estado ?? this.estado,
       fechaSalida: fechaSalida,
       fechaConfirmacionSalida: fechaConfirmacionSalida ?? this.fechaConfirmacionSalida,
@@ -91,6 +96,7 @@ class ChecklistHerramientas {
       numero: (map['numero'] ?? '').toString(),
       obra: (map['obra'] ?? '').toString(),
       responsable: (map['responsable'] ?? '').toString(),
+      maleta: map['maleta'] as String?,
       estado: EstadoHerramientas.values.firstWhere(
         (e) => e.name == map['estado'],
         orElse: () => EstadoHerramientas.pendiente,
@@ -111,6 +117,7 @@ class ChecklistHerramientas {
       'numero': numero,
       'obra': obra,
       'responsable': responsable,
+      'maleta': maleta,
       'estado': estado.name,
       'fecha_salida': fechaSalida.toIso8601String(),
       'fecha_confirmacion_salida': fechaConfirmacionSalida?.toIso8601String(),

@@ -39,7 +39,9 @@ String textoHerramientas(ChecklistHerramientas h) {
   final buffer = StringBuffer()
     ..writeln('🧰 SALIDA DE HERRAMIENTAS ${h.numero} — Inversiones ICR')
     ..writeln('Obra: ${h.obra}')
-    ..writeln('Responsable: ${h.responsable}')
+    ..writeln('Responsable: ${h.responsable}');
+  if (h.maleta != null) buffer.writeln('Maleta: ${h.maleta}');
+  buffer
     ..writeln('Registrado: ${_formatoFecha.format(h.fechaSalida)}')
     ..writeln('Estado: ${h.estado.etiqueta}');
   if (h.fechaConfirmacionSalida != null) {

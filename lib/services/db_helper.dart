@@ -28,7 +28,7 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'cotizador_icr.db');
     return openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: (db, version) async {
         await _crearTablaProductos(db);
         await _crearTablaCotizacionesGuardadas(db);
@@ -56,6 +56,13 @@ class DbHelper {
         }
         if (oldVersion < 7) {
           await _agregarColumnasEstadosAlmacen(db);
+        }
+        if (oldVersion < 8) {
+          try {
+            await db.execute('ALTER TABLE checklists_herramientas ADD COLUMN maleta TEXT');
+          } catch (_) {
+            // La columna ya existe (tabla recién creada con el esquema nuevo).
+          }
         }
       },
     );
@@ -144,6 +151,7 @@ class DbHelper {
         numero TEXT NOT NULL,
         obra TEXT NOT NULL,
         responsable TEXT NOT NULL,
+        maleta TEXT,
         estado TEXT NOT NULL,
         fecha_salida TEXT NOT NULL,
         fecha_confirmacion_salida TEXT,

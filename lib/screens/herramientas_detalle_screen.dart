@@ -165,7 +165,20 @@ class HerramientasDetalleScreen extends StatelessWidget {
                     style: AppTextStyles.subtitulo.copyWith(fontSize: 18, color: BrandColors.azulMarino),
                   ),
                   const SizedBox(height: 8),
-                  Wrap(children: [PildoraEstado.herramientas(h.estado)]),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      PildoraEstado.herramientas(h.estado),
+                      if (h.maleta != null)
+                        PildoraEstado(
+                          texto: h.maleta!,
+                          color: BrandColors.azulMarino,
+                          fondo: const Color(0xFFE2E8F0),
+                          icono: Icons.work_outline_rounded,
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 18),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -48,6 +48,8 @@ flutter:
     - assets/icon/icon.png
     - assets/animations/
     - assets/icons/
+    - assets/maletas/
+    - assets/maletas/maleta1/
   fonts:
     - family: Manrope
       fonts:

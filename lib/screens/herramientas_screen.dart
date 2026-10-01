@@ -10,8 +10,8 @@ import '../widgets/encabezado_curvo.dart';
 import '../widgets/estado_vacio.dart';
 import '../widgets/fade_slide_in.dart';
 import 'agregar_item_checklist_screen.dart';
-import 'checklist_screen.dart';
 import 'herramientas_detalle_screen.dart';
+import 'maleta_screen.dart';
 
 enum FiltroHerramientas { todos, registrado, pendiente, conforme }
 
@@ -168,7 +168,7 @@ class _HerramientasScreenState extends State<HerramientasScreen> {
         bottomNavigationBar: BotonInferiorFijo(
           texto: 'NUEVO CHECKLIST',
           icono: Icons.add,
-          onPressed: () => abrirChecklist(context, TipoChecklist.herramientas),
+          onPressed: () => nuevaSalidaHerramientas(context),
         ),
       ),
     );
