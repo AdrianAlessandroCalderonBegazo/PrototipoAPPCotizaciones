@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/checklist_categoria.dart';
@@ -340,7 +341,16 @@ class ListaItemsPorCategoria extends StatelessWidget {
   /// Si ya se entregó/devolvió: cada ítem se ve con su check cian.
   final bool completado;
 
-  const ListaItemsPorCategoria({super.key, required this.categorias, this.completado = false});
+  /// Salidas de herramientas: cada ítem muestra su recorrido (no salió,
+  /// en obra, devuelta, no volvió) según lo que se marcó al confirmar.
+  final bool recorridoHerramientas;
+
+  const ListaItemsPorCategoria({
+    super.key,
+    required this.categorias,
+    this.completado = false,
+    this.recorridoHerramientas = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -393,11 +403,14 @@ class ListaItemsPorCategoria extends StatelessWidget {
                           FotoHerramienta(ruta: item.imagen, titulo: item.texto, tamano: 40),
                           const SizedBox(width: 10),
                         ],
-                        Icon(
-                          completado ? Icons.check_circle : Icons.radio_button_unchecked,
-                          size: 18,
-                          color: completado ? BrandColors.cian : colorScheme.outline,
-                        ),
+                        if (recorridoHerramientas)
+                          _IconoRecorrido(item: item)
+                        else
+                          Icon(
+                            completado ? Icons.check_circle : Icons.radio_button_unchecked,
+                            size: 18,
+                            color: completado ? BrandColors.cian : colorScheme.outline,
+                          ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -533,6 +546,47 @@ class BotonPrincipal extends StatelessWidget {
   }
 }
 
+/// La foto es un asset de la app (las que vienen con ella) o un archivo del
+/// celular (las que se toman desde Configuración).
+Widget _imagenHerramienta(
+  String ruta, {
+  double? height,
+  ImageErrorWidgetBuilder? errorBuilder,
+}) {
+  return ruta.startsWith('/')
+      ? Image.file(File(ruta), fit: BoxFit.contain, height: height, errorBuilder: errorBuilder)
+      : Image.asset(ruta, fit: BoxFit.contain, height: height, errorBuilder: errorBuilder);
+}
+
+/// Dónde va una herramienta de una salida, según lo marcado al confirmar
+/// la salida y la devolución.
+class _IconoRecorrido extends StatelessWidget {
+  final ChecklistItemEntry item;
+
+  const _IconoRecorrido({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icono, color, texto) = switch ((item.salio, item.volvio)) {
+      (false, _) => (Icons.cancel_outlined, ColoresEstado.urgente, 'No salió'),
+      (true, true) => (Icons.check_circle, ColoresEstado.listo, 'Devuelta'),
+      (true, false) => (Icons.error_outline, ColoresEstado.urgente, 'No volvió'),
+      (true, null) => (Icons.outbox_outlined, ColoresEstado.pendiente, 'En obra'),
+      _ => (Icons.radio_button_unchecked, Theme.of(context).colorScheme.outline, 'Por salir'),
+    };
+    return Tooltip(
+      message: texto,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icono, size: 20, color: color),
+          Text(texto, style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: color)),
+        ],
+      ),
+    );
+  }
+}
+
 /// Foto de una herramienta (las de las maletas vienen en los assets). Sin
 /// foto muestra un ícono; con foto, tocarla la abre en grande.
 class FotoHerramienta extends StatelessWidget {
@@ -555,7 +609,7 @@ class FotoHerramienta extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(ruta!, fit: BoxFit.contain, height: 280),
+                child: _imagenHerramienta(ruta!, height: 280),
               ),
               const SizedBox(height: 12),
               Text(
@@ -598,7 +652,7 @@ class FotoHerramienta extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(7),
-          child: Image.asset(ruta!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => sinFoto),
+          child: _imagenHerramienta(ruta!, errorBuilder: (_, __, ___) => sinFoto),
         ),
       ),
     );

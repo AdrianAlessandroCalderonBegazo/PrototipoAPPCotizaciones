@@ -72,6 +72,12 @@ class ChecklistItemEntry {
   /// resumen. Null = sin precio. Las herramientas no lo usan.
   double? precio;
 
+  /// Herramientas: si realmente salieron a obra / si volvieron, según lo
+  /// que se fue marcando al confirmar la salida y la devolución. Null =
+  /// todavía no se revisó.
+  bool? salio;
+  bool? volvio;
+
   ChecklistItemEntry({
     required this.texto,
     this.cantidad = 0,
@@ -80,6 +86,8 @@ class ChecklistItemEntry {
     this.unidad,
     this.imagen,
     this.precio,
+    this.salio,
+    this.volvio,
   });
 
   bool get marcado => cantidad > 0;
@@ -105,6 +113,8 @@ class ChecklistItemEntry {
       unidad: json['unidad'] as String?,
       imagen: json['imagen'] as String?,
       precio: (json['precio'] as num?)?.toDouble(),
+      salio: json['salio'] as bool?,
+      volvio: json['volvio'] as bool?,
     );
   }
 
@@ -116,6 +126,8 @@ class ChecklistItemEntry {
         if (unidad != null) 'unidad': unidad,
         if (imagen != null) 'imagen': imagen,
         if (precio != null) 'precio': precio,
+        if (salio != null) 'salio': salio,
+        if (volvio != null) 'volvio': volvio,
       };
 }
 

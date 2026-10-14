@@ -251,7 +251,6 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
         ],
       ),
     );
-    controller.dispose();
     if (resultado == null) return;
     final texto = resultado.trim().replaceAll(',', '.');
     checklist.setPrecio(item, texto.isEmpty ? null : double.tryParse(texto));

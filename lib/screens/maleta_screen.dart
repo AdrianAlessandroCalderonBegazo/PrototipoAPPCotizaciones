@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/checklist_categoria.dart';
 import '../models/datos_almacen.dart';
 import '../models/maleta.dart';
+import '../services/db_helper.dart';
 import '../services/pdf_service.dart';
 import '../state/almacen_state.dart';
 import '../state/checklist_state.dart';
@@ -59,14 +60,20 @@ Future<void> nuevaSalidaHerramientas(BuildContext context) async {
 
   final List<Maleta> maletas;
   try {
-    maletas = await cargarMaletas();
+    maletas = await DbHelper.instance.getMaletas();
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudieron cargar las maletas: $e')));
     }
     return;
   }
-  if (!context.mounted || maletas.isEmpty) return;
+  if (!context.mounted) return;
+  if (maletas.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No hay maletas. Créalas en Inicio › Configuración › Maletas.')),
+    );
+    return;
+  }
 
   // Con una sola maleta se va directo a su resumen; con varias, se elige.
   final maleta = maletas.length == 1
@@ -432,7 +439,7 @@ class _NivelMaleta extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  FotoHerramienta(ruta: maleta.rutaImagen(item), tamano: 52, titulo: item.nombre),
+                  FotoHerramienta(ruta: item.imagen, tamano: 52, titulo: item.nombre),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(item.nombre, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),

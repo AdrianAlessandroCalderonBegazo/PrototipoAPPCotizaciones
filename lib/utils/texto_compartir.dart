@@ -59,6 +59,16 @@ String textoHerramientas(ChecklistHerramientas h) {
     buffer.writeln('Devuelto: ${_formatoFecha.format(h.fechaDevolucion!)}${quien.isEmpty ? '' : ' · recibió $quien'}');
   }
   _escribirCategorias(buffer, h.categorias);
+  if (h.noSalieron.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('⚠️ No salieron (${h.noSalieron.length}): ${h.noSalieron.map((i) => i.texto).join(', ')}');
+  }
+  if (h.noVolvieron.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('⚠️ No volvieron (${h.noVolvieron.length}): ${h.noVolvieron.map((i) => i.texto).join(', ')}');
+  }
   _escribirObservaciones(buffer, 'Observaciones', h.observaciones);
   _escribirObservaciones(buffer, 'Observaciones de la devolución', h.observacionesDevolucion);
   return buffer.toString().trim();

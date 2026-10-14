@@ -54,7 +54,31 @@ class ChecklistHerramientas {
     required this.categoriasJson,
   });
 
-  late final List<ChecklistCategoriaState> categorias = soloMarcados(categoriasDesdeJson(categoriasJson));
+  late final List<ChecklistCategoriaState> categorias = _conMarcasPorDefecto(soloMarcados(categoriasDesdeJson(categoriasJson)));
+
+  /// Las salidas guardadas antes de que se marcara herramienta por
+  /// herramienta no traen las marcas: si ya salieron se dan por salidas, y
+  /// si ya fueron conformes, por devueltas.
+  List<ChecklistCategoriaState> _conMarcasPorDefecto(List<ChecklistCategoriaState> categorias) {
+    for (final c in categorias) {
+      for (final i in c.items) {
+        if (i.salio == null && estado != EstadoHerramientas.registrado) i.salio = true;
+        if (i.volvio == null && estado == EstadoHerramientas.conforme && i.salio != false) i.volvio = true;
+      }
+    }
+    return categorias;
+  }
+
+  Iterable<ChecklistItemEntry> get _items => categorias.expand((c) => c.items);
+
+  /// Herramientas que no salieron en la confirmación de salida.
+  late final List<ChecklistItemEntry> noSalieron = [for (final i in _items) if (i.salio == false) i];
+
+  /// Herramientas que salieron y no volvieron al confirmar la devolución.
+  late final List<ChecklistItemEntry> noVolvieron = [for (final i in _items) if (i.salio != false && i.volvio == false) i];
+
+  /// Cuántas salieron a obra (todas, mientras no se confirme la salida).
+  int get totalSalieron => _items.where((i) => i.salio != false).length;
   late final int totalItems = categorias.fold(0, (s, c) => s + c.items.length);
   late final int totalUnidades = categorias.fold(0, (s, c) => s + c.totalUnidades);
 
@@ -71,6 +95,8 @@ class ChecklistHerramientas {
     DateTime? fechaDevolucion,
     String? encargado,
     String? observacionesDevolucion,
+    String? categoriasJson,
+    String? observaciones,
   }) {
     return ChecklistHerramientas(
       id: id ?? this.id,
@@ -84,9 +110,9 @@ class ChecklistHerramientas {
       salidaConfirmadaPor: salidaConfirmadaPor ?? this.salidaConfirmadaPor,
       fechaDevolucion: fechaDevolucion ?? this.fechaDevolucion,
       encargado: encargado ?? this.encargado,
-      observaciones: observaciones,
+      observaciones: observaciones ?? this.observaciones,
       observacionesDevolucion: observacionesDevolucion ?? this.observacionesDevolucion,
-      categoriasJson: categoriasJson,
+      categoriasJson: categoriasJson ?? this.categoriasJson,
     );
   }
 
