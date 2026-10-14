@@ -67,6 +67,11 @@ class ChecklistItemEntry {
   /// maleta armada; las del checklist no la tienen.
   final String? imagen;
 
+  /// Precio unitario (S/) de un material del requerimiento: viene por
+  /// defecto de la lista de precios de la empresa y se puede cambiar en el
+  /// resumen. Null = sin precio. Las herramientas no lo usan.
+  double? precio;
+
   ChecklistItemEntry({
     required this.texto,
     this.cantidad = 0,
@@ -74,9 +79,12 @@ class ChecklistItemEntry {
     this.esProducto = false,
     this.unidad,
     this.imagen,
+    this.precio,
   });
 
   bool get marcado => cantidad > 0;
+
+  double get subtotal => (precio ?? 0) * cantidad;
 
   /// "× 3" o "× 3 m" — como se muestra la cantidad en pantalla y en el PDF.
   String get cantidadTexto {
@@ -96,6 +104,7 @@ class ChecklistItemEntry {
       esProducto: json['es_producto'] == true,
       unidad: json['unidad'] as String?,
       imagen: json['imagen'] as String?,
+      precio: (json['precio'] as num?)?.toDouble(),
     );
   }
 
@@ -106,6 +115,7 @@ class ChecklistItemEntry {
         'es_producto': esProducto,
         if (unidad != null) 'unidad': unidad,
         if (imagen != null) 'imagen': imagen,
+        if (precio != null) 'precio': precio,
       };
 }
 
@@ -131,6 +141,7 @@ class ChecklistCategoriaState {
 
   int get totalMarcados => items.where((i) => i.marcado).length;
   int get totalUnidades => items.fold(0, (s, i) => s + i.cantidad);
+  double get totalPrecio => items.fold(0.0, (s, i) => s + i.subtotal);
 }
 
 /// Reconstruye las categorías guardadas de un checklist (para su pantalla
@@ -158,3 +169,12 @@ List<ChecklistCategoriaState> soloMarcados(List<ChecklistCategoriaState> categor
 
 String categoriasAJson(List<ChecklistCategoriaState> categorias) =>
     jsonEncode(categorias.map((c) => c.toJson()).toList());
+
+/// Total en soles de lo que se pidió (cantidad × precio de cada ítem).
+double totalPrecioCategorias(List<ChecklistCategoriaState> categorias) =>
+    categorias.fold(0.0, (s, c) => s + c.totalPrecio);
+
+/// Si algún ítem trae precio (los requerimientos guardados antes de que
+/// existieran los precios no lo tienen, y no se muestran columnas vacías).
+bool categoriasConPrecios(List<ChecklistCategoriaState> categorias) =>
+    categorias.any((c) => c.items.any((i) => i.precio != null));

@@ -348,7 +348,7 @@ class _HojaDevolucionState extends State<_HojaDevolucion> {
           controller: _encargadoController,
           textCapitalization: TextCapitalization.words,
           onChanged: (_) => setState(() {}),
-          decoration: decoracionCampoHoja('Encargado que recibe', icono: Icons.person_outline),
+          decoration: decoracionCampoHoja('Encargado que recibe *', icono: Icons.person_outline),
         ),
         const SizedBox(height: 10),
         TextField(

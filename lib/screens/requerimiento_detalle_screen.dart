@@ -265,6 +265,29 @@ class RequerimientoDetalleScreen extends StatelessWidget {
                     'MATERIALES SOLICITADOS · ${cantidadConPalabra(r.totalItems, 'ÍTEM', 'ÍTEMS')}',
                   ),
                   ListaItemsPorCategoria(categorias: r.categorias, completado: r.entregado),
+                  if (r.conPrecios)
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: BrandColors.azulMarino,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'TOTAL ESTIMADO',
+                              style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800, fontSize: 12),
+                            ),
+                          ),
+                          Text(
+                            soles(r.totalPrecio),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -340,6 +363,7 @@ class _HojaAprobacion extends StatefulWidget {
 class _HojaAprobacionState extends State<_HojaAprobacion> {
   final _codigoController = TextEditingController();
   final _nombreController = TextEditingController();
+  bool _faltaNombre = false;
   String? _error;
 
   @override
@@ -360,6 +384,10 @@ class _HojaAprobacionState extends State<_HojaAprobacion> {
   }
 
   Future<void> _confirmar() async {
+    if (_nombreController.text.trim().isEmpty) {
+      setState(() => _faltaNombre = true);
+      return;
+    }
     if (_codigoController.text.trim() != codigoJefeDeObra) {
       setState(() => _error = 'Código incorrecto. Solo el jefe de obra puede aprobar.');
       _codigoController.clear();
@@ -405,7 +433,11 @@ class _HojaAprobacionState extends State<_HojaAprobacion> {
         TextField(
           controller: _nombreController,
           textCapitalization: TextCapitalization.words,
-          decoration: decoracionCampoHoja('Nombre del jefe de obra (para el PDF)', icono: Icons.badge_outlined),
+          onChanged: (_) {
+            if (_faltaNombre) setState(() => _faltaNombre = false);
+          },
+          decoration: decoracionCampoHoja('Nombre del jefe de obra *', icono: Icons.badge_outlined)
+              .copyWith(errorText: _faltaNombre ? 'Escribe el nombre de quien aprueba' : null),
         ),
         const SizedBox(height: 16),
         Row(
@@ -449,6 +481,7 @@ class _HojaEntrega extends StatefulWidget {
 
 class _HojaEntregaState extends State<_HojaEntrega> {
   late final _recibidoController = TextEditingController(text: widget.requerimiento.solicitante);
+  bool _faltaNombre = false;
 
   @override
   void dispose() {
@@ -467,7 +500,11 @@ class _HojaEntregaState extends State<_HojaEntrega> {
         TextField(
           controller: _recibidoController,
           textCapitalization: TextCapitalization.words,
-          decoration: decoracionCampoHoja('Recibido por', icono: Icons.person_outline),
+          onChanged: (_) {
+            if (_faltaNombre) setState(() => _faltaNombre = false);
+          },
+          decoration: decoracionCampoHoja('Recibido por *', icono: Icons.person_outline)
+              .copyWith(errorText: _faltaNombre ? 'Escribe quién recibe los materiales' : null),
         ),
         const SizedBox(height: 16),
         Row(
@@ -482,7 +519,14 @@ class _HojaEntregaState extends State<_HojaEntrega> {
             const SizedBox(width: 10),
             Expanded(
               child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(_recibidoController.text.trim()),
+                onPressed: () {
+                  final recibido = _recibidoController.text.trim();
+                  if (recibido.isEmpty) {
+                    setState(() => _faltaNombre = true);
+                    return;
+                  }
+                  Navigator.of(context).pop(recibido);
+                },
                 style: FilledButton.styleFrom(
                   backgroundColor: ColoresEstado.listo,
                   padding: const EdgeInsets.symmetric(vertical: 14),

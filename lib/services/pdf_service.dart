@@ -158,7 +158,9 @@ class PdfService {
         build: (context) => [
           _resumenCantidades('Materiales solicitados', r.totalItems, r.totalUnidades),
           _leyendaCasillas(marcada: 'Entregado', vacia: 'Pendiente de entrega'),
-          for (final cat in r.categorias) ..._seccionCategoriaDocumento(cat, marcado: r.entregado),
+          for (final cat in r.categorias)
+            ..._seccionCategoriaDocumento(cat, marcado: r.entregado, conPrecios: r.conPrecios),
+          if (r.conPrecios) _totalEstimado(r.totalPrecio),
           ..._bloqueObservaciones('Observaciones', r.observaciones),
           pw.SizedBox(height: 30),
           _firmas(
@@ -513,6 +515,7 @@ class PdfService {
     ChecklistCategoriaState cat, {
     required bool marcado,
     Map<String, pw.MemoryImage>? fotos,
+    bool conPrecios = false,
   }) {
     final conFotos = fotos != null && fotos.isNotEmpty;
     final cantidad = cat.items.length == 1 ? '1 ítem' : '${cat.items.length} ítems';
@@ -535,6 +538,18 @@ class PdfService {
               ),
             ),
             pw.Text(cantidad, style: const pw.TextStyle(fontSize: 9, color: PdfColors.white)),
+            if (conPrecios) ...[
+              pw.SizedBox(
+                width: 70,
+                child: pw.Text('P. unit.',
+                    textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 9, color: PdfColors.white)),
+              ),
+              pw.SizedBox(
+                width: 75,
+                child: pw.Text('Subtotal',
+                    textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 9, color: PdfColors.white)),
+              ),
+            ],
           ],
         ),
       ),
@@ -573,11 +588,52 @@ class PdfService {
                 item.cantidadTexto,
                 style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: BrandColors.pdfCian),
               ),
+              if (conPrecios) ...[
+                pw.SizedBox(
+                  width: 70,
+                  child: pw.Text(
+                    item.precio == null ? 'Sin precio' : _soles(item.precio!),
+                    textAlign: pw.TextAlign.right,
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
+                ),
+                pw.SizedBox(
+                  width: 75,
+                  child: pw.Text(
+                    item.precio == null ? '-' : _soles(item.subtotal),
+                    textAlign: pw.TextAlign.right,
+                    style: const pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                  ),
+                ),
+              ],
             ],
           ),
         );
       }),
     ];
+  }
+
+  static String _soles(double monto) =>
+      NumberFormat.currency(locale: 'en_US', symbol: 'S/ ').format(monto);
+
+  /// Total del requerimiento (precios por defecto o los que se cambiaron).
+  static pw.Widget _totalEstimado(double total) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(top: 10),
+      padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      color: BrandColors.pdfTint(BrandColors.pdfCian, 0.88),
+      child: pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Text('TOTAL ESTIMADO', style: const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+          ),
+          pw.Text(
+            _soles(total),
+            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: BrandColors.pdfAzulMarino),
+          ),
+        ],
+      ),
+    );
   }
 
   static List<pw.Widget> _bloqueObservaciones(String titulo, String? texto) {

@@ -44,12 +44,15 @@ flutter:
   assets:
     - assets/productos_seed.json
     - assets/checklist_seed.json
+    - assets/precios_materiales.json
     - assets/productos/
     - assets/icon/icon.png
     - assets/animations/
     - assets/icons/
     - assets/maletas/
     - assets/maletas/maleta1/
+    - assets/maletas/maleta2/
+    - assets/maletas/tld_aml/
   fonts:
     - family: Manrope
       fonts:

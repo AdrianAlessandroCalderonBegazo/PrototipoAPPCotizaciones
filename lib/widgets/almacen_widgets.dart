@@ -194,7 +194,7 @@ class TarjetaRequerimiento extends StatelessWidget {
       colorIcono: urgenteActivo ? ColoresEstado.urgente : colorEstado,
       titulo: r.obra.isEmpty ? 'Obra sin nombre' : r.obra,
       subtitulo:
-          '${r.numero} · ${cantidadConPalabra(r.totalItems, 'ítem', 'ítems')} · ${fechaCorta(r.fechaCreacion)} · ${r.solicitante}',
+          '${r.numero} · ${cantidadConPalabra(r.totalItems, 'ítem', 'ítems')}${r.conPrecios ? ' · ${soles(r.totalPrecio)}' : ''} · ${fechaCorta(r.fechaCreacion)} · ${r.solicitante}',
       pildoras: [
         PildoraEstado.requerimiento(r.estado),
         if (r.pendienteDeAlistar) PildoraEstado.porAlistar(),
@@ -345,8 +345,10 @@ class ListaItemsPorCategoria extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    // Las salidas por maleta traen foto de cada herramienta.
+    // Las salidas por maleta traen foto de cada herramienta; los
+    // requerimientos, el precio de cada material.
     final conFotos = categorias.any((c) => c.items.any((i) => i.imagen != null));
+    final conPrecios = categoriasConPrecios(categorias);
     return Column(
       children: [
         for (final categoria in categorias)
@@ -398,7 +400,19 @@ class ListaItemsPorCategoria extends StatelessWidget {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(item.texto, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.texto, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500)),
+                              if (conPrecios)
+                                Text(
+                                  item.precio == null
+                                      ? 'Sin precio'
+                                      : '${soles(item.precio!)} c/u · ${soles(item.subtotal)}',
+                                  style: AppTextStyles.apoyo,
+                                ),
+                            ],
+                          ),
                         ),
                         if (item.esExtra) ...[
                           Icon(
@@ -619,8 +633,8 @@ class BotonInferiorFijo extends StatelessWidget {
 
 /// Confirmación de un paso de Almacén que solo pide el nombre de quien lo
 /// hace (Listo para entrega, Confirmar salida). Recuerda el último nombre
-/// escrito en [clavePreferencia] para no tipearlo cada vez. Devuelve el
-/// nombre (puede ser vacío) o null si se canceló.
+/// escrito en [clavePreferencia] para no tipearlo cada vez. El nombre es
+/// obligatorio. Devuelve el nombre, o null si se canceló.
 class HojaConfirmacionNombre extends StatefulWidget {
   final String titulo;
   final String texto;
@@ -645,6 +659,7 @@ class HojaConfirmacionNombre extends StatefulWidget {
 
 class _HojaConfirmacionNombreState extends State<HojaConfirmacionNombre> {
   final _nombreController = TextEditingController();
+  bool _faltaNombre = false;
 
   @override
   void initState() {
@@ -664,6 +679,10 @@ class _HojaConfirmacionNombreState extends State<HojaConfirmacionNombre> {
 
   Future<void> _confirmar() async {
     final nombre = _nombreController.text.trim();
+    if (nombre.isEmpty) {
+      setState(() => _faltaNombre = true);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(widget.clavePreferencia, nombre);
     if (mounted) Navigator.of(context).pop(nombre);
@@ -678,7 +697,11 @@ class _HojaConfirmacionNombreState extends State<HojaConfirmacionNombre> {
         TextField(
           controller: _nombreController,
           textCapitalization: TextCapitalization.words,
-          decoration: decoracionCampoHoja(widget.etiquetaNombre, icono: Icons.person_outline),
+          onChanged: (_) {
+            if (_faltaNombre) setState(() => _faltaNombre = false);
+          },
+          decoration: decoracionCampoHoja('${widget.etiquetaNombre} *', icono: Icons.person_outline)
+              .copyWith(errorText: _faltaNombre ? 'El nombre es obligatorio' : null),
         ),
         const SizedBox(height: 16),
         Row(

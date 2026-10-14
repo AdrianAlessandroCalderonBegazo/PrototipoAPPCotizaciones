@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/checklist_categoria.dart';
+import '../models/datos_almacen.dart';
 import '../models/item_catalogo_checklist.dart';
 import '../services/db_helper.dart';
 import '../utils/checklist_estilo.dart';
@@ -21,6 +22,13 @@ class ChecklistState extends ChangeNotifier {
 
   List<ChecklistCategoriaState> _categorias = [];
   int _indice = 0;
+
+  /// Obra, solicitante/responsable, etc. — se piden antes de empezar.
+  DatosAlmacen? datos;
+
+  /// Precio por defecto de cada material (lista de precios de la empresa,
+  /// assets/precios_materiales.json). Solo para requerimientos.
+  Map<String, double> _precios = {};
   bool _cargando = true;
   String? _error;
 
@@ -39,6 +47,9 @@ class ChecklistState extends ChangeNotifier {
 
   int get totalItems => _categorias.fold(0, (s, c) => s + c.items.length);
   int get totalMarcados => _categorias.fold(0, (s, c) => s + c.totalMarcados);
+
+  /// Total en soles de lo marcado (solo requerimientos de materiales).
+  double get totalPrecio => totalPrecioCategorias(_categorias);
 
   /// Avance por CATEGORÍAS ya completadas, no por ítems marcados: esto es
   /// una revisión de qué llevar (no siempre se lleva todo), así que pasar
@@ -62,18 +73,31 @@ class ChecklistState extends ChangeNotifier {
           .toList()
         ..sort((a, b) => a.orden.compareTo(b.orden));
 
+      if (tipo == TipoChecklist.materiales && _precios.isEmpty) {
+        final rawPrecios = await rootBundle.loadString('assets/precios_materiales.json');
+        _precios = {
+          for (final e in (jsonDecode(rawPrecios) as Map<String, dynamic>).entries)
+            e.key.toLowerCase(): (e.value as num).toDouble(),
+        };
+      }
+
       final categorias = seed
           .map(
             (c) => ChecklistCategoriaState(
               nombre: c.categoria,
-              items: c.items.map((texto) => ChecklistItemEntry(texto: capitalizarPrimeraLetra(texto))).toList(),
+              items: c.items
+                  .map((texto) => ChecklistItemEntry(
+                        texto: capitalizarPrimeraLetra(texto),
+                        precio: _precioPorDefecto(texto),
+                      ))
+                  .toList(),
             ),
           )
           .toList();
 
       final agregados = await DbHelper.instance.getItemsCatalogoChecklist(tipo);
       for (final item in agregados) {
-        _incorporar(categorias, item);
+        _incorporar(categorias, item, _precioPorDefecto(item.nombre));
       }
 
       _categorias = categorias;
@@ -91,7 +115,9 @@ class ChecklistState extends ChangeNotifier {
   /// Suma un ítem agregado a la lista base en su categoría (o en una nueva,
   /// al final, si esa categoría no existe en el Excel) — sin repetirlo si ya
   /// había uno con el mismo nombre.
-  static void _incorporar(List<ChecklistCategoriaState> categorias, ItemCatalogoChecklist item) {
+  double? _precioPorDefecto(String texto) => _precios[texto.trim().toLowerCase()];
+
+  static void _incorporar(List<ChecklistCategoriaState> categorias, ItemCatalogoChecklist item, [double? precio]) {
     final nombre = capitalizarPrimeraLetra(item.nombre.trim());
     if (nombre.isEmpty) return;
     var categoria = _buscarCategoria(categorias, item.categoria);
@@ -100,7 +126,7 @@ class ChecklistState extends ChangeNotifier {
       categorias.add(categoria);
     }
     final yaEsta = categoria.items.any((i) => i.texto.toLowerCase() == nombre.toLowerCase());
-    if (!yaEsta) categoria.items.add(ChecklistItemEntry(texto: nombre, unidad: item.unidad));
+    if (!yaEsta) categoria.items.add(ChecklistItemEntry(texto: nombre, unidad: item.unidad, precio: precio));
   }
 
   static ChecklistCategoriaState? _buscarCategoria(List<ChecklistCategoriaState> categorias, String nombre) {
@@ -123,7 +149,7 @@ class ChecklistState extends ChangeNotifier {
   /// empezarlo de nuevo.
   void incorporarItemCatalogo(ItemCatalogoChecklist item) {
     if (_categorias.isEmpty) return;
-    _incorporar(_categorias, item);
+    _incorporar(_categorias, item, _precioPorDefecto(item.nombre));
     notifyListeners();
   }
 
@@ -154,13 +180,26 @@ class ChecklistState extends ChangeNotifier {
 
   /// Agrega un ítem nuevo (ya marcado) a una categoría cualquiera, solo para
   /// este checklist.
-  void agregarItemEn(int categoriaIndex, String texto, {bool esProducto = false}) {
+  /// [precio] viene del catálogo cuando se agrega un producto; si no, se
+  /// busca en la lista de precios (o queda sin precio, para ponerlo después).
+  void agregarItemEn(int categoriaIndex, String texto, {bool esProducto = false, double? precio}) {
     final limpio = texto.trim();
     if (limpio.isEmpty) return;
     _categorias[categoriaIndex].items.add(
           ChecklistItemEntry(
-              texto: capitalizarPrimeraLetra(limpio), cantidad: 1, esExtra: true, esProducto: esProducto),
+            texto: capitalizarPrimeraLetra(limpio),
+            cantidad: 1,
+            esExtra: true,
+            esProducto: esProducto,
+            precio: tipo == TipoChecklist.materiales ? (precio ?? _precioPorDefecto(limpio)) : null,
+          ),
         );
+    notifyListeners();
+  }
+
+  /// Cambia el precio unitario de un material (desde el resumen).
+  void setPrecio(ChecklistItemEntry item, double? precio) {
+    item.precio = precio;
     notifyListeners();
   }
 
@@ -188,6 +227,7 @@ class ChecklistState extends ChangeNotifier {
   /// extras) para empezar uno nuevo.
   Future<void> reiniciar() async {
     _categorias = [];
+    datos = null;
     _cargando = true;
     notifyListeners();
     await _cargarDesdeAssets();

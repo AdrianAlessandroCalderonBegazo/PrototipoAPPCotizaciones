@@ -52,14 +52,15 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
   @override
   void initState() {
     super.initState();
-    _cargarUltimaPersona();
-  }
-
-  Future<void> _cargarUltimaPersona() async {
-    final prefs = await SharedPreferences.getInstance();
-    final ultima = prefs.getString(_clavePersona) ?? '';
-    if (!mounted || _personaController.text.isNotEmpty) return;
-    setState(() => _personaController.text = ultima);
+    // Los datos se completaron antes de empezar el checklist; aquí se ven
+    // de nuevo y todavía se pueden corregir.
+    final datos = context.read<ChecklistState>().datos;
+    if (datos != null) {
+      _obraController.text = datos.obra;
+      _personaController.text = datos.persona;
+      _observacionesController.text = datos.observaciones;
+      _urgente = datos.urgente;
+    }
   }
 
   @override
@@ -218,6 +219,42 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
         ),
       ),
     );
+  }
+
+  /// El precio viene de la lista de la empresa, pero se puede cambiar para
+  /// este requerimiento (o poner uno si el material no lo tenía).
+  Future<void> _editarPrecio(ChecklistState checklist, ChecklistItemEntry item) async {
+    final controller = TextEditingController(text: item.precio?.toStringAsFixed(2) ?? '');
+    final resultado = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Precio unitario'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${item.texto} ${item.cantidadTexto}', style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              decoration: const InputDecoration(prefixText: 'S/ ', labelText: 'Precio por unidad'),
+              onSubmitted: (v) => Navigator.pop(dialogContext, v),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text), child: const Text('Guardar')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (resultado == null) return;
+    final texto = resultado.trim().replaceAll(',', '.');
+    checklist.setPrecio(item, texto.isEmpty ? null : double.tryParse(texto));
   }
 
   Future<void> _empezarNuevo(ChecklistState checklist) async {
@@ -425,6 +462,8 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                           _FilaResumenCategoria(
                             categoria: entry.value,
                             esUltima: entry.key == checklist.categorias.length - 1,
+                            conPrecios: _esMateriales,
+                            onEditarPrecio: (item) => _editarPrecio(checklist, item),
                             onTap: () {
                               checklist.irACategoria(entry.key);
                               Navigator.of(context).pop();
@@ -433,6 +472,37 @@ class _ChecklistResumenScreenState extends State<ChecklistResumenScreen> {
                       ],
                     ),
                   ),
+                  if (_esMateriales) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: BrandColors.azulMarino,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'TOTAL ESTIMADO',
+                              style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w800, fontSize: 12),
+                            ),
+                          ),
+                          Text(
+                            soles(checklist.totalPrecio),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(4, 6, 4, 0),
+                      child: Text(
+                        'Precios por defecto de la lista de la empresa. Toca un precio para cambiarlo.',
+                        style: AppTextStyles.apoyo,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -497,7 +567,18 @@ class _FilaResumenCategoria extends StatelessWidget {
   final bool esUltima;
   final VoidCallback onTap;
 
-  const _FilaResumenCategoria({required this.categoria, required this.esUltima, required this.onTap});
+  /// Requerimientos de materiales: cada ítem muestra su precio (tocarlo
+  /// lo cambia) y el subtotal.
+  final bool conPrecios;
+  final ValueChanged<ChecklistItemEntry> onEditarPrecio;
+
+  const _FilaResumenCategoria({
+    required this.categoria,
+    required this.esUltima,
+    required this.onTap,
+    required this.conPrecios,
+    required this.onEditarPrecio,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -572,6 +653,10 @@ class _FilaResumenCategoria extends StatelessWidget {
                                   color: BrandColors.azulMarino,
                                 ),
                               ),
+                              if (conPrecios) ...[
+                                const SizedBox(width: 8),
+                                _ChipPrecio(item: item, onTap: () => onEditarPrecio(item)),
+                              ],
                             ],
                           ),
                         ),
@@ -579,6 +664,54 @@ class _FilaResumenCategoria extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Precio de un material en el resumen: "S/ 3.00 c/u" y el subtotal; sin
+/// precio, invita a ponerlo. Tocarlo abre la edición.
+class _ChipPrecio extends StatelessWidget {
+  final ChecklistItemEntry item;
+  final VoidCallback onTap;
+
+  const _ChipPrecio({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final sinPrecio = item.precio == null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 92),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: sinPrecio ? ColoresEstado.pendienteFondo : BrandColors.cian.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  sinPrecio ? 'Poner precio' : soles(item.subtotal),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: sinPrecio ? ColoresEstado.pendiente : BrandColors.azulMarino,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.edit, size: 12, color: sinPrecio ? ColoresEstado.pendiente : BrandColors.cian),
+              ],
+            ),
+            if (!sinPrecio)
+              Text('${soles(item.precio!)} c/u', style: const TextStyle(fontSize: 10.5, color: BrandColors.grisApoyo)),
+          ],
+        ),
       ),
     );
   }

@@ -58,6 +58,11 @@ class Requerimiento {
   late final int totalItems = categorias.fold(0, (s, c) => s + c.items.length);
   late final int totalUnidades = categorias.fold(0, (s, c) => s + c.totalUnidades);
 
+  /// Total estimado en soles (cantidad × precio de cada material). Los
+  /// requerimientos anteriores a los precios no lo tienen ([conPrecios]).
+  late final double totalPrecio = totalPrecioCategorias(categorias);
+  late final bool conPrecios = categoriasConPrecios(categorias);
+
   bool get entregado => estado == EstadoRequerimiento.entregado;
 
   /// Aprobado y todavía sin alistar: el recordatorio para el almacenero.
