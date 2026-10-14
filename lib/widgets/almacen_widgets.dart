@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/checklist_categoria.dart';
@@ -194,7 +195,7 @@ class TarjetaRequerimiento extends StatelessWidget {
       colorIcono: urgenteActivo ? ColoresEstado.urgente : colorEstado,
       titulo: r.obra.isEmpty ? 'Obra sin nombre' : r.obra,
       subtitulo:
-          '${r.numero} · ${cantidadConPalabra(r.totalItems, 'ítem', 'ítems')} · ${fechaCorta(r.fechaCreacion)} · ${r.solicitante}',
+          '${r.numero} · ${cantidadConPalabra(r.totalItems, 'ítem', 'ítems')}${r.conPrecios ? ' · ${soles(r.totalPrecio)}' : ''} · ${fechaCorta(r.fechaCreacion)} · ${r.solicitante}',
       pildoras: [
         PildoraEstado.requerimiento(r.estado),
         if (r.pendienteDeAlistar) PildoraEstado.porAlistar(),
@@ -340,13 +341,24 @@ class ListaItemsPorCategoria extends StatelessWidget {
   /// Si ya se entregó/devolvió: cada ítem se ve con su check cian.
   final bool completado;
 
-  const ListaItemsPorCategoria({super.key, required this.categorias, this.completado = false});
+  /// Salidas de herramientas: cada ítem muestra su recorrido (no salió,
+  /// en obra, devuelta, no volvió) según lo que se marcó al confirmar.
+  final bool recorridoHerramientas;
+
+  const ListaItemsPorCategoria({
+    super.key,
+    required this.categorias,
+    this.completado = false,
+    this.recorridoHerramientas = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    // Las salidas por maleta traen foto de cada herramienta.
+    // Las salidas por maleta traen foto de cada herramienta; los
+    // requerimientos, el precio de cada material.
     final conFotos = categorias.any((c) => c.items.any((i) => i.imagen != null));
+    final conPrecios = categoriasConPrecios(categorias);
     return Column(
       children: [
         for (final categoria in categorias)
@@ -391,14 +403,29 @@ class ListaItemsPorCategoria extends StatelessWidget {
                           FotoHerramienta(ruta: item.imagen, titulo: item.texto, tamano: 40),
                           const SizedBox(width: 10),
                         ],
-                        Icon(
-                          completado ? Icons.check_circle : Icons.radio_button_unchecked,
-                          size: 18,
-                          color: completado ? BrandColors.cian : colorScheme.outline,
-                        ),
+                        if (recorridoHerramientas)
+                          _IconoRecorrido(item: item)
+                        else
+                          Icon(
+                            completado ? Icons.check_circle : Icons.radio_button_unchecked,
+                            size: 18,
+                            color: completado ? BrandColors.cian : colorScheme.outline,
+                          ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(item.texto, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.texto, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500)),
+                              if (conPrecios)
+                                Text(
+                                  item.precio == null
+                                      ? 'Sin precio'
+                                      : '${soles(item.precio!)} c/u · ${soles(item.subtotal)}',
+                                  style: AppTextStyles.apoyo,
+                                ),
+                            ],
+                          ),
                         ),
                         if (item.esExtra) ...[
                           Icon(
@@ -519,6 +546,47 @@ class BotonPrincipal extends StatelessWidget {
   }
 }
 
+/// La foto es un asset de la app (las que vienen con ella) o un archivo del
+/// celular (las que se toman desde Configuración).
+Widget _imagenHerramienta(
+  String ruta, {
+  double? height,
+  ImageErrorWidgetBuilder? errorBuilder,
+}) {
+  return ruta.startsWith('/')
+      ? Image.file(File(ruta), fit: BoxFit.contain, height: height, errorBuilder: errorBuilder)
+      : Image.asset(ruta, fit: BoxFit.contain, height: height, errorBuilder: errorBuilder);
+}
+
+/// Dónde va una herramienta de una salida, según lo marcado al confirmar
+/// la salida y la devolución.
+class _IconoRecorrido extends StatelessWidget {
+  final ChecklistItemEntry item;
+
+  const _IconoRecorrido({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icono, color, texto) = switch ((item.salio, item.volvio)) {
+      (false, _) => (Icons.cancel_outlined, ColoresEstado.urgente, 'No salió'),
+      (true, true) => (Icons.check_circle, ColoresEstado.listo, 'Devuelta'),
+      (true, false) => (Icons.error_outline, ColoresEstado.urgente, 'No volvió'),
+      (true, null) => (Icons.outbox_outlined, ColoresEstado.pendiente, 'En obra'),
+      _ => (Icons.radio_button_unchecked, Theme.of(context).colorScheme.outline, 'Por salir'),
+    };
+    return Tooltip(
+      message: texto,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icono, size: 20, color: color),
+          Text(texto, style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: color)),
+        ],
+      ),
+    );
+  }
+}
+
 /// Foto de una herramienta (las de las maletas vienen en los assets). Sin
 /// foto muestra un ícono; con foto, tocarla la abre en grande.
 class FotoHerramienta extends StatelessWidget {
@@ -541,7 +609,7 @@ class FotoHerramienta extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(ruta!, fit: BoxFit.contain, height: 280),
+                child: _imagenHerramienta(ruta!, height: 280),
               ),
               const SizedBox(height: 12),
               Text(
@@ -584,7 +652,7 @@ class FotoHerramienta extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(7),
-          child: Image.asset(ruta!, fit: BoxFit.contain, errorBuilder: (_, __, ___) => sinFoto),
+          child: _imagenHerramienta(ruta!, errorBuilder: (_, __, ___) => sinFoto),
         ),
       ),
     );
@@ -619,8 +687,8 @@ class BotonInferiorFijo extends StatelessWidget {
 
 /// Confirmación de un paso de Almacén que solo pide el nombre de quien lo
 /// hace (Listo para entrega, Confirmar salida). Recuerda el último nombre
-/// escrito en [clavePreferencia] para no tipearlo cada vez. Devuelve el
-/// nombre (puede ser vacío) o null si se canceló.
+/// escrito en [clavePreferencia] para no tipearlo cada vez. El nombre es
+/// obligatorio. Devuelve el nombre, o null si se canceló.
 class HojaConfirmacionNombre extends StatefulWidget {
   final String titulo;
   final String texto;
@@ -645,6 +713,7 @@ class HojaConfirmacionNombre extends StatefulWidget {
 
 class _HojaConfirmacionNombreState extends State<HojaConfirmacionNombre> {
   final _nombreController = TextEditingController();
+  bool _faltaNombre = false;
 
   @override
   void initState() {
@@ -664,6 +733,10 @@ class _HojaConfirmacionNombreState extends State<HojaConfirmacionNombre> {
 
   Future<void> _confirmar() async {
     final nombre = _nombreController.text.trim();
+    if (nombre.isEmpty) {
+      setState(() => _faltaNombre = true);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(widget.clavePreferencia, nombre);
     if (mounted) Navigator.of(context).pop(nombre);
@@ -678,7 +751,11 @@ class _HojaConfirmacionNombreState extends State<HojaConfirmacionNombre> {
         TextField(
           controller: _nombreController,
           textCapitalization: TextCapitalization.words,
-          decoration: decoracionCampoHoja(widget.etiquetaNombre, icono: Icons.person_outline),
+          onChanged: (_) {
+            if (_faltaNombre) setState(() => _faltaNombre = false);
+          },
+          decoration: decoracionCampoHoja('${widget.etiquetaNombre} *', icono: Icons.person_outline)
+              .copyWith(errorText: _faltaNombre ? 'El nombre es obligatorio' : null),
         ),
         const SizedBox(height: 16),
         Row(

@@ -8,7 +8,7 @@ import '../widgets/almacen_widgets.dart';
 import '../widgets/animated_pressable.dart';
 import '../widgets/brand_icon.dart';
 import '../widgets/fade_slide_in.dart';
-import 'config_screen.dart';
+import 'configuracion_screen.dart';
 import 'herramientas_detalle_screen.dart';
 import 'herramientas_screen.dart';
 import 'requerimiento_detalle_screen.dart';
@@ -74,8 +74,8 @@ class InicioScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   _BotonCuadrado(
                     icono: Icons.settings_outlined,
-                    tooltip: 'Sincronizar catálogo',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConfigScreen())),
+                    tooltip: 'Configuración',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConfiguracionScreen())),
                   ),
                 ],
               ),

@@ -3,6 +3,7 @@ import '../models/checklist_categoria.dart';
 import '../models/checklist_herramientas.dart';
 import '../models/requerimiento.dart';
 import 'checklist_estilo.dart';
+import 'formato.dart';
 
 /// Texto plano listo para copiar y pegar en WhatsApp ("Copiar como
 /// mensaje"): los mismos datos del PDF, sin necesidad de adjuntar archivo.
@@ -31,6 +32,11 @@ String textoRequerimiento(Requerimiento r) {
     buffer.writeln('Entregado: ${_formatoFecha.format(r.fechaEntrega!)}${quien.isEmpty ? '' : ' a $quien'}');
   }
   _escribirCategorias(buffer, r.categorias);
+  if (r.conPrecios) {
+    buffer
+      ..writeln()
+      ..writeln('TOTAL ESTIMADO: ${soles(r.totalPrecio)}');
+  }
   _escribirObservaciones(buffer, 'Observaciones', r.observaciones);
   return buffer.toString().trim();
 }
@@ -53,6 +59,16 @@ String textoHerramientas(ChecklistHerramientas h) {
     buffer.writeln('Devuelto: ${_formatoFecha.format(h.fechaDevolucion!)}${quien.isEmpty ? '' : ' · recibió $quien'}');
   }
   _escribirCategorias(buffer, h.categorias);
+  if (h.noSalieron.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('⚠️ No salieron (${h.noSalieron.length}): ${h.noSalieron.map((i) => i.texto).join(', ')}');
+  }
+  if (h.noVolvieron.isNotEmpty) {
+    buffer
+      ..writeln()
+      ..writeln('⚠️ No volvieron (${h.noVolvieron.length}): ${h.noVolvieron.map((i) => i.texto).join(', ')}');
+  }
   _escribirObservaciones(buffer, 'Observaciones', h.observaciones);
   _escribirObservaciones(buffer, 'Observaciones de la devolución', h.observacionesDevolucion);
   return buffer.toString().trim();
@@ -64,7 +80,8 @@ void _escribirCategorias(StringBuffer buffer, List<ChecklistCategoriaState> cate
       ..writeln()
       ..writeln('${quitarNumeroCategoria(cat.nombre)} (${cat.items.length})');
     for (final item in cat.items) {
-      buffer.writeln('• ${item.texto} ${item.cantidadTexto}');
+      final precio = item.precio == null ? '' : ' · ${soles(item.precio!)} c/u = ${soles(item.subtotal)}';
+      buffer.writeln('• ${item.texto} ${item.cantidadTexto}$precio');
     }
   }
 }

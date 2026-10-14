@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/checklist_categoria.dart';
+import '../models/datos_almacen.dart';
 import '../models/maleta.dart';
+import '../services/db_helper.dart';
 import '../services/pdf_service.dart';
 import '../state/almacen_state.dart';
+import '../state/checklist_state.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../utils/checklist_estilo.dart';
@@ -18,6 +21,7 @@ import '../widgets/encabezado_curvo.dart';
 import '../widgets/lottie_gate_screen.dart';
 import '../widgets/seccion_card.dart';
 import 'checklist_screen.dart';
+import 'datos_almacen_screen.dart';
 import 'documento_creado_screen.dart';
 import 'herramientas_detalle_screen.dart';
 
@@ -25,28 +29,51 @@ import 'herramientas_detalle_screen.dart';
 /// salida — recorriendo el checklist de herramientas ítem por ítem, o
 /// sacando una maleta ya armada completa.
 Future<void> nuevaSalidaHerramientas(BuildContext context) async {
+  final borrador = context.read<BorradoresChecklist>().de(TipoChecklist.herramientas);
+  final continuar = await preguntarContinuarBorrador(context, borrador);
+  if (continuar == null || !context.mounted) return;
+  if (continuar) {
+    // Sigue el checklist que estaba a medias (con sus datos, o pidiéndolos).
+    if (borrador.datos == null && (!await pedirDatosChecklist(context, borrador) || !context.mounted)) return;
+    await recorrerChecklist(context, borrador);
+    return;
+  }
+
+  // Lo primero: los datos de la salida. Sin ellos no se elige nada.
+  final datos = await Navigator.of(context).push<DatosAlmacen>(
+    MaterialPageRoute(builder: (_) => const DatosAlmacenScreen(tipo: TipoChecklist.herramientas)),
+  );
+  if (datos == null || !context.mounted) return;
+
   final opcion = await showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const _HojaFormaDeSalida(),
+    builder: (_) => _HojaFormaDeSalida(datos: datos),
   );
   if (opcion == null || !context.mounted) return;
   if (opcion == 'checklist') {
-    await abrirChecklist(context, TipoChecklist.herramientas);
+    borrador.datos = datos;
+    await recorrerChecklist(context, borrador);
     return;
   }
 
   final List<Maleta> maletas;
   try {
-    maletas = await cargarMaletas();
+    maletas = await DbHelper.instance.getMaletas();
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudieron cargar las maletas: $e')));
     }
     return;
   }
-  if (!context.mounted || maletas.isEmpty) return;
+  if (!context.mounted) return;
+  if (maletas.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No hay maletas. Créalas en Inicio › Configuración › Maletas.')),
+    );
+    return;
+  }
 
   // Con una sola maleta se va directo a su resumen; con varias, se elige.
   final maleta = maletas.length == 1
@@ -57,17 +84,22 @@ Future<void> nuevaSalidaHerramientas(BuildContext context) async {
           builder: (_) => _HojaElegirMaleta(maletas: maletas),
         );
   if (maleta == null || !context.mounted) return;
-  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => MaletaResumenScreen(maleta: maleta)));
+  await Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => MaletaResumenScreen(maleta: maleta, datos: datos)),
+  );
 }
 
 class _HojaFormaDeSalida extends StatelessWidget {
-  const _HojaFormaDeSalida();
+  final DatosAlmacen datos;
+
+  const _HojaFormaDeSalida({required this.datos});
 
   @override
   Widget build(BuildContext context) {
     return HojaAlmacen(
       titulo: '¿Cómo registras la salida?',
-      texto: 'Elige si vas a marcar las herramientas una por una o si sale una maleta ya armada.',
+      texto:
+          '${datos.obra} · ${datos.persona}. Elige si vas a marcar las herramientas una por una o si sale una maleta ya armada.',
       children: [
         _OpcionSalida(
           icono: Icons.checklist_rounded,
@@ -177,7 +209,10 @@ class _HojaElegirMaleta extends StatelessWidget {
 class MaletaResumenScreen extends StatefulWidget {
   final Maleta maleta;
 
-  const MaletaResumenScreen({super.key, required this.maleta});
+  /// Los datos que se completaron antes de elegir la maleta.
+  final DatosAlmacen datos;
+
+  const MaletaResumenScreen({super.key, required this.maleta, required this.datos});
 
   @override
   State<MaletaResumenScreen> createState() => _MaletaResumenScreenState();
@@ -188,22 +223,12 @@ class _MaletaResumenScreenState extends State<MaletaResumenScreen> {
   // suele ser el mismo responsable de siempre.
   static const _clavePersona = 'ultimo_responsable_herramientas';
 
-  final _obraController = TextEditingController();
-  final _personaController = TextEditingController();
-  final _observacionesController = TextEditingController();
+  late final _obraController = TextEditingController(text: widget.datos.obra);
+  late final _personaController = TextEditingController(text: widget.datos.persona);
+  late final _observacionesController = TextEditingController(text: widget.datos.observaciones);
   bool _guardando = false;
 
   Maleta get _maleta => widget.maleta;
-
-  @override
-  void initState() {
-    super.initState();
-    SharedPreferences.getInstance().then((prefs) {
-      if (mounted && _personaController.text.isEmpty) {
-        _personaController.text = prefs.getString(_clavePersona) ?? '';
-      }
-    });
-  }
 
   @override
   void dispose() {
@@ -414,7 +439,7 @@ class _NivelMaleta extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  FotoHerramienta(ruta: maleta.rutaImagen(item), tamano: 52, titulo: item.nombre),
+                  FotoHerramienta(ruta: item.imagen, tamano: 52, titulo: item.nombre),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(item.nombre, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),

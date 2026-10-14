@@ -51,7 +51,7 @@ class _HojaAgregarItemState extends State<_HojaAgregarItem> {
     super.dispose();
   }
 
-  Future<void> _agregar(String texto, {bool esProducto = false}) async {
+  Future<void> _agregar(String texto, {bool esProducto = false, double? precio}) async {
     final limpio = texto.trim();
     if (limpio.isEmpty || _guardando) return;
     setState(() => _guardando = true);
@@ -77,7 +77,7 @@ class _HojaAgregarItemState extends State<_HojaAgregarItem> {
       }
     }
 
-    widget.checklist.agregarItemEn(widget.categoriaIndex, limpio, esProducto: esProducto);
+    widget.checklist.agregarItemEn(widget.categoriaIndex, limpio, esProducto: esProducto, precio: precio);
     if (mounted) Navigator.pop(context);
   }
 
@@ -88,7 +88,7 @@ class _HojaAgregarItemState extends State<_HojaAgregarItem> {
       backgroundColor: Colors.transparent,
       builder: (_) => const BuscadorProductos(titulo: 'Buscar en el catálogo'),
     );
-    if (producto != null) await _agregar(producto.nombre, esProducto: true);
+    if (producto != null) await _agregar(producto.nombre, esProducto: true, precio: producto.precioVenta);
   }
 
   @override

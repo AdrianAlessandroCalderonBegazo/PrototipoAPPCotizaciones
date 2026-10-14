@@ -75,6 +75,13 @@ class AlmacenState extends ChangeNotifier {
     return null;
   }
 
+  /// Solo para pruebas: carga salidas de herramientas sin pasar por la base.
+  @visibleForTesting
+  void herramientasParaPrueba(List<ChecklistHerramientas> lista) {
+    _herramientas = lista;
+    _cargando = false;
+  }
+
   Future<void> cargar() async {
     try {
       final requerimientos = await DbHelper.instance.getRequerimientos();
@@ -191,13 +198,23 @@ class AlmacenState extends ChangeNotifier {
     return guardado;
   }
 
-  /// Almacén confirma que las herramientas salieron: quedan pendientes de devolución.
-  Future<ChecklistHerramientas> confirmarSalida(ChecklistHerramientas h, {String? confirmadaPor}) {
+  /// Almacén confirma qué herramientas salieron (las que se marcaron una
+  /// por una en [categorias]): quedan pendientes de devolución.
+  Future<ChecklistHerramientas> confirmarSalida(
+    ChecklistHerramientas h, {
+    required String confirmadaPor,
+    required List<ChecklistCategoriaState> categorias,
+    String? observaciones,
+  }) {
+    final extra = (observaciones ?? '').trim();
+    final previas = (h.observaciones ?? '').trim();
     return _actualizarHerramientas(
       h.copyWith(
         estado: EstadoHerramientas.pendiente,
         fechaConfirmacionSalida: DateTime.now(),
         salidaConfirmadaPor: confirmadaPor,
+        categoriasJson: categoriasAJson(categorias),
+        observaciones: extra.isEmpty ? previas : (previas.isEmpty ? extra : '$previas\nSalida: $extra'),
       ),
     );
   }
@@ -206,6 +223,7 @@ class AlmacenState extends ChangeNotifier {
     ChecklistHerramientas h, {
     required String encargado,
     String? observaciones,
+    List<ChecklistCategoriaState>? categorias,
   }) async {
     return _actualizarHerramientas(
       h.copyWith(
@@ -213,6 +231,7 @@ class AlmacenState extends ChangeNotifier {
         fechaDevolucion: DateTime.now(),
         encargado: encargado,
         observacionesDevolucion: observaciones,
+        categoriasJson: categorias == null ? null : categoriasAJson(categorias),
       ),
     );
   }
