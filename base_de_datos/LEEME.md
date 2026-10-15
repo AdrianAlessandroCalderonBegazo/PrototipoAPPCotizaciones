@@ -22,7 +22,8 @@ tablas, así todos ven lo mismo.
 - **Acceso:** `usuarios`, `sesiones`, `configuracion`
 - **Productos:** `productos` (con `codigo_erp` para enlazar con el ERP)
 - **Cotizaciones:** `cotizaciones`, `cotizacion_items` (guardan nombre y precio del momento)
-- **Almacén:** `requerimientos` + `requerimiento_items` (con precio unitario),
+- **Almacén:** `requerimientos` + `requerimiento_items` (con precio unitario y el **alistado por material**:
+  `alistado`, `alistado_por`, `fecha_alistado`),
   `checklists_herramientas` + `checklist_herramientas_items` (con `salio` / `volvio` por herramienta)
 - **Listas:** `checklist_catalogo` (materiales con precio y herramientas), `maletas` + `maleta_items`
 - **Control:** `correlativos` (números S, REQ, HER sin repetirse), `bitacora` (quién cambió qué)
@@ -37,5 +38,15 @@ tablas, así todos ven lo mismo.
 - Los estados nuevos están completos: requerimiento
   `pendiente → aprobado → listo → entregado`; herramientas
   `registrado → pendiente → conforme`.
+- **Alistado compartido:** cada material del requerimiento guarda si ya se alistó, quién y
+  cuándo. Una persona alista parte y guarda; otra continúa con lo que falta. Cuando todos
+  están alistados el requerimiento pasa solo a `listo`.
+- **Edición con clave:** cotizaciones, requerimientos y salidas de herramientas se pueden
+  editar (agregar un producto, material o herramienta olvidado o de último momento) tras
+  ingresar la clave, guardada cifrada en `configuracion.clave_edicion` (de inicio `1234`).
+  Cada tabla guarda `editado_en` / `editado_por`, los ítems agregados así quedan con
+  `agregado_en_edicion = 1`, y el detalle del cambio va a `bitacora`. Un requerimiento
+  `listo`/`entregado` al que se le agrega algo vuelve a `aprobado` (falta alistar lo nuevo);
+  una salida `conforme` a la que se agrega una herramienta vuelve a `pendiente`.
 - Nada importante se borra de verdad (`activo = 0`); al eliminar una maleta o
   un producto, el historial queda intacto.

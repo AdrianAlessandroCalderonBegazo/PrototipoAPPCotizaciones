@@ -11,9 +11,10 @@
 --   Acceso ........ usuarios, sesiones, configuracion
 --   Productos ..... productos (catálogo de cotización)
 --   Cotizaciones .. cotizaciones, cotizacion_items
---   Almacén ....... requerimientos (+items), checklists_herramientas (+items)
+--   Almacén ....... requerimientos (+items, con el alistado por material),
+--                   checklists_herramientas (+items)
 --   Listas ........ checklist_catalogo (materiales y herramientas), maletas (+items)
---   Control ....... correlativos, bitacora
+--   Control ....... correlativos, bitacora (incluye cada edición con la clave)
 --
 -- Las fotos no van en la base: se guardan como archivos en el servidor
 -- (carpeta uploads/) y aquí solo queda su ruta relativa.
@@ -136,6 +137,9 @@ CREATE TABLE IF NOT EXISTS cotizaciones (
   total       DECIMAL(12,2) NOT NULL DEFAULT 0,
   fecha       DATETIME      NOT NULL,
   creado_por  INT UNSIGNED  NULL,
+  version     INT UNSIGNED  NOT NULL DEFAULT 1,           -- sube con cada edición
+  editado_en  DATETIME      NULL,                         -- última edición con la clave
+  editado_por VARCHAR(120)  NULL,
   CONSTRAINT fk_cotizacion_usuario FOREIGN KEY (creado_por) REFERENCES usuarios(id) ON DELETE SET NULL,
   INDEX idx_cotizaciones_fecha (fecha),
   INDEX idx_cotizaciones_cliente (cliente(100))
@@ -154,6 +158,7 @@ CREATE TABLE IF NOT EXISTS cotizacion_items (
   precio_unitario    DECIMAL(12,2) NOT NULL,
   unidad_medida      VARCHAR(40)   NULL,
   imagen             VARCHAR(255)  NULL,
+  agregado_en_edicion TINYINT(1)   NOT NULL DEFAULT 0,    -- se agregó después, editando
   CONSTRAINT fk_item_cotizacion FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id) ON DELETE CASCADE,
   CONSTRAINT fk_item_producto   FOREIGN KEY (producto_id)   REFERENCES productos(id)    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -229,6 +234,8 @@ CREATE TABLE IF NOT EXISTS requerimientos (
   recibido_por     VARCHAR(120) NULL,
   total_estimado   DECIMAL(12,2) NOT NULL DEFAULT 0,
   version          INT UNSIGNED NOT NULL DEFAULT 1,
+  editado_en       DATETIME     NULL,                   -- última edición con la clave
+  editado_por      VARCHAR(120) NULL,
   creado_por       INT UNSIGNED NULL,
   actualizado_en   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_requerimiento_usuario FOREIGN KEY (creado_por) REFERENCES usuarios(id) ON DELETE SET NULL,
@@ -249,6 +256,10 @@ CREATE TABLE IF NOT EXISTS requerimiento_items (
   precio_unitario  DECIMAL(12,2) NULL,
   es_extra         TINYINT(1)    NOT NULL DEFAULT 0,    -- agregado solo a este requerimiento
   es_producto      TINYINT(1)    NOT NULL DEFAULT 0,    -- vino del catálogo de productos
+  alistado         TINYINT(1)    NOT NULL DEFAULT 0,    -- almacén ya lo alistó
+  alistado_por     VARCHAR(120)  NULL,                  -- quién lo alistó
+  fecha_alistado   DATETIME      NULL,
+  agregado_en_edicion TINYINT(1) NOT NULL DEFAULT 0,    -- se agregó después, editando
   CONSTRAINT fk_item_requerimiento FOREIGN KEY (requerimiento_id) REFERENCES requerimientos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -276,6 +287,8 @@ CREATE TABLE IF NOT EXISTS checklists_herramientas (
   encargado                 VARCHAR(120) NULL,              -- quien recibe la devolución
   observaciones_devolucion  TEXT         NULL,
   version                   INT UNSIGNED NOT NULL DEFAULT 1,
+  editado_en                DATETIME     NULL,              -- última edición con la clave
+  editado_por               VARCHAR(120) NULL,
   creado_por                INT UNSIGNED NULL,
   actualizado_en            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_herramientas_usuario FOREIGN KEY (creado_por) REFERENCES usuarios(id) ON DELETE SET NULL,
@@ -301,6 +314,7 @@ CREATE TABLE IF NOT EXISTS checklist_herramientas_items (
   volvio       TINYINT(1)    NULL,
   es_extra     TINYINT(1)    NOT NULL DEFAULT 0,
   es_producto  TINYINT(1)    NOT NULL DEFAULT 0,
+  agregado_en_edicion TINYINT(1) NOT NULL DEFAULT 0,        -- se agregó después, editando
   CONSTRAINT fk_item_herramientas FOREIGN KEY (checklist_id) REFERENCES checklists_herramientas(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -311,4 +325,11 @@ INSERT IGNORE INTO correlativos (clave, valor) VALUES
 INSERT IGNORE INTO configuracion (clave, valor) VALUES
   ('igv', '0.18'),
   ('zona_horaria', 'America/Lima');
+
+-- Clave para EDITAR cotizaciones, requerimientos y salidas de herramientas
+-- (agregar productos, materiales o herramientas olvidados). Se guarda cifrada
+-- (bcrypt) y vale "1234"; cámbiala desde la app o con:
+--   UPDATE configuracion SET valor = '<password_hash de PHP>' WHERE clave = 'clave_edicion';
+INSERT IGNORE INTO configuracion (clave, valor) VALUES
+  ('clave_edicion', '$2y$12$iiv3c3uZo5p7lEnS76KQseP69gWYfQ0mY627YZUfTrjj09yKyxAMe');
 -- El código del jefe de obra y el primer administrador los crea el instalador.
