@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../models/cotizacion_guardada.dart';
 import '../services/db_helper.dart';
+import '../services/pdf_service.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../utils/formato.dart';
@@ -14,6 +15,8 @@ import '../widgets/encabezado_curvo.dart';
 import '../widgets/estado_vacio.dart';
 import '../widgets/fade_slide_in.dart';
 import '../widgets/producto_thumbnail.dart';
+import '../utils/seguridad.dart';
+import 'editar_cotizacion_screen.dart';
 import 'vista_previa_pdf_screen.dart';
 
 /// Historial de cotizaciones ya generadas (se abre desde el ícono de reloj
@@ -102,11 +105,12 @@ class _HistorialCotizacionesScreenState extends State<HistorialCotizacionesScree
   }
 
   Future<void> _abrir(CotizacionGuardada c) async {
-    final eliminada = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => CotizacionDetalleScreen(cotizacion: c)),
     );
-    if (eliminada == true) _cargar();
+    // Pudo eliminarse o editarse allá: se vuelve a leer el historial.
+    _cargar();
   }
 
   @override
@@ -374,10 +378,57 @@ class _TarjetaCotizacion extends StatelessWidget {
 /// fecha, vendedor, datos bancarios y todos los productos (con su foto),
 /// más ver el PDF, compartirlo o eliminarla. Devuelve true al cerrarse si
 /// se eliminó, para que el historial se actualice.
-class CotizacionDetalleScreen extends StatelessWidget {
+class CotizacionDetalleScreen extends StatefulWidget {
   final CotizacionGuardada cotizacion;
 
   const CotizacionDetalleScreen({super.key, required this.cotizacion});
+
+  @override
+  State<CotizacionDetalleScreen> createState() => _CotizacionDetalleScreenState();
+}
+
+class _CotizacionDetalleScreenState extends State<CotizacionDetalleScreen> {
+  late CotizacionGuardada cotizacion = widget.cotizacion;
+
+  /// Editar (con la clave): datos, productos, cantidades y precios. Al
+  /// guardar se recalcula el total y se vuelve a armar el PDF.
+  Future<void> _editar(BuildContext context) async {
+    if (!await pedirClaveEdicion(context) || !context.mounted) return;
+    final editada = await Navigator.push<CotizacionGuardada>(
+      context,
+      MaterialPageRoute(builder: (_) => EditarCotizacionScreen(cotizacion: cotizacion)),
+    );
+    if (editada == null || !context.mounted) return;
+    try {
+      final ruta = await PdfService.regenerarCotizacion(editada);
+      final guardada = CotizacionGuardada(
+        id: editada.id,
+        numero: editada.numero,
+        cliente: editada.cliente,
+        rucDni: editada.rucDni,
+        telefono: editada.telefono,
+        vendedor: editada.vendedor,
+        banco: editada.banco,
+        moneda: editada.moneda,
+        nroCuenta: editada.nroCuenta,
+        cci: editada.cci,
+        fecha: editada.fecha,
+        total: editada.total,
+        archivoPdf: ruta,
+        items: editada.items,
+      );
+      await DbHelper.instance.actualizarCotizacion(guardada);
+      if (!mounted) return;
+      setState(() => cotizacion = guardada);
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text('${guardada.numero} actualizada.')),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo guardar los cambios: $e')));
+      }
+    }
+  }
 
   Future<void> _verPdf(BuildContext context) async {
     if (!await _verificarArchivo(context, cotizacion.archivoPdf)) return;
@@ -461,6 +512,11 @@ class CotizacionDetalleScreen extends StatelessWidget {
               color: BrandColors.cian,
               conVolver: true,
               acciones: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                  tooltip: 'Editar',
+                  onPressed: () => _editar(context),
+                ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.white),
                   tooltip: 'Eliminar',
