@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'api_cliente.dart';
+import 'db_helper.dart';
 import '../models/checklist_categoria.dart';
 import '../models/checklist_herramientas.dart';
 import '../models/cotizacion_guardada.dart';
@@ -39,12 +41,7 @@ class PdfService {
   /// Se pide UNA vez, antes de generar, para que quien llama pueda usar el
   /// mismo número tanto en el PDF como al guardar el registro en el
   /// historial (mismo nombre de archivo, mismo "Nro").
-  static Future<int> siguienteNumero() async {
-    final prefs = await SharedPreferences.getInstance();
-    final siguiente = (prefs.getInt('cotizacion_correlativo') ?? 0) + 1;
-    await prefs.setInt('cotizacion_correlativo', siguiente);
-    return siguiente;
-  }
+  static Future<int> siguienteNumero() => DbHelper.instance.siguienteCorrelativo('cotizacion');
 
   static String formatearNumero(int numero) => 'S${numero.toString().padLeft(5, '0')}';
 
@@ -122,7 +119,20 @@ class PdfService {
   /// Conserva el número y la fecha originales. Devuelve la ruta del archivo.
   static Future<String> regenerarCotizacion(CotizacionGuardada c) async {
     final numero = int.tryParse(c.numero.replaceAll(RegExp(r'\D'), '')) ?? 0;
-    final bytes = await generar(
+    final bytes = await bytesCotizacion(c);
+    if (c.archivoPdf.isNotEmpty) {
+      await File(c.archivoPdf).writeAsBytes(bytes);
+      return c.archivoPdf;
+    }
+    return guardarEnDisco(bytes, numero);
+  }
+
+  /// El PDF de una cotización ya guardada, armado con sus datos actuales
+  /// (conserva el número y la fecha originales). Con servidor no hay archivo
+  /// guardado: cada vez que se abre se vuelve a armar desde la base.
+  static Future<Uint8List> bytesCotizacion(CotizacionGuardada c) async {
+    final numero = int.tryParse(c.numero.replaceAll(RegExp(r'\D'), '')) ?? 0;
+    return generar(
       numero: numero,
       fecha: c.fecha,
       items: [
@@ -147,11 +157,6 @@ class PdfService {
       nroCuenta: c.nroCuenta ?? '',
       cci: c.cci ?? '',
     );
-    if (c.archivoPdf.isNotEmpty) {
-      await File(c.archivoPdf).writeAsBytes(bytes);
-      return c.archivoPdf;
-    }
-    return guardarEnDisco(bytes, numero);
   }
 
   /// Guarda el PDF ya generado en el almacenamiento propio de la app, para
@@ -826,7 +831,10 @@ class PdfService {
     await Future.wait(
       archivos.map((archivo) async {
         try {
-          if (esRutaDeArchivo(archivo)) {
+          if (esFotoDeServidor(archivo)) {
+            final r = await http.get(Uri.parse(ApiCliente.instancia.urlArchivo(archivo)));
+            if (r.statusCode == 200) resultado[archivo] = r.bodyBytes;
+          } else if (esRutaDeArchivo(archivo)) {
             resultado[archivo] = await File(archivo).readAsBytes();
           } else {
             final data = await rootBundle.load('assets/productos/$archivo');

@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/checklist_categoria.dart';
 import '../models/checklist_herramientas.dart';
 import '../models/item_catalogo_checklist.dart';
 import '../models/requerimiento.dart';
 import '../screens/editar_almacen_screen.dart';
+import '../services/api_cliente.dart';
 import '../services/db_helper.dart';
 
 /// Código que pide la app para aprobar un requerimiento como jefe de obra,
@@ -98,13 +99,80 @@ class AlmacenState extends ChangeNotifier {
     }
   }
 
+  // Con servidor, otras personas cambian cosas todo el tiempo: la lista se
+  // vuelve a pedir cada cierto rato (y al volver a la app) y las pantallas se
+  // actualizan solas, para que todos vean lo mismo.
+  Timer? _reloj;
+  bool _actualizando = false;
+  static const _cadaCuanto = Duration(seconds: 20);
+
+  /// Cuántos requerimientos esperan aprobación y no se habían visto antes
+  /// (para avisar al encargado en el celular).
+  final ValueNotifier<List<Requerimiento>> nuevosPorAprobar = ValueNotifier(const []);
+
+  void iniciarActualizacionAutomatica() {
+    if (!DbHelper.instance.esServidor || _reloj != null) return;
+    _reloj = Timer.periodic(_cadaCuanto, (_) => actualizarEnSegundoPlano());
+  }
+
+  void detenerActualizacionAutomatica() {
+    _reloj?.cancel();
+    _reloj = null;
+  }
+
+  static String _firma(Iterable<(int?, int)> filas) => filas.map((f) => '${f.$1}:${f.$2}').join(',');
+
+  /// Vuelve a pedir la lista sin mostrar "cargando"; solo avisa a las
+  /// pantallas si algo cambió.
+  Future<void> actualizarEnSegundoPlano() async {
+    if (_actualizando) return;
+    _actualizando = true;
+    try {
+      final requerimientos = await DbHelper.instance.getRequerimientos();
+      final herramientas = await DbHelper.instance.getChecklistsHerramientas();
+      final cambio = _firma(requerimientos.map((r) => (r.id, r.version))) != _firma(_requerimientos.map((r) => (r.id, r.version))) ||
+          _firma(herramientas.map((h) => (h.id, h.version))) != _firma(_herramientas.map((h) => (h.id, h.version)));
+      if (!cambio) return;
+      final conocidos = {for (final r in _requerimientos) r.id};
+      final nuevos = [
+        for (final r in requerimientos)
+          if (r.estado == EstadoRequerimiento.pendiente && !conocidos.contains(r.id)) r,
+      ];
+      _requerimientos = requerimientos;
+      _herramientas = herramientas;
+      notifyListeners();
+      if (nuevos.isNotEmpty) nuevosPorAprobar.value = nuevos;
+    } catch (_) {
+      // Sin conexión por un momento: se reintenta en el próximo ciclo.
+    } finally {
+      _actualizando = false;
+    }
+  }
+
+  /// Si el servidor rechaza un cambio porque otra persona ya lo modificó, se
+  /// actualiza lo que se ve para partir de lo último (el aviso con el motivo
+  /// lo muestra la app, ver main.dart).
+  Future<T> _conAvisos<T>(Future<T> Function() accion) async {
+    try {
+      return await accion();
+    } on ApiError catch (e) {
+      if (e.conflicto) await actualizarEnSegundoPlano();
+      rethrow;
+    }
+  }
+
+  @override
+  void dispose() {
+    detenerActualizacionAutomatica();
+    nuevosPorAprobar.dispose();
+    super.dispose();
+  }
+
   /// Correlativo propio de cada tipo de documento (REQ-0001, HER-0001), en
   /// preferencias y no según el id de la base: así un número nunca se
   /// repite aunque se elimine un registro.
   static Future<String> _siguienteNumero(String clave, String prefijo) async {
-    final prefs = await SharedPreferences.getInstance();
-    final siguiente = (prefs.getInt(clave) ?? 0) + 1;
-    await prefs.setInt(clave, siguiente);
+    final siguiente = await DbHelper.instance.siguienteCorrelativo(clave);
     return '$prefijo-${siguiente.toString().padLeft(4, '0')}';
   }
 
@@ -116,7 +184,7 @@ class AlmacenState extends ChangeNotifier {
     required List<ChecklistCategoriaState> categorias,
   }) async {
     final nuevo = Requerimiento(
-      numero: await _siguienteNumero('requerimiento_correlativo', 'REQ'),
+      numero: await _siguienteNumero('requerimiento', 'REQ'),
       obra: obra,
       solicitante: solicitante,
       urgente: urgente,
@@ -124,8 +192,7 @@ class AlmacenState extends ChangeNotifier {
       observaciones: observaciones,
       categoriasJson: categoriasAJson(soloMarcados(categorias)),
     );
-    final id = await DbHelper.instance.insertarRequerimiento(nuevo);
-    final guardado = nuevo.copyWith(id: id);
+    final guardado = await _conAvisos(() => DbHelper.instance.insertarRequerimiento(nuevo));
     _requerimientos = [guardado, ..._requerimientos];
     notifyListeners();
     return guardado;
@@ -256,16 +323,16 @@ class AlmacenState extends ChangeNotifier {
   }
 
   Future<Requerimiento> _actualizarRequerimiento(Requerimiento actualizado) async {
-    await DbHelper.instance.actualizarRequerimiento(actualizado);
+    final guardado = await _conAvisos(() => DbHelper.instance.actualizarRequerimiento(actualizado));
     _requerimientos = [
-      for (final r in _requerimientos) r.id == actualizado.id ? actualizado : r,
+      for (final r in _requerimientos) r.id == guardado.id ? guardado : r,
     ];
     notifyListeners();
-    return actualizado;
+    return guardado;
   }
 
   Future<void> eliminarRequerimiento(Requerimiento r) async {
-    await DbHelper.instance.eliminarRequerimiento(r.id!);
+    await _conAvisos(() => DbHelper.instance.eliminarRequerimiento(r.id!));
     _requerimientos = _requerimientos.where((x) => x.id != r.id).toList();
     notifyListeners();
   }
@@ -278,7 +345,7 @@ class AlmacenState extends ChangeNotifier {
     String? maleta,
   }) async {
     final nuevo = ChecklistHerramientas(
-      numero: await _siguienteNumero('herramientas_correlativo', 'HER'),
+      numero: await _siguienteNumero('herramientas', 'HER'),
       obra: obra,
       responsable: responsable,
       maleta: maleta,
@@ -286,8 +353,7 @@ class AlmacenState extends ChangeNotifier {
       observaciones: observaciones,
       categoriasJson: categoriasAJson(soloMarcados(categorias)),
     );
-    final id = await DbHelper.instance.insertarChecklistHerramientas(nuevo);
-    final guardado = nuevo.copyWith(id: id);
+    final guardado = await _conAvisos(() => DbHelper.instance.insertarChecklistHerramientas(nuevo));
     _herramientas = [guardado, ..._herramientas];
     notifyListeners();
     return guardado;
@@ -332,16 +398,16 @@ class AlmacenState extends ChangeNotifier {
   }
 
   Future<ChecklistHerramientas> _actualizarHerramientas(ChecklistHerramientas actualizado) async {
-    await DbHelper.instance.actualizarChecklistHerramientas(actualizado);
+    final guardado = await _conAvisos(() => DbHelper.instance.actualizarChecklistHerramientas(actualizado));
     _herramientas = [
-      for (final x in _herramientas) x.id == actualizado.id ? actualizado : x,
+      for (final x in _herramientas) x.id == guardado.id ? guardado : x,
     ];
     notifyListeners();
-    return actualizado;
+    return guardado;
   }
 
   Future<void> eliminarHerramientas(ChecklistHerramientas h) async {
-    await DbHelper.instance.eliminarChecklistHerramientas(h.id!);
+    await _conAvisos(() => DbHelper.instance.eliminarChecklistHerramientas(h.id!));
     _herramientas = _herramientas.where((x) => x.id != h.id).toList();
     notifyListeners();
   }
