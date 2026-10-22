@@ -36,6 +36,10 @@ class Requerimiento {
   final String? observaciones;
   final String categoriasJson;
 
+  /// Con servidor: la versión del registro cuando se leyó. Si otra persona lo
+  /// cambia en el medio, el servidor avisa en vez de pisar su cambio.
+  final int version;
+
   Requerimiento({
     this.id,
     required this.numero,
@@ -52,6 +56,7 @@ class Requerimiento {
     this.recibidoPor,
     this.observaciones,
     required this.categoriasJson,
+    this.version = 0,
   });
 
   late final List<ChecklistCategoriaState> categorias = soloMarcados(categoriasDesdeJson(categoriasJson));
@@ -121,6 +126,7 @@ class Requerimiento {
       recibidoPor: recibidoPor ?? this.recibidoPor,
       observaciones: observaciones ?? this.observaciones,
       categoriasJson: categoriasJson ?? this.categoriasJson,
+      version: version,
     );
   }
 
@@ -140,6 +146,7 @@ class Requerimiento {
       aprobadoPor: aprobadoPor,
       observaciones: observaciones ?? this.observaciones,
       categoriasJson: categoriasJson ?? this.categoriasJson,
+      version: version,
     );
   }
 
@@ -163,6 +170,7 @@ class Requerimiento {
       recibidoPor: map['recibido_por'] as String?,
       observaciones: map['observaciones'] as String?,
       categoriasJson: (map['categorias_json'] ?? '[]').toString(),
+      version: (map['version'] as num?)?.toInt() ?? 0,
     );
   }
 
