@@ -69,3 +69,19 @@ Archivos: `estructura.sql` (15 tablas) y `datos_iniciales.sql` (800 productos, 9
 - Ordenar ramas: `main` (offline) y una rama de producción.
 - Traer los productos del ERP.
 - Migración de dominios y respaldos del servidor actual.
+
+## 10. Servidor compartido en el VPS (carpeta `servidor/`)
+Hecho después de lo anterior; reemplaza a la idea de MySQL/PHP:
+- **PostgreSQL** (`servidor/db/schema.sql`, datos iniciales `seed.sql`, generados con `generar_seed.mjs`; tablas nuevas en `db/migraciones/`).
+  Documentos (`requerimientos`, `checklists_herramientas`, `cotizaciones`) guardan los ítems en JSONB y tienen `version`; vistas planas `v_requerimiento_items`, `v_herramientas_items`, `v_cotizacion_items`.
+- **API Node/Express** (`servidor/api/`): login con usuarios y roles (admin, empleado, encargado, almacén, vendedor), reglas de estado por rol
+  (encargado aprueba, almacén alista, empleado confirma la recepción), clave de edición verificada por el servidor (permiso de 15 min),
+  aviso de conflicto 409 si dos personas cambian lo mismo, bitácora y subida de fotos. 16 pruebas contra PostgreSQL real.
+- **App Flutter**: `DbHelper` es una interfaz con `DbLocal` (SQLite, sin servidor) y `DbApi` (servidor). La web usa siempre el servidor
+  (misma dirección, `/api`); el APK lo usa con `--dart-define=API_URL=https://api.DOMINIO/api`. Login, actualización automática cada 20 s y botones según el rol.
+  Prueba de punta a punta: `test/integracion_api_test.dart` (necesita una API de prueba corriendo).
+- **Vista general** (`servidor/portal/index.html`): tablas simples de lo que hace todo el equipo, detalle por ítem, usuarios y bitácora.
+- **Despliegue**: `servidor/docker-compose.yml` (db + api + Caddy con HTTPS), `Caddyfile`, scripts de respaldo/restauración, guía `servidor/DESPLIEGUE.md`.
+- Dominio: `icrenergy.tech` (subdominios cotizador., app., api., finanzas.). VPS KVM 4 de Hostinger, IP 200.141.24.38.
+- Pendiente: probar el despliegue real en el VPS (Docker no se pudo probar en el entorno de desarrollo), roles/login con el ERP, productos desde el ERP,
+  app de finanzas, respaldo externo, revisar el plazo del VPS (la caducidad mostraba 2026-11-22).
