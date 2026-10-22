@@ -46,3 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Servidor compartido (VPS)
+servidor/.env
+servidor/datos/
+servidor/web/
+servidor/web.anterior/
+servidor/respaldos/
