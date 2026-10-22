@@ -44,11 +44,13 @@ void main() {
     api.urlParaPruebas = url;
     DbHelper.instance = DbApi.instancia;
     await entrarComo('admin', claveAdmin);
+    final existentes = {for (final u in await api.get('usuarios') as List) (u as Map)['usuario']: u['id']};
     for (final (u, rol) in [('juan', 'empleado'), ('carlos', 'encargado'), ('pedro', 'almacen'), ('ana', 'almacen'), ('vera', 'vendedor')]) {
-      try {
+      if (existentes.containsKey(u)) {
+        // de una corrida anterior: se deja con la clave y el rol de la prueba
+        await api.put('usuarios/${existentes[u]}', {'clave': 'clave-segura', 'rol': rol, 'activo': true});
+      } else {
         await api.post('usuarios', {'usuario': u, 'nombre': u.toUpperCase(), 'clave': 'clave-segura', 'rol': rol});
-      } on ApiError {
-        // ya existía de una corrida anterior
       }
     }
   });
@@ -224,9 +226,10 @@ void main() {
     test('productos nuevos y listas editables se comparten', () async {
       await entrarComo('vera');
       final db = DbHelper.instance;
-      await db.agregarProductoManual(Producto(nombre: 'Cable integración', categoriaProducto: 'CABLES', precioVenta: 12));
-      expect((await db.buscar('integración')).single.origen, 'local');
-      final item = ItemCatalogoChecklist(tipo: TipoChecklist.materiales, categoria: '1. CONDUIT', nombre: 'Cinta integración', fecha: DateTime.now(), precio: 4.5);
+      final marca = 'cable integración ${DateTime.now().microsecondsSinceEpoch}';
+      await db.agregarProductoManual(Producto(nombre: marca, categoriaProducto: 'CABLES', precioVenta: 12));
+      expect((await db.buscar(marca)).single.origen, 'local');
+      final item = ItemCatalogoChecklist(tipo: TipoChecklist.materiales, categoria: '1. CONDUIT', nombre: 'Cinta integración ${DateTime.now().microsecondsSinceEpoch}', fecha: DateTime.now(), precio: 4.5);
       await entrarComo('juan');
       final id = await db.agregarItemCatalogoChecklist(item);
       final lista = await db.getItemsCatalogoChecklist(TipoChecklist.materiales);

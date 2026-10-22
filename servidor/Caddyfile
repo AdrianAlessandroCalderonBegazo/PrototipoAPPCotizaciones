@@ -1,0 +1,58 @@
+# HTTPS automático (Let's Encrypt) para cada subdominio. DOMINIO viene del .env
+# (por ejemplo icrenergy.tech). Los registros DNS tipo A de cotizador., app. y
+# api. deben apuntar a la IP del VPS.
+
+(seguridad) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# La app (PWA): archivos estáticos + la API en /api (misma dirección, sin CORS)
+cotizador.{$DOMINIO} {
+	import seguridad
+	request_body {
+		max_size 10MB
+	}
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle /uploads/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/web
+		@estaticos path *.js *.wasm *.png *.jpg *.json *.otf *.ttf *.woff2
+		header @estaticos Cache-Control "public, max-age=86400"
+		header /index.html Cache-Control "no-cache"
+		header /flutter_service_worker.js Cache-Control "no-cache"
+		header /version.json Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Vista general: la API sirve también la página (y /api)
+app.{$DOMINIO} {
+	import seguridad
+	reverse_proxy api:3000
+}
+
+# La API sola (para el APK u otras apps)
+api.{$DOMINIO} {
+	import seguridad
+	request_body {
+		max_size 10MB
+	}
+	reverse_proxy api:3000
+}
+
+# Reservado para la app de finanzas (todavía no existe)
+finanzas.{$DOMINIO} {
+	import seguridad
+	respond "Finanzas: próximamente." 200
+}
