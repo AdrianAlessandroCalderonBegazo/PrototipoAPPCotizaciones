@@ -1,3 +1,4 @@
+import { CONTENIDO_FORMULARIO } from "../lib/layout";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { C, card, kicker, t } from "../theme";
@@ -19,7 +20,7 @@ export function Captura({ cap, onBack, onGallery, onCamera, onCancel, topInset, 
   return (
     <Screen>
       <Header kicker="EGRESO · CAPTURA" title="Sube tu comprobante" sub="Boleta, factura, voucher o captura de transferencia" onBack={onBack} topInset={topInset} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 22, paddingHorizontal: 20, paddingBottom: 22 + bottomInset, gap: 16 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ ...CONTENIDO_FORMULARIO, paddingVertical: 22, paddingHorizontal: 20, paddingBottom: 22 + bottomInset, gap: 16 }}>
         {cap.status === "idle" ? (
           <>
             <Pressable

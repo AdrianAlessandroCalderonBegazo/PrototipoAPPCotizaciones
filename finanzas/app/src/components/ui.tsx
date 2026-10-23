@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, Pressable, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { ANCHO } from "../lib/layout";
 import { C, TEAL_GRADIENT, card, inputBox, kicker, primaryButton, secondaryButton, t } from "../theme";
 
 export { DateField } from "./DateField";
@@ -28,28 +29,35 @@ export function Header({ kicker: k, title, sub, onBack, topInset, tone = "ink" }
   const Wrap = teal ? TealGradient : View;
   return (
     <Wrap style={[{ paddingTop: 20 + topInset, paddingHorizontal: 22, paddingBottom: 22 }, !teal && { backgroundColor: C.ink }]}>
-      <Pressable
-        onPress={onBack}
-        accessibilityLabel="Volver"
-        hitSlop={8}
-        style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: teal ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.14)", alignItems: "center", justifyContent: "center", marginBottom: 14 }}
-      >
-        <Text style={t(22, 600, C.white, { marginTop: -3 })}>‹</Text>
-      </Pressable>
-      <Text style={kicker(`rgba(255,255,255,${teal ? 0.9 : 0.75})`, 10.5)}>{k}</Text>
-      <Text style={t(24, 800, C.white, { marginTop: 4 })}>{title}</Text>
-      <Text style={t(12, 400, `rgba(255,255,255,${soft})`, { marginTop: 4 })}>{sub}</Text>
+      <Cuerpo ancho={ANCHO.formulario - 40}>
+        <Pressable
+          onPress={onBack}
+          accessibilityLabel="Volver"
+          hitSlop={8}
+          style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: teal ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.14)", alignItems: "center", justifyContent: "center", marginBottom: 14 }}
+        >
+          <Text style={t(22, 600, C.white, { marginTop: -3 })}>‹</Text>
+        </Pressable>
+        <Text style={kicker(`rgba(255,255,255,${teal ? 0.9 : 0.75})`, 10.5)}>{k}</Text>
+        <Text style={t(24, 800, C.white, { marginTop: 4 })}>{title}</Text>
+        <Text style={t(12, 400, `rgba(255,255,255,${soft})`, { marginTop: 4 })}>{sub}</Text>
+      </Cuerpo>
     </Wrap>
   );
 }
 
 /** Teal gradient container for the home and ingreso headers. */
-export function TealGradient({ style, children }: { style?: StyleProp<ViewStyle>; children?: ReactNode }) {
+export function TealGradient({ style, children, ancho }: { style?: StyleProp<ViewStyle>; children?: ReactNode; /** Ancho máximo del contenido (en computadora el degradado ocupa todo, el texto se alinea con el cuerpo). */ ancho?: number }) {
   return (
     <LinearGradient colors={TEAL_GRADIENT.colors} start={TEAL_GRADIENT.start} end={TEAL_GRADIENT.end} style={style}>
-      {children}
+      {ancho ? <Cuerpo ancho={ancho - 36}>{children}</Cuerpo> : children}
     </LinearGradient>
   );
+}
+
+/** Contenido centrado con ancho máximo: en el teléfono ocupa todo; en una pantalla grande no se estira. */
+export function Cuerpo({ ancho, children, style }: { ancho: number; children?: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ width: "100%", maxWidth: ancho, alignSelf: "center" }, style]}>{children}</View>;
 }
 
 export function FieldLabel({ children, auto, optional }: { children: string; auto?: boolean; optional?: boolean }) {
@@ -199,8 +207,10 @@ export function SecondaryButton({ label, onPress, danger }: { label: string; onP
 /** Sticky bottom action bar used by both forms. */
 export function BottomBar({ children, bottomInset }: { children: ReactNode; bottomInset: number }) {
   return (
-    <View style={{ paddingTop: 14, paddingHorizontal: 20, paddingBottom: 22 + bottomInset, backgroundColor: C.card, borderTopWidth: 1, borderTopColor: C.line, gap: 10 }}>
-      {children}
+    <View style={{ paddingTop: 14, paddingHorizontal: 20, paddingBottom: 22 + bottomInset, backgroundColor: C.card, borderTopWidth: 1, borderTopColor: C.line }}>
+      <Cuerpo ancho={ANCHO.formulario - 40} style={{ gap: 10 }}>
+        {children}
+      </Cuerpo>
     </View>
   );
 }

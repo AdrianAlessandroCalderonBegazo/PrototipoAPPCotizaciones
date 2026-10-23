@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { C, card, kicker, raisedCard, t } from "../theme";
 import { Etiqueta, FechaNav, Seccion, AvisoSync, CiudadSwitch } from "../components/caja";
-import { PrimaryButton, SecondaryButton, TealGradient, TextField } from "../components/ui";
+import { Cuerpo, PrimaryButton, SecondaryButton, TealGradient, TextField } from "../components/ui";
+import { ANCHO, useEscritorio } from "../lib/layout";
 import { fdateLarga, money } from "../lib/format";
 import { aperturaEstimada } from "../lib/caja/calc";
 import { errorDe, saldosDe, sinEnviar, type State } from "../lib/caja/store";
@@ -42,6 +43,7 @@ export function CajaDiaria({ caja, estado, ciudad, setCiudad, fecha, setFecha, h
   topInset: number;
   bottomInset: number;
 }) {
+  const escritorio = useEscritorio();
   const hoja = hojaVisible(caja, ciudad, fecha);
   const s = saldosDe(hoja);
   const t_ = s.totales;
@@ -53,7 +55,7 @@ export function CajaDiaria({ caja, estado, ciudad, setCiudad, fecha, setFecha, h
   return (
     <View style={{ flex: 1 }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <TealGradient style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 70 }}>
+        <TealGradient ancho={ANCHO.panel} style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 70 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
             <Text style={kicker("rgba(255,255,255,.9)", 11)}>CAJA DIARIA</Text>
             <CiudadSwitch valor={ciudad} onChange={setCiudad} />
@@ -73,71 +75,80 @@ export function CajaDiaria({ caja, estado, ciudad, setCiudad, fecha, setFecha, h
 
         <AvisoSync estado={estado} caja={caja} />
 
-        <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 18, marginTop: -44 }}>
-          <View style={[raisedCard(16), { flex: 1, padding: 14 }]}>
-            <Text style={kicker(C.teal, 10)}>INGRESOS</Text>
-            <Text style={t(17, 800, C.teal, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.caja.ingreso)}</Text>
-          </View>
-          <View style={[raisedCard(16), { flex: 1, padding: 14 }]}>
-            <Text style={kicker(C.muted, 10)}>SALIDAS</Text>
-            <Text style={t(17, 800, C.red, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.caja.salida)}</Text>
-          </View>
-        </View>
-
-        <View style={{ paddingHorizontal: 18, paddingTop: 16, gap: 10 }}>
-          {cierre ? <CierreResumen cierre={cierre} puedeReabrir={permisos.reabrir} onReabrir={onReabrir} /> : null}
-          {soloLectura && !cierre ? (
-            <View style={{ backgroundColor: C.tint, borderRadius: 12, padding: 12, gap: 8 }}>
-              <Text style={t(12, 700, C.ink, { lineHeight: 17 })}>{motivoSoloLectura}</Text>
-              <Pressable onPress={() => setFecha(hoy)} accessibilityRole="button">
-                <Text style={t(12, 800, C.teal)}>Volver a hoy ›</Text>
-              </Pressable>
+        <Cuerpo ancho={ANCHO.panel}>
+          <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 18, marginTop: -44 }}>
+            <View style={[raisedCard(16), { flex: 1, padding: 14 }]}>
+              <Text style={kicker(C.teal, 10)}>INGRESOS</Text>
+              <Text style={t(17, 800, C.teal, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.caja.ingreso)}</Text>
             </View>
-          ) : null}
-          {!soloLectura ? (
-            <>
-              <PrimaryButton label="+ NUEVO MOVIMIENTO" onPress={onNueva} />
-              <SecondaryButton label="Enviar dinero a caja chica" onPress={onEnviarChica} />
-            </>
-          ) : null}
-          {puedeCerrar ? <SecondaryButton label="Cerrar el día" onPress={onCerrarDia} /> : null}
-          {permisos.revisar ? (
-            <Pressable onPress={onCambios} accessibilityRole="button" style={{ alignSelf: "center", paddingVertical: 4 }}>
-              <Text style={t(12, 800, C.teal)}>Ver cambios del día ›</Text>
+            <View style={[raisedCard(16), { flex: 1, padding: 14 }]}>
+              <Text style={kicker(C.muted, 10)}>SALIDAS</Text>
+              <Text style={t(17, 800, C.red, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.caja.salida)}</Text>
+            </View>
+          </View>
+
+          <View style={{ paddingHorizontal: 18, paddingTop: 16, gap: 10 }}>
+            {cierre ? <CierreResumen cierre={cierre} puedeReabrir={permisos.reabrir} onReabrir={onReabrir} /> : null}
+            {soloLectura && !cierre ? (
+              <View style={{ backgroundColor: C.tint, borderRadius: 12, padding: 12, gap: 8 }}>
+                <Text style={t(12, 700, C.ink, { lineHeight: 17 })}>{motivoSoloLectura}</Text>
+                <Pressable onPress={() => setFecha(hoy)} accessibilityRole="button">
+                  <Text style={t(12, 800, C.teal)}>Volver a hoy ›</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {/* teléfono: los botones uno debajo del otro; computadora: en una fila */}
+            <View style={{ flexDirection: escritorio ? "row" : "column", gap: 10, flexWrap: escritorio ? "wrap" : "nowrap" }}>
+              {!soloLectura ? (
+                <>
+                  <View style={{ flex: escritorio ? 1 : undefined, minWidth: escritorio ? 200 : undefined }}><PrimaryButton label="+ NUEVO MOVIMIENTO" onPress={onNueva} /></View>
+                  <View style={{ flex: escritorio ? 1 : undefined, minWidth: escritorio ? 200 : undefined }}><SecondaryButton label="Enviar dinero a caja chica" onPress={onEnviarChica} /></View>
+                </>
+              ) : null}
+              {puedeCerrar ? <View style={{ flex: escritorio ? 1 : undefined, minWidth: escritorio ? 200 : undefined }}><SecondaryButton label="Cerrar el día" onPress={onCerrarDia} /></View> : null}
+            </View>
+            {permisos.revisar ? (
+              <Pressable onPress={onCambios} accessibilityRole="button" style={{ alignSelf: "center", paddingVertical: 4 }}>
+                <Text style={t(12, 800, C.teal)}>Ver cambios del día ›</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* teléfono: todo en una columna; computadora: movimientos a la izquierda, resumen y responsable a la derecha */}
+          <View style={{ flexDirection: escritorio ? "row" : "column", alignItems: "flex-start" }}>
+            <View style={{ flex: escritorio ? 3 : undefined, width: escritorio ? undefined : "100%", paddingHorizontal: 18, paddingTop: 22 }}>
+              <Seccion titulo="MOVIMIENTOS DEL DÍA" derecha={<Text style={t(11.5, 400, C.muted)}>{hoja.filas.length} {hoja.filas.length === 1 ? "registro" : "registros"}</Text>}>
+                <View style={[card(16), { overflow: "hidden" }]}>
+                  {hoja.filas.map((f, i) => (
+                    <FilaCard key={f.id} f={f} primero={i === 0} caja={caja} onPress={() => (f.transferencia_id ? onEnvio(f) : onEditar(f))} />
+                  ))}
+                  {hoja.filas.length === 0 ? <Text style={t(12, 400, C.muted, { padding: 26, textAlign: "center" })}>{pasado ? "No hubo movimientos ese día." : "Aún no hay movimientos hoy. Toca “Nuevo movimiento”."}</Text> : null}
+                </View>
+              </Seccion>
+            </View>
+
+            <View style={{ flex: escritorio ? 2 : undefined, width: escritorio ? undefined : "100%" }}>
+              <View style={{ paddingHorizontal: 18, paddingTop: 22 }}>
+                <Seccion titulo="RESUMEN DEL DÍA">
+                  <View style={[card(16), { overflow: "hidden" }]}>
+                    <FilaResumen cab c1="INGRESO" c2="SALIDA" c3="TOTAL" />
+                    <FilaResumen titulo="Efectivo" p={t_.efectivo} />
+                    <FilaResumen titulo="Yape / Transf." p={t_.transf} />
+                    <FilaResumen titulo="Caja" p={t_.caja} fuerte />
+                    <FilaResumen titulo="Cta. cte." p={t_.cta_cte} />
+                  </View>
+                </Seccion>
+              </View>
+              <ResponsableCaja key={hojaKey(ciudad, fecha)} hoja={hoja} ciudad={ciudad} fecha={fecha} sugerencias={caja.responsables} soloLectura={soloLectura} />
+            </View>
+          </View>
+
+          {permisos.configurar ? (
+            <Pressable onPress={onSaldos} style={{ alignSelf: "center", paddingVertical: 20 }} accessibilityRole="button">
+              <Text style={t(12, 700, C.teal)}>Saldos iniciales de {ciudad === "AQP" ? "Arequipa" : "Moquegua"} ›</Text>
             </Pressable>
           ) : null}
-        </View>
-
-        <View style={{ paddingHorizontal: 18, paddingTop: 22 }}>
-          <Seccion titulo="MOVIMIENTOS DEL DÍA" derecha={<Text style={t(11.5, 400, C.muted)}>{hoja.filas.length} {hoja.filas.length === 1 ? "registro" : "registros"}</Text>}>
-            <View style={[card(16), { overflow: "hidden" }]}>
-              {hoja.filas.map((f, i) => (
-                <FilaCard key={f.id} f={f} primero={i === 0} caja={caja} onPress={() => (f.transferencia_id ? onEnvio(f) : onEditar(f))} />
-              ))}
-              {hoja.filas.length === 0 ? <Text style={t(12, 400, C.muted, { padding: 26, textAlign: "center" })}>{pasado ? "No hubo movimientos ese día." : "Aún no hay movimientos hoy. Toca “Nuevo movimiento”."}</Text> : null}
-            </View>
-          </Seccion>
-        </View>
-
-        <View style={{ paddingHorizontal: 18, paddingTop: 22 }}>
-          <Seccion titulo="RESUMEN DEL DÍA">
-            <View style={[card(16), { overflow: "hidden" }]}>
-              <FilaResumen cab c1="INGRESO" c2="SALIDA" c3="TOTAL" />
-              <FilaResumen titulo="Efectivo" p={t_.efectivo} />
-              <FilaResumen titulo="Yape / Transf." p={t_.transf} />
-              <FilaResumen titulo="Caja" p={t_.caja} fuerte />
-              <FilaResumen titulo="Cta. cte." p={t_.cta_cte} />
-            </View>
-          </Seccion>
-        </View>
-
-        <ResponsableCaja key={hojaKey(ciudad, fecha)} hoja={hoja} ciudad={ciudad} fecha={fecha} sugerencias={caja.responsables} soloLectura={soloLectura} />
-
-        {permisos.configurar ? (
-          <Pressable onPress={onSaldos} style={{ alignSelf: "center", paddingVertical: 20 }} accessibilityRole="button">
-            <Text style={t(12, 700, C.teal)}>Saldos iniciales de {ciudad === "AQP" ? "Arequipa" : "Moquegua"} ›</Text>
-          </Pressable>
-        ) : null}
+        </Cuerpo>
       </ScrollView>
     </View>
   );

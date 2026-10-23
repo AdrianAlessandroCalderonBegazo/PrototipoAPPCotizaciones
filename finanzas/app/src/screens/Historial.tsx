@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { C, card, kicker, t } from "../theme";
 import { AvisoSync, CiudadSwitch, Etiqueta } from "../components/caja";
-import { TealGradient } from "../components/ui";
+import { Cuerpo, TealGradient } from "../components/ui";
+import { ANCHO, useEscritorio } from "../lib/layout";
 import { fdateLarga, money, today } from "../lib/format";
 import { r2 } from "../lib/caja/calc";
 import { apiJson } from "../lib/api";
@@ -26,6 +27,7 @@ export function Historial({ caja, estado, ciudad, setCiudad, permisos, onAbrirDi
   bottomInset: number;
 }) {
   const hoy = today();
+  const escritorio = useEscritorio();
 
   const dias = useMemo(() => {
     const por = new Map<string, Dia>();
@@ -41,7 +43,7 @@ export function Historial({ caja, estado, ciudad, setCiudad, permisos, onAbrirDi
   return (
     <View style={{ flex: 1 }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <TealGradient style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 26 }}>
+        <TealGradient ancho={ANCHO.panel} style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 26 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={kicker("rgba(255,255,255,.9)", 11)}>HISTORIAL</Text>
             <CiudadSwitch valor={ciudad} onChange={setCiudad} />
@@ -52,10 +54,10 @@ export function Historial({ caja, estado, ciudad, setCiudad, permisos, onAbrirDi
 
         <AvisoSync estado={estado} caja={caja} />
 
-        <View style={{ padding: 16, gap: 18 }}>
-          {permisos.revisar ? <PanelAlertas ciudad={ciudad} onAbrirDia={onAbrirDia} version={Object.keys(caja.hojas).length} /> : null}
+        <Cuerpo ancho={ANCHO.panel} style={{ padding: 16, gap: 18, flexDirection: escritorio ? "row" : "column", alignItems: "flex-start" }}>
+          {permisos.revisar ? <View style={{ flex: escritorio ? 2 : undefined, width: escritorio ? undefined : "100%" }}><PanelAlertas ciudad={ciudad} onAbrirDia={onAbrirDia} version={Object.keys(caja.hojas).length} /></View> : null}
 
-          <View style={{ gap: 10 }}>
+          <View style={{ gap: 10, flex: escritorio ? 3 : undefined, width: escritorio ? undefined : "100%" }}>
             <Text style={kicker(C.ink, 11.5)}>DÍAS</Text>
             {dias.length === 0 ? (
               <View style={[card(16), { padding: 26 }]}>
@@ -70,7 +72,7 @@ export function Historial({ caja, estado, ciudad, setCiudad, permisos, onAbrirDi
             )}
             <Text style={t(11, 400, C.muted, { lineHeight: 16 })}>Los egresos de caja chica de cualquier día están en la pestaña Caja chica. Un día cerrado ya no se puede cambiar.</Text>
           </View>
-        </View>
+        </Cuerpo>
       </ScrollView>
     </View>
   );

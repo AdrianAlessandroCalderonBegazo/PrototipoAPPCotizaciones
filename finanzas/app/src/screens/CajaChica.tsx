@@ -3,7 +3,8 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { C, card, kicker, t } from "../theme";
 import { AvisoSync, CiudadSwitch, Etiqueta, FotosSoloLectura } from "../components/caja";
 import { Sheet } from "../components/Overlays";
-import { PrimaryButton, SecondaryButton, TealGradient } from "../components/ui";
+import { Cuerpo, PrimaryButton, SecondaryButton, TealGradient } from "../components/ui";
+import { ANCHO } from "../lib/layout";
 import { catLabel } from "../lib/data";
 import { fdate, fdateLarga, money } from "../lib/format";
 import { conSaldoAcumulado } from "../lib/caja/calc";
@@ -57,7 +58,7 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <TealGradient style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 70 }}>
+        <TealGradient ancho={ANCHO.lista} style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 70 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <Text style={kicker("rgba(255,255,255,.9)", 11)}>CAJA CHICA</Text>
             <CiudadSwitch valor={ciudad} onChange={setCiudad} />
@@ -71,6 +72,7 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
 
         <AvisoSync estado={estado} caja={caja} />
 
+        <Cuerpo ancho={ANCHO.lista}>
         <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 18, marginTop: -44 }}>
           <View style={[card(16), { flex: 1, padding: 14, borderWidth: 0, elevation: 4, shadowColor: "#0D2233" }]}>
             <Text style={kicker(C.teal, 10)}>RECIBIDO</Text>
@@ -125,6 +127,7 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
             </View>
           ) : null}
         </View>
+        </Cuerpo>
       </ScrollView>
 
       {ver ? (
