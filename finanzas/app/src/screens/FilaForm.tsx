@@ -14,8 +14,15 @@ import { COMPROBANTES, COMPROBANTE_LABEL, TIPOS_FILA, TIPO_FILA_LABEL, CIUDAD_LA
 
 const monto = (n: number) => (n ? String(n) : "");
 
+type Sentido = "ingreso" | "egreso";
+const SENTIDOS = ["ingreso", "egreso"] as const;
+const SENTIDO_LABEL: Record<Sentido, string> = { ingreso: "Ingreso", egreso: "Egreso" };
+/** Un movimiento es un ingreso o un egreso, no los dos a la vez: una fila antigua con salidas y sin ingresos es un egreso. */
+const sentidoDe = (f?: Fila): Sentido => (f && f.caja_ingreso_efectivo + f.caja_ingreso_transf + f.cta_cte_ingreso === 0 && f.caja_salida_efectivo + f.caja_salida_transf + f.cta_cte_salida > 0 ? "egreso" : "ingreso");
+
 /** Una línea de la planilla "CAJA DIARIO": nueva o editando una existente. */
 export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset, bottomInset }: { ciudad: Ciudad; fecha: string; fila?: Fila; responsables: string[]; onClose: () => void; topInset: number; bottomInset: number }) {
+  const [sentido, setSentidoRaw] = useState<Sentido>(sentidoDe(fila));
   const [tipo, setTipo] = useState<TipoFila>(fila?.tipo ?? "VTA");
   const [descripcion, setDescripcion] = useState(fila?.descripcion ?? "");
   const [responsable, setResponsable] = useState(fila?.responsable ?? "");
@@ -33,6 +40,13 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
   const [intento, setIntento] = useState(false);
   const [borrando, setBorrando] = useState(false);
 
+  // al cambiar entre ingreso y egreso se borran los importes del otro lado (y la categoría del gasto, que solo aplica a egresos)
+  const setSentido = (v: Sentido) => {
+    if (v === sentido) return;
+    setSentidoRaw(v);
+    setM((p) => (v === "ingreso" ? { ...p, se: "", st: "", cs: "" } : { ...p, ie: "", it: "", ci: "" }));
+    if (v === "ingreso") (setCategoria(""), setSubcategoria(""));
+  };
   const setMonto = (k: keyof typeof m) => (v: string) => setM((p) => ({ ...p, [k]: cleanAmt(v) }));
   const armada = (): Fila => ({
     id: fila?.id ?? "nueva", orden: fila?.orden ?? 0, tipo, descripcion: descripcion.trim(), responsable: responsable.trim(), comprobante,
@@ -88,6 +102,10 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
         <Header kicker={`CAJA DIARIA · ${CIUDAD_LABEL[ciudad].toUpperCase()}`} title={fila ? "Editar movimiento" : "Nuevo movimiento"} sub="Como en la planilla de caja diaria" onBack={cancelar} topInset={topInset} tone="teal" />
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 28, gap: 20 }} keyboardShouldPersistTaps="handled">
           <View>
+            <FieldLabel>MOVIMIENTO</FieldLabel>
+            <OptionGrid options={SENTIDOS} value={sentido} onPick={setSentido} columns={2} height={46} fontSize={13.5} labels={SENTIDO_LABEL} />
+          </View>
+          <View>
             <FieldLabel>TIPO</FieldLabel>
             <OptionGrid options={TIPOS_FILA} value={tipo} onPick={setTipo} columns={3} height={44} fontSize={12.5} labels={TIPO_FILA_LABEL} />
           </View>
@@ -116,19 +134,26 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
           </View>
 
           <Seccion titulo="CAJA">
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <MontoCampo label="INGRESO · EFECTIVO" value={m.ie} onChangeText={setMonto("ie")} color={C.teal} />
-              <MontoCampo label="INGRESO · YAPE/TRANSF." value={m.it} onChangeText={setMonto("it")} color={C.teal} />
-            </View>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <MontoCampo label="SALIDA · EFECTIVO" value={m.se} onChangeText={setMonto("se")} color={C.red} />
-              <MontoCampo label="SALIDA · YAPE/TRANSF." value={m.st} onChangeText={setMonto("st")} color={C.red} />
-            </View>
+            {sentido === "ingreso" ? (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <MontoCampo label="INGRESO · EFECTIVO" value={m.ie} onChangeText={setMonto("ie")} color={C.teal} />
+                <MontoCampo label="INGRESO · YAPE/TRANSF." value={m.it} onChangeText={setMonto("it")} color={C.teal} />
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <MontoCampo label="SALIDA · EFECTIVO" value={m.se} onChangeText={setMonto("se")} color={C.red} />
+                <MontoCampo label="SALIDA · YAPE/TRANSF." value={m.st} onChangeText={setMonto("st")} color={C.red} />
+              </View>
+            )}
           </Seccion>
           <Seccion titulo="CUENTA CORRIENTE">
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <MontoCampo label="INGRESO" value={m.ci} onChangeText={setMonto("ci")} color={C.navy} />
-              <MontoCampo label="SALIDA" value={m.cs} onChangeText={setMonto("cs")} color={C.navy} />
+              {sentido === "ingreso" ? (
+                <MontoCampo label="INGRESO" value={m.ci} onChangeText={setMonto("ci")} color={C.navy} />
+              ) : (
+                <MontoCampo label="SALIDA" value={m.cs} onChangeText={setMonto("cs")} color={C.navy} />
+              )}
+              <View style={{ flex: 1 }} />
             </View>
             <ErrorText>{mostrar("montos")}</ErrorText>
           </Seccion>

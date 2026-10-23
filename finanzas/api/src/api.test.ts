@@ -129,7 +129,7 @@ test("validación de filas: lo que el ERP necesita se exige aquí", async () => 
   await malo(fila(h.id, { caja_ingreso_efectivo: 0, caja_salida_efectivo: 5 }), /categor/i); // gasto real sin categoría
   await malo(fila(h.id, { caja_ingreso_efectivo: 0, caja_salida_efectivo: 5, categoria: "Gastos fijos" }), /gasto fijo/i);
   await malo(fila(h.id, { tipo: "XX" }), /tipo/);
-  await malo(fila(h.id, { comprobante: "RECIBO" }), /comprobante/);
+  await malo(fila(h.id, { comprobante: "CONTRATO_TICKET" }), /comprobante/);
   await malo(fila(h.id, { categoria: "Inventada" }), /categor/i);
   assert.equal((await call("PUT", "/caja/filas/no-uuid", fila(h.id))).status, 400);
   assert.equal((await putFila(uid(), fila(uid()))).error?.code, "HOJA_NO_ENCONTRADA");

@@ -91,10 +91,11 @@ export function crearServidor(opts: { auth: Auth; svc: Servicio; permisos?: Perm
 
       // Solo desarrollo (AUTH_MODE=dev): el ERP real es quien inicia sesión en producción.
       if (loginDev && req.method === "POST" && path === "/auth/login") {
-        const { email = "", password = "" } = JSON.parse((await leer(req, MAX_JSON)).toString("utf8") || "{}");
-        if (!email || !password) throw new ApiError(400, "DATOS_INVALIDOS", "Ingresa tu correo y tu clave.");
-        const nombre = String(email).split("@")[0];
-        return json(200, { status: "success", data: { token: `dev:${nombre}:ADMIN`, user: { nombre_completo: nombre, email, rol_codigo: "ADMIN" } } });
+        const c = JSON.parse((await leer(req, MAX_JSON)).toString("utf8") || "{}");
+        const usuario = String(c.usuario ?? c.email ?? "");
+        if (!usuario || !(c.clave ?? c.password)) throw new ApiError(400, "DATOS_INVALIDOS", "Ingresa tu usuario y tu clave.");
+        const nombre = usuario.split("@")[0];
+        return json(200, { status: "success", data: { token: `dev:${nombre}:admin`, user: { nombre_completo: nombre, email: usuario, rol_codigo: "admin" }, permisos: permisos.de({ rol: "admin" }) } });
       }
 
       // Inicio de sesión: la app de Finanzas entra con el mismo usuario y clave del resto de la plataforma.

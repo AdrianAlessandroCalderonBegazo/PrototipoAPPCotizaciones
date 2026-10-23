@@ -13,12 +13,12 @@ export const TIPOS_FILA = ["VTA", "OBRA", "OTRO"] as const;
 export type TipoFila = (typeof TIPOS_FILA)[number];
 export const TIPO_FILA_LABEL: Record<TipoFila, string> = { VTA: "Venta", OBRA: "Obra", OTRO: "Otro" };
 
-export const COMPROBANTES = ["FACTURA", "BOLETA", "CONTRATO_TICKET", "NINGUNO"] as const;
+export const COMPROBANTES = ["FACTURA", "BOLETA", "RECIBO", "NINGUNO"] as const;
 export type Comprobante = (typeof COMPROBANTES)[number];
 export const COMPROBANTE_LABEL: Record<Comprobante, string> = {
   FACTURA: "Factura",
   BOLETA: "Boleta",
-  CONTRATO_TICKET: "Contrato / Ticket",
+  RECIBO: "Recibo",
   NINGUNO: "Sin comprobante",
 };
 
