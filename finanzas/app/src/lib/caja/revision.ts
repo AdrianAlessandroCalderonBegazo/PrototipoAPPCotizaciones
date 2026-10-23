@@ -47,7 +47,7 @@ const CAMPOS: Record<string, string> = {
   efectivo_contado: "efectivo contado", saldo_calculado: "saldo calculado", diferencia: "diferencia",
 };
 const IMPORTES = new Set(["caja_ingreso_efectivo", "caja_ingreso_transf", "caja_salida_efectivo", "caja_salida_transf", "cta_cte_ingreso", "cta_cte_salida", "monto", "saldo_inicial_caja", "saldo_inicial_cta_cte", "saldo_inicial_caja_chica", "efectivo_contado", "saldo_calculado", "diferencia"]);
-const COMPROBANTES: Record<string, string> = { FACTURA: "Factura", BOLETA: "Boleta", CONTRATO_TICKET: "Contrato / Ticket", NINGUNO: "Sin comprobante" };
+const COMPROBANTES: Record<string, string> = { FACTURA: "Factura", BOLETA: "Boleta", RECIBO: "Recibo", CONTRATO_TICKET: "Contrato / Ticket", NINGUNO: "Sin comprobante" };
 const TIPOS: Record<string, string> = { VTA: "Venta", OBRA: "Obra", OTRO: "Otro" };
 
 const soles = (n: number) => `S/ ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

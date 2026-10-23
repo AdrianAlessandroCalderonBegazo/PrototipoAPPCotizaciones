@@ -131,7 +131,7 @@ export function CajaDiaria({ caja, estado, ciudad, setCiudad, fecha, setFecha, h
           </Seccion>
         </View>
 
-        <Observaciones key={hojaKey(ciudad, fecha)} hoja={hoja} ciudad={ciudad} fecha={fecha} sugerencias={caja.responsables} soloLectura={soloLectura} />
+        <ResponsableCaja key={hojaKey(ciudad, fecha)} hoja={hoja} ciudad={ciudad} fecha={fecha} sugerencias={caja.responsables} soloLectura={soloLectura} />
 
         {permisos.configurar ? (
           <Pressable onPress={onSaldos} style={{ alignSelf: "center", paddingVertical: 20 }} accessibilityRole="button">
@@ -195,50 +195,34 @@ function FilaCard({ f, primero, caja, onPress }: { f: Fila; primero: boolean; ca
   );
 }
 
-const CAMPOS = [
-  ["responsable_caja", "RESPONSABLE DE CAJA", "¿Quién lleva la caja hoy?"],
-  ["obras_realizadas", "OBRAS REALIZADAS DEL DÍA", "Ej. Losa nivel 2"],
-  ["maletas", "MALETAS", ""],
-  ["escaleras", "ESCALERAS", ""],
-  ["encargado_obra", "ENCARGADO DE OBRA", "Nombre"],
-] as const;
-
-/** Pie de la planilla: se guarda al salir de cada campo. */
-function Observaciones({ hoja, ciudad, fecha, sugerencias, soloLectura }: { hoja: Hoja; ciudad: Ciudad; fecha: string; sugerencias: string[]; soloLectura: boolean }) {
-  const [v, setV] = useState({ responsable_caja: hoja.responsable_caja, obras_realizadas: hoja.obras_realizadas, maletas: hoja.maletas, escaleras: hoja.escaleras, encargado_obra: hoja.encargado_obra });
-  // si cambian desde afuera (llegó lo de otro dispositivo) y la persona no está escribiendo, se actualizan
-  useEffect(() => setV({ responsable_caja: hoja.responsable_caja, obras_realizadas: hoja.obras_realizadas, maletas: hoja.maletas, escaleras: hoja.escaleras, encargado_obra: hoja.encargado_obra }), [hoja.responsable_caja, hoja.obras_realizadas, hoja.maletas, hoja.escaleras, hoja.encargado_obra]);
-  const guardar = (k: (typeof CAMPOS)[number][0]) => {
-    const nuevo = v[k].trim();
-    if (nuevo !== hoja[k]) store.patchHoja(ciudad, fecha, { [k]: nuevo });
+/** Responsable de caja del día: se guarda al salir del campo. */
+function ResponsableCaja({ hoja, ciudad, fecha, sugerencias, soloLectura }: { hoja: Hoja; ciudad: Ciudad; fecha: string; sugerencias: string[]; soloLectura: boolean }) {
+  const [v, setV] = useState(hoja.responsable_caja);
+  // si cambia desde afuera (lo puso otra persona) se actualiza
+  useEffect(() => setV(hoja.responsable_caja), [hoja.responsable_caja]);
+  const guardar = () => {
+    const nuevo = v.trim();
+    if (nuevo !== hoja.responsable_caja) store.patchHoja(ciudad, fecha, { responsable_caja: nuevo });
   };
   return (
     <View style={{ paddingHorizontal: 18, paddingTop: 22 }}>
-      <Seccion titulo="OBSERVACIONES">
-        <View style={[card(16), { padding: 14, gap: 14 }]}>
-          {CAMPOS.map(([k, label, ph]) => (
-            <View key={k}>
-              <Text style={kicker(C.muted, 10)}>{label}</Text>
-              <View style={{ marginTop: 6 }}>
-                <TextField value={v[k]} onChangeText={(x) => setV((p) => ({ ...p, [k]: x }))} onBlur={() => guardar(k)} placeholder={soloLectura ? "" : ph} accessibilityLabel={label} editable={!soloLectura} style={soloLectura ? { backgroundColor: C.bg } : undefined} />
-              </View>
-              {k === "responsable_caja" && !v[k] && !soloLectura && sugerencias.length ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                  {sugerencias.slice(0, 4).map((n) => (
-                    <Pressable key={n} onPress={() => store.patchHoja(ciudad, fecha, { responsable_caja: n })} style={{ paddingVertical: 5, paddingHorizontal: 11, borderRadius: 999, borderWidth: 1, borderColor: C.border }}>
-                      <Text style={t(11.5, 700)}>{n}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
+      <Seccion titulo="RESPONSABLE DE CAJA">
+        <View style={[card(16), { padding: 14 }]}>
+          <TextField value={v} onChangeText={setV} onBlur={guardar} placeholder={soloLectura ? "" : "¿Quién lleva la caja hoy?"} accessibilityLabel="Responsable de caja" editable={!soloLectura} style={soloLectura ? { backgroundColor: C.bg } : undefined} />
+          {!v && !soloLectura && sugerencias.length ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+              {sugerencias.slice(0, 4).map((n) => (
+                <Pressable key={n} onPress={() => store.patchHoja(ciudad, fecha, { responsable_caja: n })} style={{ paddingVertical: 5, paddingHorizontal: 11, borderRadius: 999, borderWidth: 1, borderColor: C.border }}>
+                  <Text style={t(11.5, 700)}>{n}</Text>
+                </Pressable>
+              ))}
             </View>
-          ))}
+          ) : null}
         </View>
       </Seccion>
     </View>
   );
 }
-
 
 /** Resultado del cierre del día: quién cerró, lo contado y la diferencia. */
 function CierreResumen({ cierre, puedeReabrir, onReabrir }: { cierre: Cierre; puedeReabrir: boolean; onReabrir: () => void }) {

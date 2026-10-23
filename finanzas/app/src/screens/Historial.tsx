@@ -31,7 +31,7 @@ export function Historial({ caja, estado, ciudad, setCiudad, permisos, onAbrirDi
     const por = new Map<string, Dia>();
     const dia = (fecha: string) => por.get(fecha) ?? (por.set(fecha, { fecha, chica: [] }), por.get(fecha)!);
     for (const h of Object.values(caja.hojas)) {
-      const util = h.filas.length > 0 || [h.obras_realizadas, h.maletas, h.escaleras, h.encargado_obra].some((x) => x.trim());
+      const util = h.filas.length > 0 || !!h.cierre;
       if (h.ciudad === ciudad && h.fecha < hoy && util) dia(h.fecha).hoja = h;
     }
     for (const m of caja.chica[ciudad].movs) if (m.fecha < hoy) dia(m.fecha).chica.push(m);

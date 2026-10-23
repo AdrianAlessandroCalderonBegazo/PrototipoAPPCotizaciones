@@ -163,24 +163,24 @@ export async function generarXlsx(r: Reporte): Promise<Uint8Array> {
     pie(ws);
     ws.pageSetup.printTitlesRow = "4:4";
 
-    // ---- Observaciones de cada día (pie de la planilla) ----------------------------------------
-    const ob = wb.addWorksheet("Observaciones", { views: [{ state: "frozen", ySplit: 4 }] });
-    titulo(ob, "Caja diaria · observaciones del día", sub, 7);
-    encabezado(ob, 4, ["Fecha", "Ciudad", "Responsable de caja", "Obras realizadas del día", "Maletas", "Escaleras", "Encargado de obra"]);
+    // ---- Responsable de caja de cada día --------------------------------------------------------
+    const ob = wb.addWorksheet("Responsable de caja", { views: [{ state: "frozen", ySplit: 4 }] });
+    titulo(ob, "Caja diaria · responsable de caja", sub, 3);
+    encabezado(ob, 4, ["Fecha", "Ciudad", "Responsable de caja"]);
     let m = 4;
     for (const h of r.hojas) {
       m++;
       const row = ob.getRow(m);
-      row.values = [new Date(h.fecha + "T12:00:00"), CIUDAD_LABEL[h.ciudad], h.responsable_caja, h.obras_realizadas, h.maletas, h.escaleras, h.encargado_obra];
+      row.values = [new Date(h.fecha + "T12:00:00"), CIUDAD_LABEL[h.ciudad], h.responsable_caja];
       row.eachCell({ includeEmpty: true }, (c, k) => {
-        if (k > 7) return;
+        if (k > 3) return;
         c.border = borde;
         c.font = { name: FUENTE, size: 10 } as Font;
         c.alignment = { vertical: "top", wrapText: true } as Partial<Alignment>;
         if (k === 1) c.numFmt = "dd/mm/yyyy";
       });
     }
-    anchos(ob, [12, 11, 22, 44, 10, 10, 22]);
+    anchos(ob, [12, 11, 30]);
     pie(ob);
   }
 

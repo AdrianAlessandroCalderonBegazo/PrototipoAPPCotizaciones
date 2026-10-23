@@ -1,6 +1,6 @@
 # API de Caja diaria y Caja chica
 
-Contrato entre la PWA (`app/`) y el servidor. La implementación está en `api/` (Node + Postgres) y corre junto a la API del Cotizador, con la **misma base de datos, los mismos usuarios y las mismas sesiones**. Las tablas están en `db/migrations/` (`001_caja.sql` y `002_cierre_auditoria.sql`).
+Contrato entre la PWA (`app/`) y el servidor. La implementación está en `api/` (Node + Postgres) y corre junto a la API del Cotizador, con la **misma base de datos, los mismos usuarios y las mismas sesiones**. Las tablas están en `db/migrations/` (`001_caja.sql`, `002_cierre_auditoria.sql` y `003_comprobante_recibo.sql`).
 
 Los nombres de campo de la API, de las tablas y del modelo de la app (`app/src/lib/caja/types.ts`) coinciden a propósito.
 
@@ -51,7 +51,7 @@ Los nombres de campo de la API, de las tablas y del modelo de la app (`app/src/l
   "tipo": "VTA | OBRA | OTRO",
   "descripcion": "Venta de panel",
   "responsable": "Carlos",
-  "comprobante": "FACTURA | BOLETA | CONTRATO_TICKET | NINGUNO",
+  "comprobante": "FACTURA | BOLETA | RECIBO | NINGUNO",
   "caja_ingreso_efectivo": 0, "caja_ingreso_transf": 0,
   "caja_salida_efectivo": 0,  "caja_salida_transf": 0,
   "cta_cte_ingreso": 0,       "cta_cte_salida": 0,

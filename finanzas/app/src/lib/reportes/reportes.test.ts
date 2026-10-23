@@ -105,7 +105,7 @@ test("Excel: hojas, valores numéricos reales, formatos, filtros, fila congelada
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(bytes as unknown as ArrayBuffer);
-  assert.deepEqual(wb.worksheets.map((w) => w.name), ["Resumen", "Caja diaria", "Observaciones", "Caja chica"]);
+  assert.deepEqual(wb.worksheets.map((w) => w.name), ["Resumen", "Caja diaria", "Responsable de caja", "Caja chica"]);
 
   const cd = wb.getWorksheet("Caja diaria")!;
   assert.equal(cd.views[0].state, "frozen", "los títulos quedan fijos al bajar");
@@ -134,9 +134,9 @@ test("Excel: hojas, valores numéricos reales, formatos, filtros, fila congelada
 
   const ch = wb.getWorksheet("Caja chica")!;
   assert.equal(ch.getRow(5).getCell(9).value, 250, "saldo acumulado tras el primer movimiento");
-  const ob = wb.getWorksheet("Observaciones")!;
-  assert.match(String(ob.getRow(5).getCell(4).value), /Torre Aurora/);
-  assert.equal(ob.getRow(5).getCell(7).value, "Luis Mamani Ñahui");
+  const ob = wb.getWorksheet("Responsable de caja")!;
+  assert.equal(ob.getRow(5).getCell(3).value, "Rosa Quispe");
+  assert.equal(ob.getRow(4).getCell(4).value, null, "ya no hay columnas de obras, maletas, escaleras ni encargado");
 
   // elegir solo un libro deja solo esa hoja
   const solo = new ExcelJS.Workbook();
