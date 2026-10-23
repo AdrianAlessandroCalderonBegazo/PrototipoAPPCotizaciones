@@ -74,7 +74,7 @@ before(async () => {
   });
   base = `http://127.0.0.1:${servidor.address().port}`;
   sesiones.admin = await entrar('admin', 'admin-clave-1');
-  for (const [usuario, rol] of [['juan', 'empleado'], ['carlos', 'encargado'], ['pedro', 'almacen'], ['ana', 'almacen'], ['vera', 'vendedor']]) {
+  for (const [usuario, rol] of [['juan', 'empleado'], ['carlos', 'encargado'], ['pedro', 'almacen'], ['ana', 'almacen'], ['vera', 'vendedor'], ['fina', 'finanzas']]) {
     const r = await llamar('POST', '/api/usuarios', { token: sesiones.admin, cuerpo: { usuario, nombre: usuario.toUpperCase(), clave: 'clave-segura', rol } });
     assert.equal(r.estado, 201, JSON.stringify(r.datos));
     sesiones[usuario] = await entrar(usuario, 'clave-segura');
@@ -102,6 +102,7 @@ describe('acceso', () => {
     const r = await llamar('GET', '/api/usuarios', { token: sesiones.admin });
     assert.equal(r.estado, 200);
     assert.ok(r.datos.some((u) => u.usuario === 'carlos' && u.rol === 'encargado'));
+    assert.ok(r.datos.some((u) => u.usuario === 'fina' && u.rol === 'finanzas'));
     assert.equal((await llamar('POST', '/api/usuarios', { token: sesiones.admin, cuerpo: { usuario: 'juan', nombre: 'x', clave: 'clave-segura', rol: 'empleado' } })).estado, 409);
   });
 

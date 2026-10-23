@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { consulta } from './db.js';
 import { falla } from './errores.js';
 
-export const ROLES = ['admin', 'empleado', 'encargado', 'almacen', 'vendedor'];
+export const ROLES = ['admin', 'empleado', 'encargado', 'almacen', 'vendedor', 'finanzas'];
 const DIAS_SESION = 30;
 const MINUTOS_EDICION = 15;
 

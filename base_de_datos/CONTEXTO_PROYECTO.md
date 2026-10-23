@@ -82,6 +82,7 @@ Hecho después de lo anterior; reemplaza a la idea de MySQL/PHP:
   Prueba de punta a punta: `test/integracion_api_test.dart` (necesita una API de prueba corriendo).
 - **Vista general** (`servidor/portal/index.html`): tablas simples de lo que hace todo el equipo, detalle por ítem, usuarios y bitácora.
 - **Despliegue**: `servidor/docker-compose.yml` (db + api + Caddy con HTTPS), `Caddyfile`, scripts de respaldo/restauración, guía `servidor/DESPLIEGUE.md`.
+- **Finanzas** (carpeta `finanzas/`): PWA Expo/React Native Web en línea (no offline; varias personas a la vez) + API Node/TS (`finanzas/api`) que comparte la base, los usuarios y las sesiones de la API principal. Rol nuevo `finanzas`. Incluye cierre del día (arqueo con efectivo contado, día bloqueado), historial de cambios (`caja_auditoria` con valor anterior), roles en el servidor (`FINANZAS_ROLES_*`), alertas de descuadre, concurrencia con `version` y refresco cada 6 s. Se publica en `finanzas.icrenergy.tech` (`/api-caja`), y la pestaña **Finanzas** del portal (`app.`) muestra saldos, alertas, cierres y cambios. El respaldo incluye la base y las fotos de recibos.
 - Dominio: `icrenergy.tech` (subdominios cotizador., app., api., finanzas.). VPS KVM 4 de Hostinger, IP 200.141.24.38.
 - Pendiente: probar el despliegue real en el VPS (Docker no se pudo probar en el entorno de desarrollo), roles/login con el ERP, productos desde el ERP,
-  app de finanzas, respaldo externo, revisar el plazo del VPS (la caducidad mostraba 2026-11-22).
+  respaldo externo, revisar el plazo del VPS (la caducidad mostraba 2026-11-22).

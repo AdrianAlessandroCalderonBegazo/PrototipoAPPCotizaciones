@@ -1,4 +1,5 @@
-# Cotizador ICR en un VPS: base de datos PostgreSQL + API + HTTPS automático.
+# Cotizador ICR + Finanzas en un VPS: base de datos PostgreSQL + dos APIs + HTTPS automático.
+# Estructura esperada:  /opt/icr/servidor (esta carpeta) y /opt/icr/finanzas (al lado).
 #   1) cp .env.example .env   y completa los valores
 #   2) docker compose up -d --build
 # Más detalles en DESPLIEGUE.md
@@ -39,11 +40,39 @@ services:
     volumes:
       - uploads:/app/uploads
 
+  # Finanzas (caja diaria y caja chica). Usa la MISMA base y los MISMOS usuarios y sesiones que la API de arriba:
+  # quien entra en la app entra aquí con el mismo usuario; su rol decide qué puede hacer.
+  finanzas-api:
+    build:
+      context: ../finanzas
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://icr:${POSTGRES_PASSWORD}@db:5432/cotizador
+      MAIN_API_URL: http://api:3000
+      API_PREFIX: /api-caja
+      UPLOAD_DIR: /data/fotos
+      FINANZAS_ROLES: ${FINANZAS_ROLES:-}
+      FINANZAS_ROLES_CORREGIR: ${FINANZAS_ROLES_CORREGIR:-}
+      FINANZAS_ROLES_CERRAR: ${FINANZAS_ROLES_CERRAR:-}
+      FINANZAS_ROLES_REABRIR: ${FINANZAS_ROLES_REABRIR:-}
+      FINANZAS_ROLES_CONFIG: ${FINANZAS_ROLES_CONFIG:-}
+      FINANZAS_ROLES_REVISAR: ${FINANZAS_ROLES_REVISAR:-}
+      TZ: America/Lima
+    volumes:
+      - finanzas_fotos:/data/fotos
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
       - api
+      - finanzas-api
     ports:
       - "80:80"
       - "443:443"
@@ -52,11 +81,13 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./web:/srv/web:ro
+      - ./finanzas-web:/srv/finanzas:ro
       - caddy_data:/data
       - caddy_config:/config
 
 volumes:
   pgdata:
   uploads:
+  finanzas_fotos:
   caddy_data:
   caddy_config:
