@@ -1,6 +1,6 @@
 # HTTPS automático (Let's Encrypt) para cada subdominio. DOMINIO viene del .env
-# (por ejemplo icrenergy.tech). Los registros DNS tipo A de cotizador., app. y
-# api. deben apuntar a la IP del VPS.
+# (por ejemplo icrenergy.tech). Los registros DNS tipo A de cotizador., app.,
+# api. y finanzas. deben apuntar a la IP del VPS.
 
 (seguridad) {
 	encode zstd gzip
@@ -36,10 +36,18 @@ cotizador.{$DOMINIO} {
 	}
 }
 
-# Vista general: la API sirve también la página (y /api)
+# Vista general: la API sirve también la página (y /api). Finanzas va por /api-caja (la pestaña Finanzas del portal).
 app.{$DOMINIO} {
 	import seguridad
-	reverse_proxy api:3000
+	request_body {
+		max_size 12MB
+	}
+	handle /api-caja/* {
+		reverse_proxy finanzas-api:8787
+	}
+	handle {
+		reverse_proxy api:3000
+	}
 }
 
 # La API sola (para el APK u otras apps)
@@ -51,8 +59,23 @@ api.{$DOMINIO} {
 	reverse_proxy api:3000
 }
 
-# Reservado para la app de finanzas (todavía no existe)
+# Finanzas (caja diaria, caja chica, cierre del día, reportes): la PWA + su API en /api-caja (mismo origen, sin CORS).
+# Es una app en línea: nada se guarda para usar sin internet, por eso index.html y sw.js nunca se quedan en caché.
 finanzas.{$DOMINIO} {
 	import seguridad
-	respond "Finanzas: próximamente." 200
+	request_body {
+		max_size 12MB
+	}
+	handle /api-caja/* {
+		reverse_proxy finanzas-api:8787
+	}
+	handle {
+		root * /srv/finanzas
+		header /_expo/* Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		header /sw.js Cache-Control "no-cache"
+		header /manifest.webmanifest Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
 }

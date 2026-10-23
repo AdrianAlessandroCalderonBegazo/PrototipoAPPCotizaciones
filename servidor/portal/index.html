@@ -109,6 +109,7 @@
 <script>
 'use strict';
 const API = '/api';
+const API_CAJA = '/api-caja'; // la API de Finanzas (mismo usuario y misma sesión)
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const soles = (n) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -123,7 +124,8 @@ const ETIQ = {
 };
 const ETIQ_HER = { pendiente: 'En obra · por devolver' };
 const pildora = (estado, tipo) => `<span class="pildora p-${esc(estado)}">${esc((tipo === 'her' && ETIQ_HER[estado]) || ETIQ[estado] || estado)}</span>`;
-const ROLES = { admin: 'Administrador', empleado: 'Empleado', encargado: 'Encargado', almacen: 'Almacén', vendedor: 'Vendedor' };
+const ROLES = { admin: 'Administrador', empleado: 'Empleado', encargado: 'Encargado', almacen: 'Almacén', vendedor: 'Vendedor', finanzas: 'Finanzas' };
+const VE_FINANZAS = ['admin', 'finanzas', 'encargado'];
 
 let token = null, yo = null, pestana = 'requerimientos', datos = {}, filtro = { q: '', estado: '' }, reloj = null;
 
@@ -138,6 +140,14 @@ async function api(metodo, ruta, cuerpo) {
   if (r.status === 401 && token) { salir(); throw new Error('La sesión venció. Ingresa de nuevo.'); }
   if (!r.ok) throw new Error((json && json.error) || 'Error ' + r.status);
   return json;
+}
+
+async function apiCaja(ruta) {
+  const r = await fetch(API_CAJA + ruta, { headers: { Authorization: 'Bearer ' + token } });
+  const json = await r.json().catch(() => null);
+  if (r.status === 401) { salir(); throw new Error('La sesión venció. Ingresa de nuevo.'); }
+  if (!r.ok || !json || json.status !== 'success') throw new Error((json && json.error && json.error.message) || 'Error ' + r.status);
+  return json.data;
 }
 
 /* ---------------- sesión ---------------- */
@@ -168,7 +178,7 @@ function iniciar() {
   const rol = ROLES[yo.rol] || yo.rol;
   $('quien').textContent = yo.nombre === rol ? rol : `${yo.nombre} · ${rol}`;
   mostrar('app');
-  pestana = 'requerimientos';
+  pestana = yo.rol === 'finanzas' ? 'finanzas' : 'requerimientos';
   dibujarPestanas();
   cargar();
   clearInterval(reloj);
@@ -184,6 +194,7 @@ async function cargar() {
     datos = { ...datos, resumen, requerimientos, herramientas, cotizaciones };
     if (pestana === 'usuarios' && yo.rol === 'admin') datos.usuarios = await api('GET', '/usuarios');
     if (pestana === 'bitacora') datos.bitacora = await api('GET', '/bitacora');
+    if (pestana === 'finanzas') await cargarFinanzas();
     $('pie').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-PE') + ' · se actualiza solo cada 30 segundos';
     dibujarTarjetas(); dibujar();
   } catch (err) { $('pie').textContent = 'No se pudo actualizar: ' + err.message; }
@@ -203,6 +214,7 @@ function dibujarTarjetas() {
 /* ---------------- pestañas ---------------- */
 function dibujarPestanas() {
   const lista = [['requerimientos', 'Requerimientos'], ['herramientas', 'Herramientas'], ['cotizaciones', 'Cotizaciones']];
+  if (VE_FINANZAS.includes(yo.rol)) lista.unshift(['finanzas', 'Finanzas']);
   if (yo.rol === 'admin') lista.push(['usuarios', 'Usuarios']);
   if (yo.rol === 'admin' || yo.rol === 'encargado') lista.push(['bitacora', 'Quién hizo qué']);
   $('pestanas').innerHTML = lista.map(([k, t]) => `<button data-p="${k}" class="${k === pestana ? 'activa' : ''}">${t}</button>`).join('');
@@ -210,6 +222,7 @@ function dibujarPestanas() {
     pestana = b.dataset.p; filtro = { q: '', estado: '' }; dibujarPestanas();
     if (pestana === 'usuarios') datos.usuarios = await api('GET', '/usuarios');
     if (pestana === 'bitacora') datos.bitacora = await api('GET', '/bitacora');
+    if (pestana === 'finanzas') { dibujar(); await cargarFinanzas(); }
     dibujar();
   }));
 }
@@ -230,6 +243,7 @@ function dibujar() {
   if (pestana === 'requerimientos') c.innerHTML = barra([['pendiente', 'Por aprobar'], ['aprobado', 'Por alistar'], ['listo', 'Listos'], ['entregado', 'Entregados']]) + '<div class="tabla" id="tabla"></div>';
   else if (pestana === 'herramientas') c.innerHTML = barra([['registrado', 'Por confirmar salida'], ['pendiente', 'En obra'], ['conforme', 'Conformes']]) + '<div class="tabla" id="tabla"></div>';
   else if (pestana === 'cotizaciones') c.innerHTML = barra(null) + '<div class="tabla" id="tabla"></div>';
+  else if (pestana === 'finanzas') return dibujarFinanzas();
   else if (pestana === 'usuarios') return dibujarUsuarios();
   else if (pestana === 'bitacora') return dibujarBitacora();
   enlazarBarra(); dibujarFilas();
@@ -364,6 +378,49 @@ function formUsuario() {
       $('detalle').close(); datos.usuarios = await api('GET', '/usuarios'); dibujarUsuarios();
     } catch (err) { $('eU').textContent = err.message; }
   });
+}
+
+/* ---------------- finanzas (caja diaria y caja chica) ---------------- */
+async function cargarFinanzas() {
+  try { datos.finanzas = await apiCaja('/caja/resumen'); datos.finanzasError = null; }
+  catch (e) { datos.finanzasError = e.message; }
+  if (pestana === 'finanzas') dibujarFinanzas();
+}
+const dia = (f) => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(f || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (f || '—'); };
+const NIVEL = { alta: 'p-urgente', media: 'p-pendiente', info: 'p-gris' };
+const ACCION = { crear: 'Registró', editar: 'Modificó', eliminar: 'Eliminó', cerrar: 'Cerró el día', reabrir: 'Reabrió el día', anular: 'Anuló', config: 'Cambió saldos iniciales', subir_foto: 'Agregó foto', quitar_foto: 'Quitó foto' };
+function dibujarFinanzas() {
+  const c = $('contenido');
+  if (datos.finanzasError) { c.innerHTML = `<div class="vacio">No se pudo cargar Finanzas: ${esc(datos.finanzasError)}</div>`; return; }
+  const f = datos.finanzas;
+  if (!f) { c.innerHTML = '<div class="vacio">Cargando…</div>'; return; }
+  const NOMBRE = { AQP: 'Arequipa', MOQ: 'Moquegua' };
+  const kpis = Object.entries(f.ciudades).map(([k, v]) => {
+    const h = v.hoy;
+    return `<div class="kpi"><b>${soles(v.caja.saldo)}</b><span>${NOMBRE[k] || k} · saldo de caja</span></div>` +
+      `<div class="kpi ${v.caja_chica.saldo < 0 ? 'alerta' : ''}"><b>${soles(v.caja_chica.saldo)}</b><span>${NOMBRE[k] || k} · caja chica</span></div>` +
+      `<div class="kpi"><b>${h ? h.movimientos : 0}</b><span>${NOMBRE[k] || k} · movimientos hoy${h && h.cierre ? ' (cerrado)' : ''}</span></div>`;
+  }).join('');
+  const al = f.alertas || {};
+  const alertas = (f.alertas_principales || []).map((a) =>
+    `<tr><td><span class="pildora ${NIVEL[a.nivel] || 'p-gris'}">${esc(a.nivel)}</span></td><td><b>${esc(a.titulo)}</b><br><small style="color:var(--suave)">${esc(a.detalle)}</small></td><td>${esc(NOMBRE[a.ciudad] || a.ciudad || '')}</td><td>${dia(a.fecha)}</td></tr>`);
+  const dias = Object.entries(f.ciudades).flatMap(([k, v]) => (v.ultimos_dias || []).map((d) => ({ ...d, ciudad: k })))
+    .sort((a, b) => b.fecha.localeCompare(a.fecha) || a.ciudad.localeCompare(b.ciudad)).map((d) => {
+      const ci = d.cierre;
+      const estado = ci ? (ci.diferencia === 0 ? '<span class="pildora p-conforme">Cerrado · cuadra</span>' : `<span class="pildora p-urgente">Cerrado · ${ci.diferencia > 0 ? 'sobra' : 'falta'} ${soles(Math.abs(ci.diferencia))}</span>`) : '<span class="pildora p-gris">Sin cerrar</span>';
+      return `<tr><td>${dia(d.fecha)}</td><td>${esc(NOMBRE[d.ciudad] || d.ciudad)}</td><td class="num">${d.movimientos}</td><td class="num">${soles(d.ingresos)}</td><td class="num">${soles(d.salidas)}</td><td class="num">${soles(d.saldo_final_caja)}</td><td>${estado}${ci ? `<br><small style="color:var(--suave)">${esc(ci.cerrada_por || '')}</small>` : ''}</td></tr>`;
+    });
+  const cambios = (f.cambios_recientes || []).map((x) =>
+    `<tr><td>${fecha(x.creado_en)}</td><td>${esc(x.usuario || '—')}</td><td>${esc(ACCION[x.accion] || x.accion)} · ${esc(x.entidad)}</td><td>${esc(NOMBRE[x.ciudad] || x.ciudad || '')} ${x.fecha_dia ? dia(x.fecha_dia) : ''}${x.motivo ? '<br><small style="color:var(--suave)">' + esc(x.motivo) + '</small>' : ''}</td></tr>`);
+  c.innerHTML =
+    `<div class="tarjetas">${kpis}</div>` +
+    `<h3 style="margin:18px 0 8px">Alertas <small style="color:var(--suave)">(${al.alta || 0} altas · ${al.media || 0} medias)</small></h3>` +
+    '<div class="tabla">' + tabla(['Nivel', 'Detalle', 'Ciudad', 'Día'], alertas, 'Todo en orden: sin alertas.') + '</div>' +
+    '<h3 style="margin:18px 0 8px">Últimos días</h3>' +
+    '<div class="tabla">' + tabla(['Día', 'Ciudad', 'Mov.#', 'Ingresos#', 'Salidas#', 'Saldo caja#', 'Cierre'], dias, 'Aún no hay movimientos.') + '</div>' +
+    '<h3 style="margin:18px 0 8px">Cambios recientes</h3>' +
+    '<div class="tabla">' + tabla(['Cuándo', 'Quién', 'Qué', 'Día'], cambios, 'Sin cambios todavía.') + '</div>' +
+    '<p class="pie">Los movimientos se registran en <b>finanzas.icrenergy.tech</b>; aquí se ven en conjunto, igual que lo demás.</p>';
 }
 
 /* ---------------- bitácora ---------------- */

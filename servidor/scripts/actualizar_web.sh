@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Publica una versión nueva de la app web:  ./scripts/actualizar_web.sh /root/app_web_icr.zip
+# (para la de Finanzas: ./scripts/actualizar_finanzas.sh /root/finanzas_web.zip, que usa la carpeta finanzas-web)
 # (el zip sale del flujo "Build web" de GitHub Actions; ver DESPLIEGUE.md)
 #
 # Importante: la carpeta "web" está montada dentro del contenedor de Caddy, así que NO se
@@ -7,6 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ZIP="${1:?Indica el .zip de la app web}"
+CARPETA="${2:-web}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 unzip -q "$ZIP" -d "$TMP"
@@ -17,11 +19,11 @@ if [ ! -f "$ORIGEN/index.html" ]; then
 fi
 [ -n "$ORIGEN" ] && [ -f "$ORIGEN/index.html" ] || { echo "El zip no parece ser la app web (no tiene index.html)." >&2; exit 1; }
 
-mkdir -p web
+mkdir -p "$CARPETA"
 # Copia de la versión anterior por si hay que volver atrás
-if [ -n "$(ls -A web 2>/dev/null)" ]; then
-  rm -rf web.anterior && mkdir web.anterior && cp -a web/. web.anterior/
+if [ -n "$(ls -A "$CARPETA" 2>/dev/null)" ]; then
+  rm -rf "$CARPETA.anterior" && mkdir "$CARPETA.anterior" && cp -a "$CARPETA"/. "$CARPETA.anterior/"
 fi
-find web -mindepth 1 -delete
-cp -a "$ORIGEN"/. web/
-echo "App web actualizada ($(find web -type f | wc -l) archivos). La versión anterior quedó en web.anterior."
+find "$CARPETA" -mindepth 1 -delete
+cp -a "$ORIGEN"/. "$CARPETA"/
+echo "App web actualizada en $CARPETA ($(find "$CARPETA" -type f | wc -l) archivos). La versión anterior quedó en $CARPETA.anterior."

@@ -27,6 +27,7 @@ const rolesUsuario = {
   'encargado': 'Encargado',
   'almacen': 'Almacén',
   'vendedor': 'Vendedor',
+  'finanzas': 'Finanzas',
 };
 
 /// Sesión de la persona que usa la app. Sin servidor no hay usuarios: todo
