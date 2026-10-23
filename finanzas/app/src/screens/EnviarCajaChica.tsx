@@ -1,3 +1,4 @@
+import { CONTENIDO_FORMULARIO } from "../lib/layout";
 import { useState } from "react";
 import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 import { C, card, t } from "../theme";
@@ -30,7 +31,7 @@ export function EnviarCajaChica({ caja, ciudad, fecha, responsable, onClose, top
     <Screen>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
         <Header kicker={`CAJA DIARIA · ${CIUDAD_LABEL[ciudad].toUpperCase()}`} title="Enviar a caja chica" sub={fdateLarga(fecha)} onBack={onClose} topInset={topInset} tone="teal" />
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ ...CONTENIDO_FORMULARIO, paddingTop: 20, paddingHorizontal: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={[card(14), { flex: 1, padding: 14 }]}>
               <Text style={t(10, 800, C.muted, { letterSpacing: 1 })}>CAJA DIARIA</Text>

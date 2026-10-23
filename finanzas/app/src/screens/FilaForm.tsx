@@ -1,3 +1,4 @@
+import { CONTENIDO_FORMULARIO } from "../lib/layout";
 import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, View } from "react-native";
 import { C, t } from "../theme";
@@ -100,7 +101,7 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
     <Screen>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
         <Header kicker={`CAJA DIARIA · ${CIUDAD_LABEL[ciudad].toUpperCase()}`} title={fila ? "Editar movimiento" : "Nuevo movimiento"} sub="Como en la planilla de caja diaria" onBack={cancelar} topInset={topInset} tone="teal" />
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 28, gap: 20 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ ...CONTENIDO_FORMULARIO, paddingTop: 20, paddingHorizontal: 20, paddingBottom: 28, gap: 20 }} keyboardShouldPersistTaps="handled">
           <View>
             <FieldLabel>MOVIMIENTO</FieldLabel>
             <OptionGrid options={SENTIDOS} value={sentido} onPick={setSentido} columns={2} height={46} fontSize={13.5} labels={SENTIDO_LABEL} />

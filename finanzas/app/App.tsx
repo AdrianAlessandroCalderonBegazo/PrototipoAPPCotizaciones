@@ -14,7 +14,8 @@ import { CajaDiariaFlujo } from "./src/screens/CajaDiariaFlujo";
 import { CajaChicaFlujo } from "./src/screens/CajaChicaFlujo";
 import { Historial } from "./src/screens/Historial";
 import { Reportes } from "./src/screens/Reportes";
-import { TabBar, type Pestana } from "./src/components/caja";
+import { MenuLateral, TabBar, type Pestana } from "./src/components/caja";
+import { ANCHO, useEscritorio } from "./src/lib/layout";
 import { Avisos } from "./src/components/Overlays";
 
 export default function App() {
@@ -38,6 +39,7 @@ function Shell() {
   const insets = useSafeAreaInsets();
   const caja = useCaja();
   const estado = useEstadoSync();
+  const escritorio = useEscritorio();
   const [listo, setListo] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [tab, setTab] = useState<Pestana>("diaria");
@@ -68,16 +70,22 @@ function Shell() {
   const cambiarCiudad = (c: Ciudad) => store.setCiudad(c);
   const verTabs = (oculto: boolean) => setSinTabs(oculto);
 
+  const salir = () => void logout().then(() => store.reiniciar()).then(() => setSession(null));
+  const conSesion = !!session && session.permisos.acceso;
+
   return (
-    // En pantallas anchas (computadora) la app se queda en una columna angosta, centrada, como en el teléfono.
-    <View style={{ flex: 1, width: "100%", maxWidth: 560, alignSelf: "center", backgroundColor: C.bg }}>
+    // Teléfono (y tableta): una columna. Computadora: menú lateral a la izquierda y el contenido en un panel centrado.
+    <View style={{ flex: 1, width: "100%", flexDirection: escritorio && conSesion ? "row" : "column", maxWidth: escritorio ? undefined : 640, alignSelf: "center", backgroundColor: escritorio && conSesion ? C.stripeB : C.bg }}>
       {!session ? (
         <Login onLoggedIn={() => void loadSession().then((s) => (setSession(s), sync.sincronizar()))} {...inset} />
       ) : !session.permisos.acceso ? (
-        <SinAcceso session={session} onSalir={() => void logout().then(() => store.reiniciar()).then(() => setSession(null))} {...inset} />
+        <SinAcceso session={session} onSalir={salir} {...inset} />
       ) : (
         <>
-          <View style={{ flex: 1 }}>
+          {escritorio ? <MenuLateral activa={tab} onPick={setTab} nombre={session.nombre} rol={ROL_LABEL[session.rolCodigo] ?? session.rolCodigo} onSalir={salir} /> : null}
+          <View style={{ flex: 1, alignItems: "center" }}>
+          <View style={{ flex: 1, width: "100%", ...(escritorio ? { maxWidth: ANCHO.panel + 40, backgroundColor: C.bg, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.line } : {}) }}>
+            <View style={{ flex: 1 }}>
             <View style={{ flex: 1, display: tab === "diaria" ? "flex" : "none" }}>
               <CajaDiariaFlujo caja={caja} estado={estado} ciudad={ciudad} setCiudad={cambiarCiudad} permisos={session.permisos} irA={irA} onOcultarTabs={verTabs} {...inset} />
             </View>
@@ -88,9 +96,11 @@ function Shell() {
               <Historial caja={caja} estado={estado} ciudad={ciudad} setCiudad={cambiarCiudad} permisos={session.permisos} onAbrirDia={(c, fecha) => (store.setCiudad(c), setIrA({ fecha, n: Date.now() }), setTab("diaria"))} {...inset} />
             ) : null}
             {tab === "reportes" ? <Reportes caja={caja} estado={estado} session={session} onSalio={() => setSession(null)} {...inset} /> : null}
+            </View>
+            {!escritorio && (!sinTabs || tab === "reportes" || tab === "historial") ? <TabBar activa={tab} onPick={setTab} bottomInset={insets.bottom} /> : null}
+            <Avisos avisos={caja.avisos} onCerrar={store.quitarAviso} topInset={insets.top} />
           </View>
-          {!sinTabs || tab === "reportes" || tab === "historial" ? <TabBar activa={tab} onPick={setTab} bottomInset={insets.bottom} /> : null}
-          <Avisos avisos={caja.avisos} onCerrar={store.quitarAviso} topInset={insets.top} />
+          </View>
         </>
       )}
     </View>

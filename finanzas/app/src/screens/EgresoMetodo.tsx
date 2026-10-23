@@ -1,3 +1,4 @@
+import { CONTENIDO_FORMULARIO } from "../lib/layout";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { ReactNode } from "react";
 import { C, t } from "../theme";
@@ -13,7 +14,7 @@ export function EgresoMetodo({ onBack, onManual, onCaptura, topInset, bottomInse
   return (
     <Screen>
       <Header kicker="NUEVO REGISTRO" title="Registrar egreso" sub="¿Cómo quieres registrarlo?" onBack={onBack} topInset={topInset} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 22, paddingHorizontal: 20, paddingBottom: 22 + bottomInset, gap: 14 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ ...CONTENIDO_FORMULARIO, paddingVertical: 22, paddingHorizontal: 20, paddingBottom: 22 + bottomInset, gap: 14 }}>
         <MethodCard
           icon={<Text style={t(12, 800, C.white, { letterSpacing: 0.72 })}>ABC</Text>}
           iconBg={C.teal}

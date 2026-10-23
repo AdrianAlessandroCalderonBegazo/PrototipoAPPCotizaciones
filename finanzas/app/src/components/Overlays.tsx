@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, Text, View } from "react-native";
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEscritorio } from "../lib/layout";
 import { C, kicker, t } from "../theme";
 import { PrimaryButton, SecondaryButton } from "./ui";
 
@@ -18,19 +19,24 @@ export type SheetData = {
 export function ConfirmSheet({ data, onConfirm, onClose, bottomInset }: { data: SheetData; onConfirm: () => void; onClose: () => void; bottomInset: number }) {
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(600)).current;
+  const escritorio = useEscritorio();
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
     Animated.timing(slide, { toValue: 0, duration: 280, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true }).start();
   }, [fade, slide]);
 
   return (
-    <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5, backgroundColor: "rgba(13,34,51,.5)", opacity: fade, justifyContent: "flex-end" }}>
-      <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Cerrar" />
+    <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5, backgroundColor: "rgba(13,34,51,.5)", opacity: fade, justifyContent: escritorio ? "center" : "flex-end", alignItems: "center", padding: escritorio ? 24 : 0 }}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Cerrar" />
       <Animated.View
         style={{
+          width: "100%",
+          maxWidth: 540,
           backgroundColor: C.card,
           borderTopLeftRadius: 26,
           borderTopRightRadius: 26,
+          borderBottomLeftRadius: escritorio ? 26 : 0,
+          borderBottomRightRadius: escritorio ? 26 : 0,
           paddingTop: 10,
           paddingHorizontal: 22,
           paddingBottom: 24 + bottomInset,
@@ -116,14 +122,15 @@ export function SuccessToast({ title, sub, topInset }: { title: string; sub: str
 export function Sheet({ onClose, bottomInset, children }: { onClose: () => void; bottomInset: number; children: React.ReactNode }) {
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(500)).current;
+  const escritorio = useEscritorio();
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
     Animated.timing(slide, { toValue: 0, duration: 260, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true }).start();
   }, [fade, slide]);
   return (
-    <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5, backgroundColor: "rgba(13,34,51,.5)", opacity: fade, justifyContent: "flex-end" }}>
-      <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Cerrar" />
-      <Animated.View style={{ backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingTop: 10, paddingHorizontal: 22, paddingBottom: 24 + bottomInset, maxHeight: "88%", transform: [{ translateY: slide }] }}>
+    <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5, backgroundColor: "rgba(13,34,51,.5)", opacity: fade, justifyContent: escritorio ? "center" : "flex-end", alignItems: "center", padding: escritorio ? 24 : 0 }}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Cerrar" />
+      <Animated.View style={{ width: "100%", maxWidth: 540, backgroundColor: C.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderBottomLeftRadius: escritorio ? 26 : 0, borderBottomRightRadius: escritorio ? 26 : 0, paddingTop: 10, paddingHorizontal: 22, paddingBottom: 24 + bottomInset, maxHeight: "88%", transform: [{ translateY: slide }] }}>
         <View style={{ width: 40, height: 4, borderRadius: 4, backgroundColor: C.border, alignSelf: "center", marginBottom: 16 }} />
         {children}
       </Animated.View>
@@ -135,9 +142,9 @@ export function Sheet({ onClose, bottomInset, children }: { onClose: () => void;
 export function Avisos({ avisos, onCerrar, topInset }: { avisos: { id: string; texto: string }[]; onCerrar: (id: string) => void; topInset: number }) {
   if (!avisos.length) return null;
   return (
-    <View style={{ position: "absolute", left: 14, right: 14, top: 14 + topInset, zIndex: 7, gap: 8 }}>
+    <View style={{ position: "absolute", left: 14, right: 14, top: 14 + topInset, zIndex: 7, gap: 8, alignItems: "center" }} pointerEvents="box-none">
       {avisos.map((a) => (
-        <Pressable key={a.id} onPress={() => onCerrar(a.id)} accessibilityRole="alert" style={{ backgroundColor: C.ink, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, flexDirection: "row", gap: 10, alignItems: "center", elevation: 8 }}>
+        <Pressable key={a.id} onPress={() => onCerrar(a.id)} accessibilityRole="alert" style={{ width: "100%", maxWidth: 520, backgroundColor: C.ink, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, flexDirection: "row", gap: 10, alignItems: "center", elevation: 8 }}>
           <Text style={t(12.5, 600, C.white, { flex: 1, lineHeight: 17 })}>{a.texto}</Text>
           <Text style={t(11, 800, C.mint)}>OK</Text>
         </Pressable>

@@ -1,3 +1,4 @@
+import { CONTENIDO_FORMULARIO } from "../lib/layout";
 import { useState } from "react";
 import { Image, KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 import { C, t } from "../theme";
@@ -119,7 +120,7 @@ export function EgresoForm({ ciudad, mov, inicial, fotoCaptura, saldoChica, resp
           onBack={cancelar}
           topInset={topInset}
         />
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 18, paddingHorizontal: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ ...CONTENIDO_FORMULARIO, paddingTop: 18, paddingHorizontal: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
           {desdeCaptura && !mov ? (
             <View style={{ flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: C.tint, borderRadius: 14, padding: 12 }}>
               <MiniaturaCaptura foto={fotoCaptura} />

@@ -71,6 +71,44 @@ export function TabBar({ activa, onPick, bottomInset }: { activa: Pestana; onPic
   );
 }
 
+/** Menú lateral para pantallas grandes (computadora): el mismo contenido que la barra de abajo del teléfono. */
+export function MenuLateral({ activa, onPick, nombre, rol, onSalir }: { activa: Pestana; onPick: (p: Pestana) => void; nombre: string; rol: string; onSalir: () => void }) {
+  return (
+    <View style={{ width: 240, backgroundColor: C.card, borderRightWidth: 1, borderRightColor: C.line, paddingVertical: 22, paddingHorizontal: 14 }} accessibilityRole="tablist">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 8, marginBottom: 26 }}>
+        <Image source={require("../../assets/icon.png")} style={{ width: 38, height: 38, borderRadius: 10 }} accessibilityLabel="ICR" />
+        <View>
+          <Text style={t(15, 800, C.ink)}>ICR Finanzas</Text>
+          <Text style={t(11, 400, C.muted)}>Caja diaria y caja chica</Text>
+        </View>
+      </View>
+      <View style={{ gap: 4 }}>
+        {PESTANAS.map((p) => {
+          const on = p.id === activa;
+          const color = on ? C.teal : C.muted;
+          return (
+            <Pressable
+              key={p.id} onPress={() => onPick(p.id)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 12, backgroundColor: on ? C.tint : pressed || hovered ? C.bg : "transparent" })}
+            >
+              <Icono tipo={p.id} color={color} />
+              <Text style={t(13.5, on ? 800 : 600, on ? C.teal : C.ink)}>{p.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={{ flex: 1 }} />
+      <View style={{ borderTopWidth: 1, borderTopColor: C.line, paddingTop: 14, paddingHorizontal: 8, gap: 2 }}>
+        <Text style={t(13, 800, C.ink)} numberOfLines={1}>{nombre}</Text>
+        <Text style={t(11.5, 400, C.muted)}>{rol}</Text>
+        <Pressable onPress={onSalir} accessibilityRole="button" style={{ marginTop: 8, alignSelf: "flex-start" }}>
+          <Text style={t(12, 800, C.teal)}>Cerrar sesión</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 // ---- selector de ciudad ------------------------------------------------------------------------
 
 /** Dos botones, Arequipa / Moquegua. `claro` = sobre fondo blanco; si no, sobre el degradado. */

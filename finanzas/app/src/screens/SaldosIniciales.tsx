@@ -1,3 +1,4 @@
+import { CONTENIDO_FORMULARIO } from "../lib/layout";
 import { useState } from "react";
 import { KeyboardAvoidingView, ScrollView, Text, View } from "react-native";
 import { C, t } from "../theme";
@@ -21,7 +22,7 @@ export function SaldosIniciales({ ciudad, config, onClose, topInset, bottomInset
     <Screen>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
         <Header kicker="CONFIGURACIÓN" title={`Saldos iniciales · ${CIUDAD_LABEL[ciudad]}`} sub="Con cuánto arranca cada caja" onBack={onClose} topInset={topInset} />
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ ...CONTENIDO_FORMULARIO, paddingTop: 20, paddingHorizontal: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
           <View>
             <FieldLabel>CAJA DIARIA</FieldLabel>
             <AmountField value={v.caja} onChangeText={campo("caja")} accent={C.teal} />

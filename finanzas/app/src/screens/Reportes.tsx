@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { C, card, kicker, t } from "../theme";
 import { AvisoSync, FilaSwitch, Seccion } from "../components/caja";
-import { Chip, DateField, PrimaryButton, SecondaryButton, TealGradient } from "../components/ui";
+import { Chip, Cuerpo, DateField, PrimaryButton, SecondaryButton, TealGradient } from "../components/ui";
+import { ANCHO } from "../lib/layout";
 import { apiJson, logout, type Session } from "../lib/api";
 import { fdate, isoDate, money, pad, today } from "../lib/format";
 import { pendientes, type State } from "../lib/caja/store";
@@ -98,7 +99,7 @@ export function Reportes({ caja, estado, session, onSalio, topInset, bottomInset
   return (
     <View style={{ flex: 1 }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <TealGradient style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 26 }}>
+        <TealGradient ancho={ANCHO.lista} style={{ paddingTop: 18 + topInset, paddingHorizontal: 20, paddingBottom: 26 }}>
           <Text style={kicker("rgba(255,255,255,.9)", 11)}>REPORTES</Text>
           <Text style={t(26, 800, C.white, { letterSpacing: -0.5, marginTop: 6 })}>Exportar caja</Text>
           <Text style={t(12, 400, "rgba(255,255,255,.88)", { marginTop: 2 })}>Por día o por fechas, en Excel o CSV</Text>
@@ -106,7 +107,7 @@ export function Reportes({ caja, estado, session, onSalio, topInset, bottomInset
 
         <AvisoSync estado={estado} caja={caja} />
 
-        <View style={{ padding: 16, gap: 22 }}>
+        <Cuerpo ancho={ANCHO.lista} style={{ padding: 16, gap: 22 }}>
           <Seccion titulo="CIUDAD">
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               {CIUDADES.map((c) => (
@@ -204,7 +205,7 @@ export function Reportes({ caja, estado, session, onSalio, topInset, bottomInset
             )}
           </Seccion>
           <View style={{ height: bottomInset }} />
-        </View>
+        </Cuerpo>
       </ScrollView>
     </View>
   );
