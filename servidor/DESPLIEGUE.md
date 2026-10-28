@@ -7,6 +7,7 @@ Qué queda funcionando al terminar:
 | `https://cotizador.TUDOMINIO` | La app (PWA instalable en el celular). Varias personas, una sola base de datos. |
 | `https://app.TUDOMINIO` | Vista general: cotizaciones, requerimientos y salidas de herramientas de todos, en tablas simples. También administra usuarios. |
 | `https://api.TUDOMINIO` | La API sola (para el APK u otras apps que se hagan después). |
+| `https://finanza.TUDOMINIO` | **Finanzas 2** (versión de prueba, base de datos propia). |
 | `https://finanzas.TUDOMINIO` | **Finanzas**: caja diaria, caja chica, cierre del día y reportes. Varias personas a la vez, con su mismo usuario de la app. Sus datos también se ven en la pestaña **Finanzas** de `app.TUDOMINIO`. |
 
 Todo corre en el mismo VPS con Docker: **PostgreSQL** (la base, una sola para todo), la **API** del cotizador, la **API de Finanzas** y **Caddy** (que pone el HTTPS solo).
@@ -165,6 +166,30 @@ docker compose exec finanzas-api npx tsx scripts/importar_caja.ts /tmp/BD_CajaDi
 
 El simulacro debe mostrar 11 días, 40 movimientos y 7 fotos, con el saldo de cada día igual al de las hojas (el 27/10 queda en S/ 5.40).
 Si algún saldo no coincide con el papel, el script se detiene y no cambia nada.
+
+## 7c. Finanzas 2 (versión de prueba en `finanza.TUDOMINIO`)
+
+Otra versión de Finanzas para comparar con la primera: libro único sobre cuentas (bancos y Yape), capturas, menús y reposición. Tiene **su propia base de datos
+(`finanzas2`, se crea sola)**, sus propias fotos y su propio servicio (`finanzas2-api`); lo único compartido son los **usuarios** y las claves.
+Finanzas 1 no se toca.
+
+1. **DNS**: en Hostinger agrega un registro **A** con nombre `finanza` apuntando a la IP del VPS (igual que los otros).
+2. Sube `servidor_icr.zip` y `finanzas2_web.zip` a `/root/` y:
+   ```bash
+   cd /opt/icr && unzip -o /root/servidor_icr.zip -d /opt/icr
+   cd /opt/icr/servidor
+   ./scripts/respaldo.sh                 # respaldo antes
+   docker compose up -d --build
+   docker compose logs finanzas2-api | tail -10    # debe decir "Base de datos creada", "Migración aplicada: 001_fin.sql" y "API de Finanzas 2 escuchando"
+   ./scripts/actualizar_finanzas2.sh /root/finanzas2_web.zip
+   ```
+3. Abre `https://finanza.TUDOMINIO` (el certificado sale solo cuando el DNS ya apunta al VPS) y entra con un usuario **Administrador, Finanzas o Encargado**.
+4. **Primer uso**: Libreta › Cuentas: crear *Cta. cte. 2000*, *Cta. cte. 7074* (con sus últimos 4 dígitos), *Yape Diego* y *Yape Milagros* (titular, saldo inicial y umbral 40).
+   Solo **admin y finanzas** crean cuentas. Luego Libreta › Personas.
+5. **Telegram** (opcional): crea un bot con @BotFather y pon `TELEGRAM_BOT_TOKEN=…` en el `.env`; luego `docker compose up -d`.
+
+El respaldo diario (`./scripts/respaldo.sh`) ya incluye la base `finanzas2` y sus fotos. Para descartar la prueba: `docker compose stop finanzas2-api` y, si quieres,
+`docker compose exec db psql -U icr -d postgres -c "DROP DATABASE finanzas2"`.
 
 ## 8. Respaldos (importante)
 

@@ -79,3 +79,24 @@ finanzas.{$DOMINIO} {
 		file_server
 	}
 }
+
+# Finanzas 2 (versión de prueba): su PWA + su propia API en /api-fin (otra base de datos y otras fotos que Finanzas 1).
+# Es una app que también funciona sin internet, por eso el service worker (sw.js) y el index nunca se quedan en caché.
+finanza.{$DOMINIO} {
+	import seguridad
+	request_body {
+		max_size 12MB
+	}
+	handle /api-fin/* {
+		reverse_proxy finanzas2-api:8788
+	}
+	handle {
+		root * /srv/finanzas2
+		header /_expo/* Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		header /sw.js Cache-Control "no-cache"
+		header /manifest.webmanifest Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
