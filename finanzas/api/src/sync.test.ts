@@ -116,7 +116,7 @@ test("trabajar TODO el día sin conexión y sincronizar al volver: nada se pierd
   // la pantalla ya muestra los números correctos, sin servidor
   const h = a.store.hoja("AQP", hoy);
   assert.equal(h.saldo_anterior_caja, 1000, "abre con el saldo inicial");
-  assert.equal(saldosDe(h).saldo_final_caja, 1000 + 950.5 - 3 - 200);
+  assert.equal(saldosDe(h).saldo_final_caja, 1000 + 800 - 3 - 200);
   assert.equal(saldoCajaChica(a.store.get(), "AQP"), 200 - 12.5);
 
   // —— vuelve la señal ——
@@ -130,7 +130,7 @@ test("trabajar TODO el día sin conexión y sincronizar al volver: nada se pierd
   assert.equal(srv.filas.length, 3, "2 filas + la del envío a caja chica, sin duplicados");
   assert.equal(srv.responsable_caja, "Rosa");
   assert.equal(srv.obras_realizadas, "Losa nivel 2");
-  assert.equal(srv.saldo_final_caja, 1000 + 950.5 - 3 - 200);
+  assert.equal(srv.saldo_final_caja, 1000 + 800 - 3 - 200);
   assert.equal(srv.filas.find((f: Fila) => f.id === compra.id).adjuntos[0].id, adjId, "la foto subió");
   // lo que muestra la app == lo que guardó el servidor
   const local = a.store.hoja("AQP", hoy);

@@ -12,6 +12,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY api/tsconfig.json ./
 COPY api/src ./src
+COPY api/scripts ./scripts
 COPY db /srv/db
 COPY app/src/lib/data.ts /srv/app/src/lib/data.ts
 COPY app/src/lib/caja/calc.ts app/src/lib/caja/types.ts /srv/app/src/lib/caja/

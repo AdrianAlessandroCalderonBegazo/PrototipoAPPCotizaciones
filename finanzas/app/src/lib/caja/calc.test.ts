@@ -60,9 +60,9 @@ test("totales por columna, como el pie de la planilla", () => {
   assert.deepEqual(t.cta_cte, { ingreso: 5800, salida: 0, total: 5800 });
 });
 
-test("saldo final = saldo anterior + ingresos − salidas (caja y cuenta corriente por separado)", () => {
+test("saldo final = saldo anterior + ingresos − salidas, la caja solo en EFECTIVO (Yape/transferencia no entra) y la cuenta corriente aparte", () => {
   const s = saldosHoja(DIA);
-  assert.equal(s.saldo_final_caja, 1417.75); // 5890.50 + 1350.25 − 5823
+  assert.equal(s.saldo_final_caja, 1167.5); // 5890.50 + 1100 − 5823 (los 250.25 por Yape no suman)
   assert.equal(s.saldo_final_cta_cte, 6600);
 });
 
@@ -110,7 +110,7 @@ test("una hoja nueva abre con el cierre de la anterior más reciente (o con el s
   assert.deepEqual(aperturaEstimada([], "2026-10-22", cfg), { saldo_anterior_caja: 100, saldo_anterior_cta_cte: 50 });
   const ayer = DIA;
   const antiayer = hoja({ fecha: "2026-10-19", saldo_anterior_caja: 1, filas: [fila({ caja_ingreso_efectivo: 1 })] });
-  assert.deepEqual(aperturaEstimada([antiayer, ayer], "2026-10-22", cfg), { saldo_anterior_caja: 1417.75, saldo_anterior_cta_cte: 6600 });
+  assert.deepEqual(aperturaEstimada([antiayer, ayer], "2026-10-22", cfg), { saldo_anterior_caja: 1167.5, saldo_anterior_cta_cte: 6600 });
   // un día que ya pasó solo mira hacia atrás: parte del cierre del 19 (caja 1 + 1; la cuenta corriente de esa hoja abrió en 0)
   assert.deepEqual(aperturaEstimada([antiayer, ayer], "2026-10-20", cfg), { saldo_anterior_caja: 2, saldo_anterior_cta_cte: 0 });
 });

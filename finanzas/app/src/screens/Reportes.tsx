@@ -165,8 +165,9 @@ export function Reportes({ caja, estado, session, onSalio, topInset, bottomInset
                   {r.diaria ? (
                     <>
                       <Linea k={`Caja diaria · ${r.hojas.length} ${r.hojas.length === 1 ? "planilla" : "planillas"}, ${tot.movimientos} mov.`} v="" />
-                      <Linea k="Ingresos de caja" v={money(tot.ingresos)} color={C.teal} />
-                      <Linea k="Salidas de caja" v={money(tot.salidas)} color={C.red} />
+                      <Linea k="Ingresos en efectivo" v={money(tot.ingresos)} color={C.teal} />
+                      <Linea k="Salidas en efectivo" v={money(tot.salidas)} color={C.red} />
+                      <Linea k="Yape / transferencias (ingresos − salidas)" v={money(tot.yapeIngresos - tot.yapeSalidas)} />
                     </>
                   ) : null}
                   {r.chica ? <Linea k="Caja chica · gastado" v={money(tot.gastadoChica)} color={C.red} /> : null}

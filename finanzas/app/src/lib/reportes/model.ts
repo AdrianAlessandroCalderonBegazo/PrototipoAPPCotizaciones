@@ -85,17 +85,19 @@ const sinRed = (e: unknown) => {
 
 // ---- resúmenes -------------------------------------------------------------------------------------
 
-export type ResumenDia = { fecha: string; ciudad: Ciudad; saldoAnterior: number; ingresos: number; salidas: number; saldoFinal: number; ctaIngresos: number; ctaSalidas: number; ctaFinal: number; movimientos: number };
+export type ResumenDia = { fecha: string; ciudad: Ciudad; saldoAnterior: number; ingresos: number; salidas: number; saldoFinal: number; ctaIngresos: number; ctaSalidas: number; ctaFinal: number; movimientos: number; yapeIngresos: number; yapeSalidas: number };
 
 export const resumenPorDia = (hojas: HojaReporte[]): ResumenDia[] =>
   hojas.map((h) => ({
-    fecha: h.fecha, ciudad: h.ciudad, saldoAnterior: h.saldo_anterior_caja, ingresos: h.totales.caja.ingreso, salidas: h.totales.caja.salida, saldoFinal: h.saldo_final_caja,
-    ctaIngresos: h.totales.cta_cte.ingreso, ctaSalidas: h.totales.cta_cte.salida, ctaFinal: h.saldo_final_cta_cte, movimientos: h.filas.length,
+    fecha: h.fecha, ciudad: h.ciudad, saldoAnterior: h.saldo_anterior_caja, ingresos: h.totales.efectivo.ingreso, salidas: h.totales.efectivo.salida, saldoFinal: h.saldo_final_caja,
+    ctaIngresos: h.totales.cta_cte.ingreso, ctaSalidas: h.totales.cta_cte.salida, ctaFinal: h.saldo_final_cta_cte, movimientos: h.filas.length, yapeIngresos: h.totales.transf.ingreso, yapeSalidas: h.totales.transf.salida,
   }));
 
 export const totalesReporte = (r: Reporte) => ({
-  ingresos: r2(r.hojas.reduce((a, h) => a + h.totales.caja.ingreso, 0)),
-  salidas: r2(r.hojas.reduce((a, h) => a + h.totales.caja.salida, 0)),
+  ingresos: r2(r.hojas.reduce((a, h) => a + h.totales.efectivo.ingreso, 0)),
+  salidas: r2(r.hojas.reduce((a, h) => a + h.totales.efectivo.salida, 0)),
+  yapeIngresos: r2(r.hojas.reduce((a, h) => a + h.totales.transf.ingreso, 0)),
+  yapeSalidas: r2(r.hojas.reduce((a, h) => a + h.totales.transf.salida, 0)),
   ctaIngresos: r2(r.hojas.reduce((a, h) => a + h.totales.cta_cte.ingreso, 0)),
   ctaSalidas: r2(r.hojas.reduce((a, h) => a + h.totales.cta_cte.salida, 0)),
   movimientos: r.hojas.reduce((a, h) => a + h.filas.length, 0),

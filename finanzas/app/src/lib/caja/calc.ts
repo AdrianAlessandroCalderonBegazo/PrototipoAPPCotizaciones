@@ -34,7 +34,8 @@ export function saldosHoja(h: Pick<Hoja, "filas" | "saldo_anterior_caja" | "sald
   const totales = totalesHoja(h.filas);
   return {
     totales,
-    saldo_final_caja: r2(h.saldo_anterior_caja + totales.caja.total),
+    // El saldo de caja es solo EFECTIVO (como en la planilla de papel): lo que entra o sale por Yape/transferencia no pasa por la caja.
+    saldo_final_caja: r2(h.saldo_anterior_caja + totales.efectivo.total),
     saldo_final_cta_cte: r2(h.saldo_anterior_cta_cte + totales.cta_cte.total),
   };
 }

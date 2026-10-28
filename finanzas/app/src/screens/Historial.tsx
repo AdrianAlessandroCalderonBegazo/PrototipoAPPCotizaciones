@@ -92,7 +92,7 @@ function DiaFila({ d, primero, caja, onPress }: { d: Dia; primero: boolean; caja
       </View>
       {s ? (
         <Text style={t(11.5, 400, C.muted)} numberOfLines={1}>
-          {n} {n === 1 ? "movimiento" : "movimientos"} · +{money(s.totales.caja.ingreso)} · −{money(s.totales.caja.salida)}
+          {n} {n === 1 ? "movimiento" : "movimientos"} · efectivo +{money(s.totales.efectivo.ingreso)} · −{money(s.totales.efectivo.salida)}
         </Text>
       ) : (
         <Text style={t(11.5, 400, C.muted)}>Sin planilla de caja diaria</Text>

@@ -28,7 +28,7 @@ const dia21 = hoja("AQP", "2026-10-21", 5890.5, 800, [
   f(4, { descripcion: "Carlos sacó 20 soles", responsable: "Carlos", caja_salida_efectivo: 20, categoria: "Movilidad" }),
 ], { obras_realizadas: "Instalación de paneles en la obra Torre Aurora, nivel 2; revisión de cableado.", maletas: "3", escaleras: "2", encargado_obra: "Luis Mamani Ñahui" });
 const largo = Array.from({ length: 24 }, (_, i) => f(i + 1, i % 3 ? { tipo: "OBRA", descripcion: `Cobro valorización N° ${i + 1} — obra con nombre bastante largo para probar el ajuste de línea`, caja_ingreso_efectivo: 100 + i, comprobante: "FACTURA" } : { descripcion: `Gasto ${i + 1}`, caja_salida_efectivo: 7.5, categoria: "Gastos fijos", subcategoria: "Servicios" }));
-const dia22 = hoja("AQP", "2026-10-22", 1417.75, 6600, largo);
+const dia22 = hoja("AQP", "2026-10-22", 67.5, 6600, largo);
 const moq22 = hoja("MOQ", "2026-10-22", 50, 0, [f(1, { tipo: "VTA", descripcion: "Venta de módulos", caja_ingreso_efectivo: 250.1, caja_ingreso_transf: 0.2 })]);
 const mov = (id: string, fecha: string, p: Partial<MovChica>): MovChica => ({ id, ciudad: "AQP", fecha, tipo: "EGRESO", descripcion: "x", persona: "Carlos", categoria: "Movilidad", subcategoria: "", monto: 1, origen: "MANUAL", adjuntos: [], updated_at: fecha, ...p });
 const chicaMovs = [
@@ -53,7 +53,7 @@ test("el reporte junta hojas y caja chica de ambas ciudades y calcula los saldos
   assert.equal(r.hojas.length, 3);
   assert.deepEqual(r.hojas.map((h) => `${h.fecha} ${h.ciudad}`), ["2026-10-21 AQP", "2026-10-22 AQP", "2026-10-22 MOQ"]);
   const h21 = r.hojas[0];
-  assert.equal(h21.saldo_final_caja, 5890.5 + 1100 - 5800 - 3 - 20); // 1167.50
+  assert.equal(h21.saldo_final_caja, 5890.5 - 5800 - 3 - 20); // 67.50: los 1100 por Yape no entran a la caja de efectivo
   assert.equal(h21.saldo_final_cta_cte, 6600);
   const c = r.chicas.find((x) => x.ciudad === "AQP")!;
   assert.equal(c.saldoAnterior, 50);
@@ -130,7 +130,8 @@ test("Excel: hojas, valores numéricos reales, formatos, filtros, fila congelada
   const dias: unknown[][] = [];
   res.eachRow((row) => { const v = row.values as unknown[]; if (v[2] === "Arequipa" || v[2] === "Moquegua") dias.push(v); });
   assert.equal(dias.length, 3, "un renglón por día y ciudad");
-  assert.equal(dias[0][6], 5890.5 + 1100 - 5800 - 3 - 20, "saldo final del día 21");
+  assert.equal(dias[0][6], 5890.5 - 5800 - 3 - 20, "saldo final (efectivo) del día 21");
+  assert.equal(dias[0][11], 1100, "los Yape del día van en su propia columna");
 
   const ch = wb.getWorksheet("Caja chica")!;
   assert.equal(ch.getRow(5).getCell(9).value, 250, "saldo acumulado tras el primer movimiento");

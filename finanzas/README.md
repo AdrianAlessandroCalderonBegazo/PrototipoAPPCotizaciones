@@ -7,14 +7,14 @@ Se publica en `https://finanzas.TUDOMINIO` y sus datos también se ven en la pes
 ```
 app/              La PWA (Expo · React Native Web · TypeScript)
 api/              API (Node + Postgres): usa los usuarios y sesiones del sistema; Dockerfile incluido
-db/migrations/    Tablas de caja (001), cierre del día, versiones e historial de cambios (002)
+db/migrations/    Tablas de caja (001), cierre del día e historial (002), comprobante Recibo (003), saldo solo efectivo (004)
 docs/API.md       Contrato de la API
 design/           Diseño original exportado de Claude Design
 ```
 
 ## Qué hace
 
-- **Caja diaria**: una hoja por día y ciudad, igual a la planilla de papel (saldo anterior, filas con tipo, responsable, comprobante, ingresos y salidas en efectivo/Yape/cuenta corriente, totales y observaciones). Cada fila admite fotos del recibo. Se puede **enviar dinero a caja chica**.
+- **Caja diaria**: una hoja por día y ciudad. El **saldo de caja es solo efectivo** (como el papel: lo que entra o sale por Yape/transferencia se muestra aparte y no suma al saldo ni al cierre), igual a la planilla de papel (saldo anterior, filas con tipo, responsable, comprobante, ingresos y salidas en efectivo/Yape/cuenta corriente, totales y observaciones). Cada fila admite fotos del recibo. Se puede **enviar dinero a caja chica**.
 - **Caja chica**: egresos con foto del recibo (se lee con OCR y rellena el formulario) o a mano.
 - **Cierre del día**: se escribe el efectivo contado, la app muestra la diferencia con el saldo calculado (la nota es obligatoria si hay diferencia) y el día queda **bloqueado para todos**. Los días se cierran en orden. Solo un administrador puede reabrirlo, con un motivo.
 - **Historial de cambios**: cada alta, corrección, eliminación, cierre y reapertura guarda quién, cuándo y **cómo estaba antes**. Se ve con «Ver cambios del día» y en la pestaña Finanzas del portal.

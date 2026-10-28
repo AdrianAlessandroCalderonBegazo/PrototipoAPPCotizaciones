@@ -146,6 +146,26 @@ La API de Finanzas no necesita configuración extra: usa la misma base y los mis
 3. Cambia la clave del administrador (botón **Nueva clave**) y, si quieres, la **clave de edición**.
 4. Cada persona abre `https://cotizador.TUDOMINIO` en su celular → menú del navegador → **Instalar app / Agregar a pantalla de inicio**.
 
+## 7b. Cargar las hojas de caja de octubre (una sola vez)
+
+Esto **BORRA toda la caja diaria y la caja chica que haya** (movimientos, fotos, historial de cambios y saldos iniciales) y carga las hojas de papel
+transcritas (carpeta `BD_CajaDiario`: `datos.json` + `imagenes/recibos/`). Cada día queda con sus recibos adjuntos y cerrado.
+**Primero haz un respaldo** (`./scripts/respaldo.sh`).
+
+```bash
+cd /opt/icr/servidor
+unzip -o /root/importacion_octubre.zip -d /root/importacion      # deja /root/importacion/BD_CajaDiario
+docker compose cp /root/importacion/BD_CajaDiario finanzas-api:/tmp/BD_CajaDiario
+
+# 1) simulacro: muestra qué borraría y qué cargaría, sin cambiar nada
+docker compose exec finanzas-api npx tsx scripts/importar_caja.ts /tmp/BD_CajaDiario
+# 2) de verdad
+docker compose exec finanzas-api npx tsx scripts/importar_caja.ts /tmp/BD_CajaDiario --confirmar
+```
+
+El simulacro debe mostrar 11 días, 40 movimientos y 7 fotos, con el saldo de cada día igual al de las hojas (el 27/10 queda en S/ 5.40).
+Si algún saldo no coincide con el papel, el script se detiene y no cambia nada.
+
 ## 8. Respaldos (importante)
 
 ```bash
@@ -190,6 +210,7 @@ Las tablas de Finanzas viven en `finanzas/db/migrations/` y la API de Finanzas l
 | `cotizador.` muestra "404" o página en blanco | Falta subir la app web (paso 6). |
 | `finanzas.` muestra "404" o página en blanco | Falta subir la app de Finanzas (paso 6b). |
 | Finanzas dice "Sin acceso" | Esa cuenta tiene rol Empleado, Almacén o Vendedor. Un administrador le asigna el rol Finanzas o Encargado (Usuarios). |
+| El saldo de caja no suma los Yape | Es a propósito: el saldo de la caja es solo **efectivo**, como en la planilla de papel. Los Yape/transferencias se ven aparte. |
 | Finanzas dice "Sin conexión" | La app de Finanzas **solo funciona con internet** (varias personas comparten los datos). Nada se guarda sin conexión; al volver, se repite el registro. |
 | `docker compose` falla con "../finanzas not found" | Falta la carpeta `finanzas` al lado de `servidor` (paso 3). |
 | No me deja entrar | Revisa el usuario/clave. Tras 10 intentos fallidos se bloquea 15 minutos. Un administrador puede poner una clave nueva en la vista general. |
