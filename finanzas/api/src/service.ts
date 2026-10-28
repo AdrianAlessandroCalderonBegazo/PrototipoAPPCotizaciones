@@ -76,7 +76,7 @@ const CIUDAD_LABEL_SRV: Record<string, string> = { AQP: "Arequipa", MOQ: "Moqueg
 /** Lo esencial de una hoja para el tablero. */
 const resumenHoja = (h: any) => ({
   id: h.id, fecha: h.fecha as string, movimientos: h.filas.length as number,
-  ingresos: h.totales.caja.ingreso as number, salidas: h.totales.caja.salida as number,
+  ingresos: h.totales.efectivo.ingreso as number, salidas: h.totales.efectivo.salida as number,
   saldo_final_caja: h.saldo_final_caja as number, saldo_final_cta_cte: h.saldo_final_cta_cte as number, cierre: h.cierre as null | { cerrada_por: string; diferencia: number },
 });
 

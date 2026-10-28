@@ -81,19 +81,19 @@ test("cada día nuevo abre con el cierre del día anterior; corregir un día pas
   await putFila(uid(), fila(d1.id, { tipo: "OTRO", descripcion: "Depósito", caja_ingreso_efectivo: 0, caja_salida_efectivo: 300, cta_cte_ingreso: 300, interno: true }));
 
   const [h1] = await hojas("AQP", "2026-10-19", "2026-10-19");
-  assert.equal(h1.saldo_final_caja, 1130.25); // 1000 + 550.50 − 120.25 − 300
+  assert.equal(h1.saldo_final_caja, 1079.75); // 1000 + 500 − 120.25 − 300 (los 50.50 por Yape no entran a la caja de efectivo)
   assert.equal(h1.saldo_final_cta_cte, 500);
   assert.deepEqual(h1.totales.efectivo, { ingreso: 500, salida: 420.25, total: 79.75 });
 
   const d2 = await abrir("AQP", "2026-10-21"); // saltó un día: abre con el cierre del 19
-  assert.equal(d2.saldo_anterior_caja, 1130.25);
+  assert.equal(d2.saldo_anterior_caja, 1079.75);
   assert.equal(d2.saldo_anterior_cta_cte, 500);
   assert.equal(d2.filas.length, 0, "el día nuevo arranca limpio");
 
   // corrijo el monto del día 19 → el día 21 se recalcula solo
   await putFila(f1, fila(d1.id, { caja_ingreso_efectivo: 600, caja_ingreso_transf: 50.5 }));
-  assert.equal((await hojas("AQP", "2026-10-21", "2026-10-21"))[0].saldo_anterior_caja, 1230.25);
-  assert.equal((await estado("AQP")).caja.saldo, 1230.25);
+  assert.equal((await hojas("AQP", "2026-10-21", "2026-10-21"))[0].saldo_anterior_caja, 1179.75);
+  assert.equal((await estado("AQP")).caja.saldo, 1179.75);
 });
 
 test("abrir la misma hoja dos veces devuelve la misma; no se abren hojas del futuro", async () => {
@@ -112,7 +112,7 @@ test("las ciudades llevan cajas separadas", async () => {
   assert.equal(m.saldo_anterior_caja, 50);
   await putFila(uid(), fila(m.id, { caja_ingreso_efectivo: 10 }));
   assert.equal((await estado("MOQ")).caja.saldo, 60);
-  assert.equal((await estado("AQP")).caja.saldo, 1230.25);
+  assert.equal((await estado("AQP")).caja.saldo, 1179.75);
 });
 
 test("validación de filas: lo que el ERP necesita se exige aquí", async () => {
@@ -152,7 +152,7 @@ test("guardar dos veces lo mismo no duplica; borrar es idempotente; lo borrado n
 });
 
 test("enviar a caja chica: baja la caja diaria, sube la caja chica, en una sola operación", async () => {
-  const antes = (await estado("AQP")).caja.saldo; // 1230.25
+  const antes = (await estado("AQP")).caja.saldo; // 1179.75
   const t = { id: uid(), fila_id: uid(), movimiento_id: uid(), ciudad: "AQP", fecha: "2026-10-22", monto: 200, nota: "para movilidad" };
   const r = await call("POST", "/caja/transferencias", t);
   assert.equal(r.status, 200, JSON.stringify(r));

@@ -62,7 +62,7 @@ export function CajaDiaria({ caja, estado, ciudad, setCiudad, fecha, setFecha, h
           </View>
           <FechaNav fecha={fecha} hoy={hoy} onChange={setFecha} textoFecha={fdateLarga(fecha)} />
           <View style={{ marginTop: 14 }}>
-            <Text style={kicker("rgba(255,255,255,.9)", 10.5)}>SALDO DE CAJA</Text>
+            <Text style={kicker("rgba(255,255,255,.9)", 10.5)}>SALDO DE CAJA · EFECTIVO</Text>
             <Text style={t(36, 800, C.white, { letterSpacing: -0.72, marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1} accessibilityLabel={`Saldo de caja ${money(s.saldo_final_caja)}`}>
               {money(s.saldo_final_caja)}
             </Text>
@@ -78,12 +78,14 @@ export function CajaDiaria({ caja, estado, ciudad, setCiudad, fecha, setFecha, h
         <Cuerpo ancho={ANCHO.panel}>
           <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 18, marginTop: -44 }}>
             <View style={[raisedCard(16), { flex: 1, padding: 14 }]}>
-              <Text style={kicker(C.teal, 10)}>INGRESOS</Text>
-              <Text style={t(17, 800, C.teal, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.caja.ingreso)}</Text>
+              <Text style={kicker(C.teal, 10)}>INGRESOS · EFECTIVO</Text>
+              <Text style={t(17, 800, C.teal, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.efectivo.ingreso)}</Text>
+              {t_.transf.ingreso > 0 ? <Text style={t(10.5, 600, C.muted, { marginTop: 2 })} numberOfLines={1}>+ {money(t_.transf.ingreso)} Yape/transf.</Text> : null}
             </View>
             <View style={[raisedCard(16), { flex: 1, padding: 14 }]}>
-              <Text style={kicker(C.muted, 10)}>SALIDAS</Text>
-              <Text style={t(17, 800, C.red, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.caja.salida)}</Text>
+              <Text style={kicker(C.muted, 10)}>SALIDAS · EFECTIVO</Text>
+              <Text style={t(17, 800, C.red, { marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1}>{money(t_.efectivo.salida)}</Text>
+              {t_.transf.salida > 0 ? <Text style={t(10.5, 600, C.muted, { marginTop: 2 })} numberOfLines={1}>+ {money(t_.transf.salida)} Yape/transf.</Text> : null}
             </View>
           </View>
 
@@ -132,9 +134,8 @@ export function CajaDiaria({ caja, estado, ciudad, setCiudad, fecha, setFecha, h
                 <Seccion titulo="RESUMEN DEL DÍA">
                   <View style={[card(16), { overflow: "hidden" }]}>
                     <FilaResumen cab c1="INGRESO" c2="SALIDA" c3="TOTAL" />
-                    <FilaResumen titulo="Efectivo" p={t_.efectivo} />
+                    <FilaResumen titulo="Efectivo (caja)" p={t_.efectivo} fuerte />
                     <FilaResumen titulo="Yape / Transf." p={t_.transf} />
-                    <FilaResumen titulo="Caja" p={t_.caja} fuerte />
                     <FilaResumen titulo="Cta. cte." p={t_.cta_cte} />
                   </View>
                 </Seccion>

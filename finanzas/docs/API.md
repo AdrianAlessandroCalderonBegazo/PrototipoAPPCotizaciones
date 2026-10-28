@@ -1,6 +1,6 @@
 # API de Caja diaria y Caja chica
 
-Contrato entre la PWA (`app/`) y el servidor. La implementación está en `api/` (Node + Postgres) y corre junto a la API del Cotizador, con la **misma base de datos, los mismos usuarios y las mismas sesiones**. Las tablas están en `db/migrations/` (`001_caja.sql`, `002_cierre_auditoria.sql` y `003_comprobante_recibo.sql`).
+Contrato entre la PWA (`app/`) y el servidor. La implementación está en `api/` (Node + Postgres) y corre junto a la API del Cotizador, con la **misma base de datos, los mismos usuarios y las mismas sesiones**. Las tablas están en `db/migrations/` (`001_caja.sql`, `002_cierre_auditoria.sql` y `003_comprobante_recibo.sql` y `004_saldo_efectivo.sql`).
 
 Los nombres de campo de la API, de las tablas y del modelo de la app (`app/src/lib/caja/types.ts`) coinciden a propósito.
 
@@ -13,6 +13,7 @@ Los nombres de campo de la API, de las tablas y del modelo de la app (`app/src/l
 - **Fechas**: `YYYY-MM-DD`, hora local de Perú. Importes: números con 2 decimales, siempre ≥ 0 (la dirección la da la columna, no el signo).
 - **IDs**: los genera el **cliente** (UUID v4) y los envía en la URL. Todas las escrituras son **idempotentes**: repetir un `PUT` con el mismo id deja el mismo resultado, así un reintento por una respuesta perdida no duplica nada.
 - **Cambios simultáneos**: cada fila, gasto y hoja tiene un número de `version`. Si dos personas cambian lo mismo a la vez, la segunda recibe `409 CAMBIO_CONCURRENTE` y ve lo que dejó la primera.
+- **Saldo de caja = solo efectivo** (`saldo_final = saldo_anterior + ingresos efectivo − salidas efectivo`): lo cobrado o pagado por Yape/transferencia no pasa por la caja física. El cierre del día compara el efectivo contado con ese saldo.
 - **Saldos**: los calcula el servidor (vistas `v_caja_hoja_resumen` y `v_caja_chica_saldo`); la app los replica para mostrarlos al instante, y hay una prueba (`api/src/crosscheck.test.ts`) que comprueba que ambos cálculos coinciden.
 
 ## Rutas

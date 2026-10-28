@@ -63,36 +63,36 @@ export async function generarXlsx(r: Reporte): Promise<Uint8Array> {
 
   // ---- Resumen ----------------------------------------------------------------------------------
   const rs = wb.addWorksheet("Resumen", { views: [{ showGridLines: false }] });
-  titulo(rs, "ICR Finanzas · Reporte de caja", sub, 10);
+  titulo(rs, "ICR Finanzas · Reporte de caja", sub, 12);
   let fila = 4;
   if (r.diaria) {
     rs.getCell(fila, 1).value = "CAJA DIARIA · resumen por día";
     rs.getCell(fila, 1).font = { name: FUENTE, size: 11, bold: true, color: { argb: TEAL } } as Font;
     fila++;
-    encabezado(rs, fila, ["Fecha", "Ciudad", "Saldo anterior", "Ingresos", "Salidas", "Saldo final", "Cta. cte. ingresos", "Cta. cte. salidas", "Cta. cte. saldo final", "N° mov."]);
+    encabezado(rs, fila, ["Fecha", "Ciudad", "Saldo anterior (efectivo)", "Ingresos efectivo", "Salidas efectivo", "Saldo final (efectivo)", "Cta. cte. ingresos", "Cta. cte. salidas", "Cta. cte. saldo final", "N° mov.", "Yape/transf. ingresos", "Yape/transf. salidas"]);
     const ini = fila + 1;
     for (const d of resumenPorDia(r.hojas)) {
       fila++;
       const row = rs.getRow(fila);
-      row.values = [new Date(d.fecha + "T12:00:00"), CIUDAD_LABEL[d.ciudad], d.saldoAnterior, d.ingresos, d.salidas, d.saldoFinal, d.ctaIngresos, d.ctaSalidas, d.ctaFinal, d.movimientos];
+      row.values = [new Date(d.fecha + "T12:00:00"), CIUDAD_LABEL[d.ciudad], d.saldoAnterior, d.ingresos, d.salidas, d.saldoFinal, d.ctaIngresos, d.ctaSalidas, d.ctaFinal, d.movimientos, d.yapeIngresos, d.yapeSalidas];
       row.eachCell((c, n) => {
         c.border = borde;
         c.font = { name: FUENTE, size: 10 } as Font;
         if (n === 1) c.numFmt = "ddd dd/mm/yyyy";
-        if (n >= 3 && n <= 9) c.numFmt = MONEY_CERO;
+        if ((n >= 3 && n <= 9) || n >= 11) c.numFmt = MONEY_CERO;
       });
       row.getCell(6).font = { name: FUENTE, size: 10, bold: true } as Font;
     }
     fila++;
     const tot = rs.getRow(fila);
     const suma = (col: string, v: number) => ({ formula: `SUBTOTAL(109,${col}${ini}:${col}${fila - 1})`, result: v });
-    tot.values = ["TOTAL DEL PERIODO", "", "", suma("D", T.ingresos), suma("E", T.salidas), "", suma("G", T.ctaIngresos), suma("H", T.ctaSalidas), "", suma("J", T.movimientos)];
+    tot.values = ["TOTAL DEL PERIODO", "", "", suma("D", T.ingresos), suma("E", T.salidas), "", suma("G", T.ctaIngresos), suma("H", T.ctaSalidas), "", suma("J", T.movimientos), suma("K", T.yapeIngresos), suma("L", T.yapeSalidas)];
     tot.eachCell({ includeEmpty: true }, (c, n) => {
-      if (n > 10) return;
+      if (n > 12) return;
       c.fill = relleno(TINT);
       c.border = borde;
       c.font = { name: FUENTE, size: 10, bold: true } as Font;
-      if (n >= 3 && n <= 9) c.numFmt = MONEY_CERO;
+      if ((n >= 3 && n <= 9) || n >= 11) c.numFmt = MONEY_CERO;
     });
     fila += 2;
   }
@@ -118,7 +118,7 @@ export async function generarXlsx(r: Reporte): Promise<Uint8Array> {
     rs.getCell(fila, 1).value = "⚠ Sin conexión: este reporte se armó con los datos guardados en este dispositivo y puede faltar lo que registraron otras personas.";
     rs.getCell(fila, 1).font = { name: FUENTE, size: 10, bold: true, color: { argb: RED } } as Font;
   }
-  anchos(rs, [20, 12, 15, 15, 15, 15, 17, 17, 18, 9]);
+  anchos(rs, [20, 12, 17, 15, 15, 17, 17, 17, 18, 9, 17, 17]);
   pie(rs);
 
   // ---- Caja diaria ------------------------------------------------------------------------------

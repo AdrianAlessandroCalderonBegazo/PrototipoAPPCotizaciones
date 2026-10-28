@@ -10,6 +10,7 @@ import { C, kicker, t } from "../theme";
 import { fdateLarga, money, today } from "../lib/format";
 import { usePuerta } from "../components/Puerta";
 import { CambiosSheet, CierreSheet, ReabrirSheet } from "./CierreSheets";
+import { DetalleFila } from "./DetalleFila";
 import { store } from "../lib/caja/runtime";
 import { diaCerrado, motivoSoloLectura, type Permisos } from "../lib/caja/permisos";
 import { hojaKey, type Ciudad, type Fila } from "../lib/caja/types";
@@ -39,6 +40,7 @@ export function CajaDiariaFlujo({ caja, estado, ciudad, setCiudad, permisos, irA
   const [envio, setEnvio] = useState<Fila | null>(null);
   const [anulando, setAnulando] = useState(false);
   const [sheet, setSheet] = useState<Hoja2>(null);
+  const [verFila, setVerFila] = useState<Fila | null>(null);
   const puerta = usePuerta(permisos, bottomInset);
 
   const setPaso = (p: Paso) => {
@@ -88,13 +90,15 @@ export function CajaDiariaFlujo({ caja, estado, ciudad, setCiudad, permisos, irA
         caja={caja} estado={estado} ciudad={ciudad} setCiudad={setCiudad} fecha={fecha} setFecha={setFecha} hoy={hoy}
         permisos={permisos} motivoSoloLectura={motivo}
         onNueva={() => puerta.pedir(pasado, () => (setEditar(undefined), setPaso("fila")), cerrado)}
-        onEditar={(f) => puerta.pedir(pasado, () => (setEditar(f), setPaso("fila")), cerrado)}
+        // un día que no se puede cambiar (cerrado o anterior sin permiso) se abre en solo lectura, con sus recibos
+        onEditar={(f) => (motivo !== null ? setVerFila(f) : (setEditar(f), setPaso("fila")))}
         onEnvio={setEnvio}
         onEnviarChica={() => puerta.pedir(pasado, () => setPaso("enviar"), cerrado)}
         onSaldos={() => setPaso("saldos")}
         onCerrarDia={() => setSheet("cerrar")} onReabrir={() => setSheet("reabrir")} onCambios={() => setSheet("cambios")} {...inset}
       />
       {puerta.modal}
+      {verFila ? <DetalleFila fila={verFila} fecha={fecha} onClose={() => setVerFila(null)} bottomInset={bottomInset} /> : null}
       {sheet === "cerrar" && hoja ? <CierreSheet ciudad={ciudad} fecha={fecha} saldoCalculado={saldosDe(hoja).saldo_final_caja} onClose={() => setSheet(null)} bottomInset={bottomInset} /> : null}
       {sheet === "reabrir" ? <ReabrirSheet ciudad={ciudad} fecha={fecha} onClose={() => setSheet(null)} bottomInset={bottomInset} /> : null}
       {sheet === "cambios" ? <CambiosSheet ciudad={ciudad} fecha={fecha} onClose={() => setSheet(null)} bottomInset={bottomInset} /> : null}
