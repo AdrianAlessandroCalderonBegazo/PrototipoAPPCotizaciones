@@ -18,6 +18,14 @@ if [ "$(stat -c %s "$DESTINO/cotizador_$FECHA.sql.gz")" -lt 1000 ]; then
   ERR=1
 fi
 
+# Base de Finanzas 2 (versión de prueba; si todavía no existe, se avisa pero no es un error)
+if docker compose exec -T db psql -U icr -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='finanzas2'" | grep -q 1; then
+  docker compose exec -T db pg_dump -U icr -d finanzas2 --no-owner | gzip > "$DESTINO/finanzas2_$FECHA.sql.gz" || ERR=1
+  docker compose exec -T finanzas2-api tar -czf - -C /data fotos > "$DESTINO/fotos_finanzas2_$FECHA.tar.gz" 2>/dev/null || { echo "ERROR: no se pudieron respaldar las fotos de finanzas 2" >&2; ERR=1; }
+else
+  echo "Aviso: la base finanzas2 todavía no existe (Finanzas 2 no se ha usado); no se respalda."
+fi
+
 # Fotos de la app (cotizador) y fotos de recibos de finanzas
 docker compose exec -T api tar -czf - -C /app uploads > "$DESTINO/fotos_$FECHA.tar.gz" 2>/dev/null || { echo "ERROR: no se pudieron respaldar las fotos de la app" >&2; ERR=1; }
 docker compose exec -T finanzas-api tar -czf - -C /data fotos > "$DESTINO/fotos_finanzas_$FECHA.tar.gz" 2>/dev/null || { echo "ERROR: no se pudieron respaldar las fotos de finanzas" >&2; ERR=1; }
@@ -26,6 +34,7 @@ for f in "$DESTINO/fotos_$FECHA.tar.gz" "$DESTINO/fotos_finanzas_$FECHA.tar.gz";
 done
 
 find "$DESTINO" -name 'cotizador_*.sql.gz' -mtime +"$DIAS" -delete
+find "$DESTINO" -name 'finanzas2_*.sql.gz' -mtime +"$DIAS" -delete
 find "$DESTINO" -name 'fotos_*.tar.gz' -mtime +"$DIAS" -delete
 
 # Copia fuera del servidor (recomendado): configura una vez "rclone config" y define RCLONE_DESTINO,

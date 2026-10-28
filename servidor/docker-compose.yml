@@ -67,12 +67,49 @@ services:
     volumes:
       - finanzas_fotos:/data/fotos
 
+  # Finanzas 2 (versión de prueba para comparar con Finanzas 1): el MISMO código de API, pero con su PROPIA base de datos
+  # («finanzas2», se crea sola), sus propias fotos y sus propias tablas. Los usuarios y las sesiones son los mismos de siempre
+  # (AUTH_DATABASE_URL apunta a la base principal solo para validar quién es cada persona).
+  finanzas2-api:
+    build:
+      context: ../finanzas
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      MODO: fin
+      PORT: "8788"
+      DATABASE_URL: postgres://icr:${POSTGRES_PASSWORD}@db:5432/finanzas2
+      CREAR_BASE: "1"
+      MIGRACIONES_DIR: /srv/db/migrations-fin
+      AUTH_DATABASE_URL: postgres://icr:${POSTGRES_PASSWORD}@db:5432/cotizador
+      MAIN_API_URL: http://api:3000
+      API_PREFIX: /api-fin
+      UPLOAD_DIR: /data/fotos
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      FIN_ROLES_CONFIG: ${FIN_ROLES_CONFIG:-}
+      FINANZAS_ROLES: ${FINANZAS_ROLES:-}
+      TZ: America/Lima
+    volumes:
+      - finanzas2_fotos:/data/fotos
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8788/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
       - api
       - finanzas-api
+      - finanzas2-api
     ports:
       - "80:80"
       - "443:443"
@@ -82,6 +119,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./web:/srv/web:ro
       - ./finanzas-web:/srv/finanzas:ro
+      - ./finanzas2-web:/srv/finanzas2:ro
       - caddy_data:/data
       - caddy_config:/config
 
@@ -89,5 +127,6 @@ volumes:
   pgdata:
   uploads:
   finanzas_fotos:
+  finanzas2_fotos:
   caddy_data:
   caddy_config:

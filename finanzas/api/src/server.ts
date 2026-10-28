@@ -7,6 +7,7 @@
 import http from "node:http";
 import { ApiError, type Auth, type Usuario } from "./auth";
 import type { Servicio } from "./service";
+import type { Fin } from "./fin";
 import { crearPermisos, type Permisos } from "./permisos";
 
 type Ctx = { user: Usuario; params: Record<string, string>; query: Record<string, string>; body: any; raw: Buffer; contentType: string };
@@ -22,8 +23,8 @@ export type LoginPrincipal = {
   salir(token: string): Promise<void>;
 };
 
-export function crearServidor(opts: { auth: Auth; svc: Servicio; permisos?: Permisos; loginPrincipal?: LoginPrincipal; corsOrigin?: string; prefijo?: string; loginDev?: boolean }) {
-  const { auth, svc, loginPrincipal, corsOrigin = "", prefijo = "", loginDev = false } = opts;
+export function crearServidor(opts: { auth: Auth; svc: Servicio; fin?: Fin; modo?: "caja" | "fin"; permisos?: Permisos; loginPrincipal?: LoginPrincipal; corsOrigin?: string; prefijo?: string; loginDev?: boolean }) {
+  const { auth, svc, fin, modo = "caja", loginPrincipal, corsOrigin = "", prefijo = "", loginDev = false } = opts;
   const permisos = opts.permisos ?? crearPermisos({});
   const rutas: { metodo: string; patron: RegExp; claves: string[]; binario?: boolean; h: Handler }[] = [];
   const ruta = (metodo: string, path: string, h: Handler, binario = false) => {
@@ -55,6 +56,22 @@ export function crearServidor(opts: { auth: Auth; svc: Servicio; permisos?: Perm
   ruta("PUT", "/caja-chica/movimientos/:id", (c) => svc.putMovChica(c.params.id, c.body, c.user));
   ruta("DELETE", "/caja-chica/movimientos/:id", (c) => svc.deleteMovChica(c.params.id, c.user));
   ruta("POST", "/caja/erp/reintentar", (c) => svc.reintentarErp(c.user));
+
+  // ICR Finanzas 2 (docs/API-V2.md): rutas /v2 sobre sus propias tablas (fin_*). En modo "fin" (el servicio de la versión 2)
+  // solo existen estas; en modo "caja" (versión 1) no.
+  if (modo === "fin") rutas.length = 0;
+  if (fin && modo === "fin") {
+    ruta("GET", "/v2/snapshot", (c) => fin.snapshot(c.query));
+    ruta("PUT", "/v2/cuentas/:id", (c) => fin.putCuenta(c.params.id, c.body, c.user));
+    ruta("POST", "/v2/cuentas/:id/aviso-prueba", (c) => fin.probarAviso(c.params.id, c.user));
+    ruta("PUT", "/v2/personas/:id", (c) => fin.putPersona(c.params.id, c.body, c.user));
+    ruta("PUT", "/v2/mov/:id", (c) => fin.putMov(c.params.id, c.body, c.user));
+    ruta("DELETE", "/v2/mov/:id", (c) => fin.deleteMov(c.params.id, c.user));
+    ruta("POST", "/v2/cuadres", (c) => fin.postCuadre(c.body, c.user));
+    ruta("PUT", "/v2/adjuntos/:id", (c) => fin.putAdjunto(c.params.id, c.query, c.contentType, c.raw, c.user), true);
+    ruta("GET", "/v2/adjuntos/:id", async (c) => ({ __binario: true, ...(await fin.getAdjunto(c.params.id)) }) as Respuesta);
+    ruta("DELETE", "/v2/adjuntos/:id", (c) => fin.deleteAdjunto(c.params.id));
+  }
 
   const leer = (req: http.IncomingMessage, max: number) =>
     new Promise<Buffer>((resolve, reject) => {

@@ -16,6 +16,9 @@ COPY api/scripts ./scripts
 COPY db /srv/db
 COPY app/src/lib/data.ts /srv/app/src/lib/data.ts
 COPY app/src/lib/caja/calc.ts app/src/lib/caja/types.ts /srv/app/src/lib/caja/
+# Finanzas 2 (rutas /v2) usa sus propias reglas de cálculo
+COPY app2/src/lib/format.ts /srv/app2/src/lib/format.ts
+COPY app2/src/lib/fin/calc.ts app2/src/lib/fin/categorias.ts app2/src/lib/fin/reposicion.ts app2/src/lib/fin/types.ts /srv/app2/src/lib/fin/
 
 RUN mkdir -p /data/fotos && chown -R node:node /data /srv
 USER node

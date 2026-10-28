@@ -18,9 +18,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIMES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FOTO = 10 * 1024 * 1024;
 
-const bad = (message: string, code = "DATOS_INVALIDOS") => new ApiError(400, code, message);
+export const bad = (message: string, code = "DATOS_INVALIDOS") => new ApiError(400, code, message);
 
-const uuid = (v: unknown, campo: string) => {
+export const uuid = (v: unknown, campo: string) => {
   if (typeof v !== "string" || !UUID.test(v)) throw bad(`${campo} debe ser un UUID.`);
   return v.toLowerCase();
 };
@@ -28,24 +28,24 @@ const ciudadDe = (v: unknown): Ciudad => {
   if (!CIUDADES.includes(v as Ciudad)) throw bad(`ciudad debe ser ${CIUDADES.join(" o ")}.`);
   return v as Ciudad;
 };
-const fechaDe = (v: unknown, campo = "fecha") => {
+export const fechaDe = (v: unknown, campo = "fecha") => {
   if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(Date.parse(v + "T00:00:00Z")) || new Date(v + "T00:00:00Z").toISOString().slice(0, 10) !== v)
     throw bad(`${campo} debe tener el formato AAAA-MM-DD.`);
   return v;
 };
-const importe = (v: unknown, campo: string, { positivo = false } = {}) => {
+export const importe = (v: unknown, campo: string, { positivo = false } = {}) => {
   const n = v == null || v === "" ? 0 : Number(v);
   if (!Number.isFinite(n) || n < 0 || n > 999_999_999) throw bad(`${campo} no es un importe válido.`);
   if (positivo && n <= 0) throw bad(`${campo} debe ser mayor a 0.`);
   return r2(n);
 };
-const texto = (v: unknown, max = 500) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+export const texto = (v: unknown, max = 500) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 /** Fecha de hoy en Perú (UTC-5, sin horario de verano). */
 export const hoyLima = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Lima" }).format(new Date());
 
-const iso = (d: unknown) => (d ? new Date(d as string).toISOString() : "");
-const nullable = (v: unknown) => (v == null || v === "" ? null : String(v));
+export const iso = (d: unknown) => (d ? new Date(d as string).toISOString() : "");
+export const nullable = (v: unknown) => (v == null || v === "" ? null : String(v));
 
 const COLS_FILA = `f.id, f.hoja_id, f.orden, f.tipo, f.descripcion, f.responsable, f.comprobante,
   f.caja_ingreso_efectivo::float8 AS caja_ingreso_efectivo, f.caja_ingreso_transf::float8 AS caja_ingreso_transf,
