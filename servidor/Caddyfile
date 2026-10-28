@@ -100,3 +100,16 @@ finanza.{$DOMINIO} {
 		file_server
 	}
 }
+
+# ---------------------------------------------------------------------------------------------------------
+# Relay (aplicativo «on the side», otro proyecto que comparte este servidor). NO BORRAR ESTE BLOQUE:
+# cada despliegue de icr reemplaza el Caddyfile del VPS por este archivo, así que si Relay no está aquí se cae.
+# Los contenedores de Relay (relay-web) deben estar en la misma red de Docker que Caddy.
+# ---------------------------------------------------------------------------------------------------------
+# Relay (atleta y coach) → contenedor relay-web
+atleta.adriancalderonbegazo.site {
+	reverse_proxy relay-web:8081
+}
+coach.adriancalderonbegazo.site {
+	reverse_proxy relay-web:8082
+}

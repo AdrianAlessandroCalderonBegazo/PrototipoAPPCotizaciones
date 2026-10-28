@@ -86,3 +86,7 @@ Hecho después de lo anterior; reemplaza a la idea de MySQL/PHP:
 - Dominio: `icrenergy.tech` (subdominios cotizador., app., api., finanzas.). VPS KVM 4 de Hostinger, IP 200.141.24.38.
 - Pendiente: probar el despliegue real en el VPS (Docker no se pudo probar en el entorno de desarrollo), roles/login con el ERP, productos desde el ERP,
   respaldo externo, revisar el plazo del VPS (la caducidad mostraba 2026-11-22).
+
+## 11. Relay en el mismo Caddy (no borrar)
+`servidor/Caddyfile` termina con los bloques de **Relay** (otro proyecto del mismo dueño: `atleta.adriancalderonbegazo.site` → `relay-web:8081` y `coach.adriancalderonbegazo.site` → `relay-web:8082`).
+Cada despliegue de icr sustituye el Caddyfile del VPS por este, así que **se deben conservar en todas las versiones nuevas** del Caddyfile (no quitarlos al editarlo ni al regenerarlo).
