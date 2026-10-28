@@ -191,6 +191,13 @@ Finanzas 1 no se toca.
 El respaldo diario (`./scripts/respaldo.sh`) ya incluye la base `finanzas2` y sus fotos. Para descartar la prueba: `docker compose stop finanzas2-api` y, si quieres,
 `docker compose exec db psql -U icr -d postgres -c "DROP DATABASE finanzas2"`.
 
+## 7d. Relay (otro aplicativo en el mismo servidor)
+
+El `Caddyfile` incluye al final los bloques de **Relay** (`atleta.` y `coach.adriancalderonbegazo.site` → contenedor `relay-web`). Como cada actualización
+de icr reemplaza el Caddyfile del VPS por el de este proyecto, esos bloques **deben seguir en `servidor/Caddyfile`** en cada versión nueva; si se borran, Relay se cae.
+El contenedor `relay-web` tiene que estar en la misma red de Docker que Caddy (si Relay no responde después de actualizar: `docker network ls` y comprobar
+que `relay-web` y `icr-caddy-1` comparten una red, y `docker compose logs caddy`).
+
 ## 8. Respaldos (importante)
 
 ```bash
