@@ -1,0 +1,59 @@
+# ICR — guía del repositorio
+
+Sistema de Inversiones ICR (Arequipa): **ICR ERP** (app central), **Logística** (antes Cotizador, Flutter) y **Finanzas** (caja diaria y caja chica),
+todo sobre un solo Postgres en un VPS con Docker + Caddy (`icrenergy.tech`). Plan y decisiones del ERP: `erp/ESPECIFICACION.md`.
+Se escribe y se responde en **español**, en lenguaje simple (el dueño del proyecto no es programador).
+
+## Estructura
+
+| Carpeta | Qué es | Stack |
+|---|---|---|
+| `servidor/api` | API principal compartida (login, sesiones, roles y matriz de permisos, catálogo, cotizaciones, requerimientos, herramientas, rutas del ERP) | Node 22, Express 5, JS ESM, `pg` |
+| `servidor/db` | `schema.sql` (base inicial) + `migraciones/NNN_*.sql` (se aplican solas al arrancar la API, una vez y en orden) | Postgres 16 |
+| `servidor/portal` | Vista general `app.` (HTML + JS sin compilar) | — |
+| `servidor/Caddyfile`, `docker-compose.yml`, `scripts/`, `DESPLIEGUE.md` | Despliegue en el VPS | Docker, Caddy |
+| `erp/web` | **ICR ERP** (`erp.`) | React 18 + TS + Vite + Tailwind 3, react-router 6 |
+| `lib/`, `test/` | App **Logística** (`cotizador.` PWA y APK) | Flutter |
+| `finanzas/api` | API de Finanzas 1 (`/api-caja`) y Finanzas 2 (`MODO=fin`, `/api-fin`, base `finanzas2`) | Node TS (tsx), servidor HTTP propio |
+| `finanzas/app` | Finanzas 1 (`finanzas.`) | Expo / React Native Web |
+| `finanzas/app2` | Finanzas 2, versión de prueba (`finanza.`) | Expo / React Native Web |
+
+## Comandos
+
+```bash
+# API principal (pruebas contra un Postgres real; crea y borra su propia base)
+cd servidor/api && npm ci && DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm test
+# Levantarla en local
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/erp_demo ADMIN_USUARIO=admin ADMIN_CLAVE=… node src/index.js
+
+# ERP web
+cd erp/web && npm ci && npm run typecheck && npm test && npm run build   # dev: npm run dev (proxy /api → localhost:3000)
+
+# Finanzas
+cd finanzas/api && npm ci && npm run typecheck && npm test              # usa PGlite, no necesita Postgres
+cd finanzas/app && npm ci && npm run typecheck && npm test
+```
+
+Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build finanzas`, `Build finanzas2`) → zip descargable → el usuario lo sube con
+`scp` y corre `servidor/scripts/actualizar_*.sh`. **No lanzar `build_apk.yml`** (el usuario no quiere APK por ahora).
+
+## Reglas y decisiones
+
+- **Relay**: `servidor/Caddyfile` termina con los bloques `atleta.` y `coach.adriancalderonbegazo.site` (contenedor `relay-web`, otro proyecto del
+  mismo VPS). **Nunca borrarlos**: cada despliegue reemplaza el Caddyfile del VPS por este.
+- **Roles**: `admin`, `ventas`, `contabilidad`, `tecnico` (etiquetas: Administrador, Ventas, Contabilidad, Técnico). Iguales en todas las apps.
+- **Permisos**: tabla `rol_permisos` (rol × módulo → `ninguno` | `lectura` | `completo`), editable solo por admin (ERP › Configuración).
+  Se validan **en el servidor**: `exigirNivel` / `nivel()` en `servidor/api/src/permisos.js`; Finanzas lee el nivel de `caja_chica` con un JOIN en
+  `finanzas/api/src/auth.ts` y decide en `finanzas/api/src/permisos.ts`. Módulos: `servidor/api/src/permisos.js › MODULOS` (si se agrega uno,
+  agregarlo también en `erp/web/src/modulos.ts` y una migración con sus filas por defecto).
+- **Auditoría**: todo cambio de dinero, estado, emisión, eliminación o configuración llama a `auditar(req, {...})` (`servidor/api/src/auditoria.js`).
+- **Nunca inventar datos**: desconocido = `null` en la base y «Sin dato» en pantalla (`erp/web/src/formato.ts`).
+- **Dinero**: `NUMERIC` + moneda; la API principal parsea `NUMERIC` como float (`db.js`), así que el código nuevo de dinero lee `::text` y calcula en céntimos.
+- **Fechas**: la base guarda hora de Lima sin zona (`now() AT TIME ZONE 'America/Lima'`).
+- **Secretos** solo en `servidor/.env` del VPS (ver `.env.example`); nunca en el código, la base ni el chat. No pedir claves al usuario por chat.
+- **Migraciones**: archivo nuevo en `servidor/db/migraciones/` (no tocar `schema.sql` salvo para instalaciones nuevas) o en `finanzas/db/migrations*/`.
+- **Diseño del ERP**: tokens del sistema de diseño en `erp/web/src/index.css` (variables CSS, modo oscuro con `data-theme`), clases en
+  `tailwind.config.js`. Respetar el diseño de `ERP_ICR.zip`; no cambiarlo sin consultar.
+- **Fases**: el ERP se construye por fases (ver `erp/ESPECIFICACION.md`); al empezar cada una se presenta el plan y se espera aprobación.
+  La cotización se quita de Logística recién en la Fase 3.
+- Rama de trabajo: `claude/checklist-productos-apk-build-xruncz`.
