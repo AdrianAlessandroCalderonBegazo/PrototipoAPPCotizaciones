@@ -45,7 +45,7 @@ void main() {
     DbHelper.instance = DbApi.instancia;
     await entrarComo('admin', claveAdmin);
     final existentes = {for (final u in await api.get('usuarios') as List) (u as Map)['usuario']: u['id']};
-    for (final (u, rol) in [('juan', 'empleado'), ('carlos', 'encargado'), ('pedro', 'almacen'), ('ana', 'almacen'), ('vera', 'vendedor')]) {
+    for (final (u, rol) in [('juan', 'ventas'), ('carlos', 'tecnico'), ('pedro', 'tecnico'), ('ana', 'tecnico'), ('vera', 'ventas')]) {
       if (existentes.containsKey(u)) {
         // de una corrida anterior: se deja con la clave y el rol de la prueba
         await api.put('usuarios/${existentes[u]}', {'clave': 'clave-segura', 'rol': rol, 'activo': true});
@@ -70,7 +70,7 @@ void main() {
     });
 
     test('un requerimiento pasa por varias personas y todas ven lo mismo', () async {
-      // Juan (empleado) crea el requerimiento
+      // Juan (ventas: solo lectura en Logística) crea el requerimiento
       await entrarComo('juan');
       final deJuan = AlmacenState();
       await deJuan.cargar();
@@ -78,10 +78,10 @@ void main() {
       expect(creado.numero, matches(r'^REQ-\d{4}$'));
       expect(creado.version, 1);
 
-      // Un empleado no puede aprobar: el servidor lo rechaza
+      // Con solo lectura no se aprueba: el servidor lo rechaza
       await expectLater(deJuan.aprobarRequerimiento(creado, aprobadoPor: 'Juan'), throwsA(isA<ApiError>().having((e) => e.codigo, 'codigo', 403)));
 
-      // Carlos (encargado) lo ve en su celular y lo aprueba
+      // Carlos (técnico: acceso completo) lo ve en su celular y lo aprueba
       await entrarComo('carlos');
       final deCarlos = AlmacenState();
       await deCarlos.cargar();
@@ -91,7 +91,7 @@ void main() {
       expect(aprobado.estado, EstadoRequerimiento.aprobado);
       expect(aprobado.version, 2);
 
-      // Pedro y Ana (almacén) abren el mismo requerimiento
+      // Pedro y Ana (técnicos) abren el mismo requerimiento
       await entrarComo('pedro');
       final dePedro = AlmacenState();
       await dePedro.cargar();

@@ -1,6 +1,6 @@
 # HTTPS automático (Let's Encrypt) para cada subdominio. DOMINIO viene del .env
 # (por ejemplo icrenergy.tech). Los registros DNS tipo A de cotizador., app.,
-# api. y finanzas. deben apuntar a la IP del VPS.
+# api., finanzas., finanza. y erp. deben apuntar a la IP del VPS.
 
 (seguridad) {
 	encode zstd gzip
@@ -96,6 +96,28 @@ finanza.{$DOMINIO} {
 		header /index.html Cache-Control "no-cache"
 		header /sw.js Cache-Control "no-cache"
 		header /manifest.webmanifest Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# ERP ICR: la app web (React) + la API principal en /api y los archivos subidos en /uploads (mismo origen, sin CORS).
+# Los archivos con huella en el nombre (/assets/*) se guardan en caché un año; index.html nunca.
+erp.{$DOMINIO} {
+	import seguridad
+	request_body {
+		max_size 12MB
+	}
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle /uploads/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/erp
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

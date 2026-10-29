@@ -9,13 +9,20 @@ class Usuario {
   final String nombre;
   final String rol;
 
-  const Usuario({required this.id, required this.usuario, required this.nombre, required this.rol});
+  /// Nivel del rol en cada módulo según la matriz de permisos del ERP:
+  /// 'ninguno', 'lectura' o 'completo' (p. ej. {'logistica': 'completo'}).
+  final Map<String, String> niveles;
+
+  const Usuario({required this.id, required this.usuario, required this.nombre, required this.rol, this.niveles = const {}});
 
   factory Usuario.fromApi(Map<String, dynamic> m) => Usuario(
         id: (m['id'] as num).toInt(),
         usuario: (m['usuario'] ?? '').toString(),
         nombre: (m['nombre'] ?? '').toString(),
-        rol: (m['rol'] ?? 'empleado').toString(),
+        rol: (m['rol'] ?? 'tecnico').toString(),
+        niveles: {
+          for (final e in Map<String, dynamic>.from((m['niveles'] as Map?) ?? const {}).entries) e.key: e.value.toString(),
+        },
       );
 
   String get rolEtiqueta => rolesUsuario[rol] ?? rol;
@@ -23,18 +30,19 @@ class Usuario {
 
 const rolesUsuario = {
   'admin': 'Administrador',
-  'empleado': 'Empleado',
-  'encargado': 'Encargado',
-  'almacen': 'Almacén',
-  'vendedor': 'Vendedor',
-  'finanzas': 'Finanzas',
+  'ventas': 'Ventas',
+  'contabilidad': 'Contabilidad',
+  'tecnico': 'Técnico',
 };
 
+const _orden = {'ninguno': 0, 'lectura': 1, 'completo': 2};
+
 /// Sesión de la persona que usa la app. Sin servidor no hay usuarios: todo
-/// está permitido, como siempre. Con servidor, el rol decide qué botones se
-/// pueden usar (el servidor también lo comprueba): cualquiera envía un
-/// requerimiento, el encargado lo aprueba, el almacenero lo alista y quien
-/// lo pidió confirma que lo recibió.
+/// está permitido, como siempre. Con servidor, la matriz de permisos del ERP
+/// (ERP › Configuración) decide qué botones se pueden usar (el servidor
+/// también lo comprueba): con lectura en Logística se piden requerimientos y
+/// se confirma lo recibido; con acceso completo además se aprueba, se alista
+/// y se confirman salidas y devoluciones.
 class AuthState extends ChangeNotifier {
   Usuario? _usuario;
   bool _cargando = true;
@@ -47,14 +55,21 @@ class AuthState extends ChangeNotifier {
   /// Con servidor, hay que ingresar antes de usar la app.
   bool get requiereIngreso => _servidor && _usuario == null;
 
-  bool _es(List<String> roles) => !_servidor || (_usuario != null && (_usuario!.rol == 'admin' || roles.contains(_usuario!.rol)));
+  /// ¿El rol llega a ese nivel en el módulo? El administrador siempre.
+  bool _nivel(String modulo, String minimo) {
+    if (!_servidor) return true;
+    final u = _usuario;
+    if (u == null) return false;
+    if (u.rol == 'admin') return true;
+    return (_orden[u.niveles[modulo] ?? 'ninguno'] ?? 0) >= (_orden[minimo] ?? 2);
+  }
 
-  bool get puedeAprobar => _es(['encargado']);
-  bool get puedeAlistar => _es(['almacen']);
-  bool get puedeConfirmarSalida => _es(['almacen']);
-  bool get puedeConfirmarDevolucion => _es(['almacen', 'encargado']);
-  bool get puedeGestionarListas => _es(['encargado', 'almacen']);
-  bool get puedeEditarProductos => _es(['encargado', 'vendedor']);
+  bool get puedeAprobar => _nivel('logistica', 'completo');
+  bool get puedeAlistar => _nivel('logistica', 'completo');
+  bool get puedeConfirmarSalida => _nivel('logistica', 'completo');
+  bool get puedeConfirmarDevolucion => _nivel('logistica', 'completo');
+  bool get puedeGestionarListas => _nivel('logistica', 'completo');
+  bool get puedeEditarProductos => _nivel('cotizacion', 'completo');
   bool get esAdmin => !_servidor || _usuario?.rol == 'admin';
 
   /// Recupera la sesión guardada (si sigue vigente).

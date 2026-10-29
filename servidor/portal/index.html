@@ -124,8 +124,9 @@ const ETIQ = {
 };
 const ETIQ_HER = { pendiente: 'En obra · por devolver' };
 const pildora = (estado, tipo) => `<span class="pildora p-${esc(estado)}">${esc((tipo === 'her' && ETIQ_HER[estado]) || ETIQ[estado] || estado)}</span>`;
-const ROLES = { admin: 'Administrador', empleado: 'Empleado', encargado: 'Encargado', almacen: 'Almacén', vendedor: 'Vendedor', finanzas: 'Finanzas' };
-const VE_FINANZAS = ['admin', 'finanzas', 'encargado'];
+const ROLES = { admin: 'Administrador', ventas: 'Ventas', contabilidad: 'Contabilidad', tecnico: 'Técnico' };
+// Lo que cada rol ve sale de la matriz de permisos del ERP (yo.niveles); el servidor lo vuelve a comprobar.
+const nivel = (modulo) => (yo?.rol === 'admin' ? 'completo' : yo?.niveles?.[modulo] || 'ninguno');
 
 let token = null, yo = null, pestana = 'requerimientos', datos = {}, filtro = { q: '', estado: '' }, reloj = null;
 
@@ -178,7 +179,7 @@ function iniciar() {
   const rol = ROLES[yo.rol] || yo.rol;
   $('quien').textContent = yo.nombre === rol ? rol : `${yo.nombre} · ${rol}`;
   mostrar('app');
-  pestana = yo.rol === 'finanzas' ? 'finanzas' : 'requerimientos';
+  pestana = nivel('logistica') === 'ninguno' && nivel('caja_chica') !== 'ninguno' ? 'finanzas' : 'requerimientos';
   dibujarPestanas();
   cargar();
   clearInterval(reloj);
@@ -214,9 +215,9 @@ function dibujarTarjetas() {
 /* ---------------- pestañas ---------------- */
 function dibujarPestanas() {
   const lista = [['requerimientos', 'Requerimientos'], ['herramientas', 'Herramientas'], ['cotizaciones', 'Cotizaciones']];
-  if (VE_FINANZAS.includes(yo.rol)) lista.unshift(['finanzas', 'Finanzas']);
+  if (nivel('caja_chica') !== 'ninguno') lista.unshift(['finanzas', 'Finanzas']);
   if (yo.rol === 'admin') lista.push(['usuarios', 'Usuarios']);
-  if (yo.rol === 'admin' || yo.rol === 'encargado') lista.push(['bitacora', 'Quién hizo qué']);
+  if (nivel('logistica') === 'completo') lista.push(['bitacora', 'Quién hizo qué']);
   $('pestanas').innerHTML = lista.map(([k, t]) => `<button data-p="${k}" class="${k === pestana ? 'activa' : ''}">${t}</button>`).join('');
   $('pestanas').querySelectorAll('button').forEach((b) => b.addEventListener('click', async () => {
     pestana = b.dataset.p; filtro = { q: '', estado: '' }; dibujarPestanas();
@@ -369,7 +370,7 @@ function formUsuario() {
   abrir('Nuevo usuario', `<form id="fU"><label class="campo">Usuario (sin espacios)<input id="uU" required pattern="[a-zA-Z0-9._-]{3,60}" autocapitalize="off"></label>
     <label class="campo">Nombre completo<input id="uN" required></label>
     <label class="campo">Clave (mínimo 6 caracteres)<input id="uC" type="text" required minlength="6"></label>
-    <label class="campo">Rol<select id="uR">${Object.entries(ROLES).map(([k, t]) => `<option value="${k}" ${k === 'empleado' ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    <label class="campo">Rol<select id="uR">${Object.entries(ROLES).map(([k, t]) => `<option value="${k}" ${k === 'tecnico' ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     <div class="error" id="eU"></div><button class="btn primario" type="submit">Crear usuario</button></form>`);
   $('fU').addEventListener('submit', async (e) => {
     e.preventDefault();

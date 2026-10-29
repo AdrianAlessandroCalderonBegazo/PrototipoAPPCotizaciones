@@ -1,4 +1,4 @@
-# Cotizador ICR + Finanzas en un VPS: base de datos PostgreSQL + dos APIs + HTTPS automático.
+# ERP ICR + Logística (cotizador) + Finanzas en un VPS: base de datos PostgreSQL + dos APIs + HTTPS automático.
 # Estructura esperada:  /opt/icr/servidor (esta carpeta) y /opt/icr/finanzas (al lado).
 #   1) cp .env.example .env   y completa los valores
 #   2) docker compose up -d --build
@@ -36,6 +36,11 @@ services:
       ADMIN_USUARIO: ${ADMIN_USUARIO:-admin}
       ADMIN_CLAVE: ${ADMIN_CLAVE:?Falta ADMIN_CLAVE en el archivo .env}
       CLAVE_EDICION: ${CLAVE_EDICION:-1234}
+      # Integraciones del ERP (Configuración › Integraciones). Opcionales.
+      FINANZAS_API_URL: http://finanzas-api:8787
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODELO: ${OLLAMA_MODELO:-qwen3:4b}
+      VRM_TOKEN: ${VRM_TOKEN:-}
       TZ: America/Lima
     volumes:
       - uploads:/app/uploads
@@ -57,12 +62,6 @@ services:
       MAIN_API_URL: http://api:3000
       API_PREFIX: /api-caja
       UPLOAD_DIR: /data/fotos
-      FINANZAS_ROLES: ${FINANZAS_ROLES:-}
-      FINANZAS_ROLES_CORREGIR: ${FINANZAS_ROLES_CORREGIR:-}
-      FINANZAS_ROLES_CERRAR: ${FINANZAS_ROLES_CERRAR:-}
-      FINANZAS_ROLES_REABRIR: ${FINANZAS_ROLES_REABRIR:-}
-      FINANZAS_ROLES_CONFIG: ${FINANZAS_ROLES_CONFIG:-}
-      FINANZAS_ROLES_REVISAR: ${FINANZAS_ROLES_REVISAR:-}
       TZ: America/Lima
     volumes:
       - finanzas_fotos:/data/fotos
@@ -91,8 +90,6 @@ services:
       API_PREFIX: /api-fin
       UPLOAD_DIR: /data/fotos
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      FIN_ROLES_CONFIG: ${FIN_ROLES_CONFIG:-}
-      FINANZAS_ROLES: ${FINANZAS_ROLES:-}
       TZ: America/Lima
     volumes:
       - finanzas2_fotos:/data/fotos
@@ -120,6 +117,7 @@ services:
       - ./web:/srv/web:ro
       - ./finanzas-web:/srv/finanzas:ro
       - ./finanzas2-web:/srv/finanzas2:ro
+      - ./erp-web:/srv/erp:ro
       - caddy_data:/data
       - caddy_config:/config
 

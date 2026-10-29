@@ -118,32 +118,26 @@ cd /opt/icr/servidor
 ./scripts/actualizar_finanzas.sh ~/finanzas-web.zip
 ```
 
-(Si te pasaron el zip ya armado, es el mismo paso.) Abre `https://finanzas.TUDOMINIO` e ingresa con un usuario de rol **Finanzas**, **Encargado** o **Administrador**.
+(Si te pasaron el zip ya armado, es el mismo paso.) Abre `https://finanzas.TUDOMINIO` e ingresa con un usuario que tenga acceso a caja chica en la matriz de permisos (por defecto **Contabilidad** o **Administrador**).
 La API de Finanzas no necesita configuración extra: usa la misma base y los mismos usuarios.
 
 ## 7. Primer ingreso
 
 1. Abre `https://app.TUDOMINIO` e ingresa con `admin` y tu `ADMIN_CLAVE`.
-2. Pestaña **Usuarios** → **Nuevo usuario** para cada persona. Roles:
-   - **Empleado**: pide materiales, registra salidas de herramientas, cotiza y confirma lo que recibió.
-   - **Encargado**: aprueba requerimientos y confirma devoluciones.
-   - **Almacén**: alista los materiales, confirma salidas y devoluciones de herramientas.
-   - **Vendedor**: cotiza y edita productos.
-   - **Administrador**: todo, incluido eliminar documentos y manejar usuarios.
-   - **Finanzas**: lleva la caja diaria y la caja chica en `finanzas.TUDOMINIO`: registra, corrige días anteriores y cierra el día.
+2. Crea a cada persona (en el ERP: `https://erp.TUDOMINIO` → **Configuración › Usuarios y roles**, o en la pestaña **Usuarios** de
+   `app.TUDOMINIO`). Hay 4 roles, los mismos en el ERP, Logística y Finanzas:
+   - **Administrador**: todo, incluido eliminar documentos, manejar usuarios y la matriz de permisos.
+   - **Ventas**: cotiza, edita productos; en Logística pide materiales y confirma lo recibido.
+   - **Contabilidad**: caja chica completa (registra, corrige días anteriores, cierra el día); ve cotizaciones.
+   - **Técnico**: Logística completa (aprueba, alista, confirma salidas y devoluciones); sin acceso a caja chica.
 
-   Quién puede qué en **Finanzas** (el servidor lo comprueba, no hay códigos compartidos):
+   Qué puede hacer cada rol en cada módulo (ninguno / lectura / completo) se cambia en **ERP › Configuración › Matriz de permisos**
+   (solo el administrador). El servidor lo comprueba en cada pedido; vale para el ERP, Logística, Finanzas 1 y Finanzas 2.
+   En **caja chica**: *lectura* = ver la caja, alertas e historial; *completo* = además registrar, corregir días anteriores y cerrar.
+   Reabrir un día cerrado y cambiar saldos iniciales: solo el administrador.
 
-   | | Admin | Finanzas | Encargado | Empleado / Almacén / Vendedor |
-   |---|:-:|:-:|:-:|:-:|
-   | Entrar y registrar movimientos de hoy | ✔ | ✔ | ✔ | — |
-   | Corregir días anteriores | ✔ | ✔ | — | — |
-   | Cerrar el día (arqueo) | ✔ | ✔ | — | — |
-   | Reabrir un día cerrado (con motivo) | ✔ | — | — | — |
-   | Cambiar saldos iniciales | ✔ | — | — | — |
-   | Ver alertas, historial de cambios y reportes | ✔ | ✔ | ✔ | — |
-
-   Se puede cambiar con las variables `FINANZAS_ROLES_*` del `.env` (ver `.env.example`); después `docker compose up -d`.
+   Al actualizar, los usuarios que ya existían cambian solos de rol: admin → Administrador, vendedor → Ventas,
+   finanzas → Contabilidad, y empleado/encargado/almacén → Técnico. Revisa la lista y ajusta lo que haga falta.
 3. Cambia la clave del administrador (botón **Nueva clave**) y, si quieres, la **clave de edición**.
 4. Cada persona abre `https://cotizador.TUDOMINIO` en su celular → menú del navegador → **Instalar app / Agregar a pantalla de inicio**.
 
