@@ -21,7 +21,7 @@ export function crearApp() {
 
   // eslint-disable-next-line no-unused-vars
   app.use((e, _req, res, _next) => {
-    if (e instanceof ErrorApi) return res.status(e.codigo).json({ error: e.message });
+    if (e instanceof ErrorApi) return res.status(e.codigo).json({ error: e.message, ...(e.datos ?? {}) });
     if (e?.type === 'entity.parse.failed') return res.status(400).json({ error: 'El pedido no tiene un formato válido.' });
     if (e?.type === 'entity.too.large') return res.status(413).json({ error: 'El archivo es demasiado grande.' });
     if (e?.code === '23505') return res.status(409).json({ error: 'Ese registro ya existe.' });

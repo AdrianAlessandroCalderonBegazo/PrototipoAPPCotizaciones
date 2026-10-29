@@ -19,7 +19,7 @@ export const MODULOS = [
   { clave: 'cotizacion', nombre: 'Cotización', grupo: 'Comercial', lectura: 'Ver catálogo y cotizaciones', completo: 'Crear y editar cotizaciones, productos, kits e importar listas' },
   { clave: 'cotizador_ia', nombre: 'Cotizador IA', grupo: 'Comercial', lectura: 'Ver las conversaciones', completo: 'Cotizar con IA y editar el contexto' },
   { clave: 'comparador', nombre: 'Comparador de proveedores', grupo: 'Comercial', lectura: 'Buscar y comparar precios', completo: 'Gestionar proveedores y cargar listas' },
-  { clave: 'contabilidad', nombre: 'Contabilidad', grupo: 'Finanzas', lectura: 'Ver cuenta principal y caja chica', completo: 'Ver todo y enviar fondos a caja chica' },
+  { clave: 'contabilidad', nombre: 'Contabilidad', grupo: 'Finanzas', lectura: 'Ver cuenta principal y caja chica', completo: 'Registrar y anular movimientos, manejar cuentas y enviar fondos a caja chica' },
   { clave: 'facturacion', nombre: 'Facturación SUNAT', grupo: 'Finanzas', lectura: 'Ver comprobantes', completo: 'Preparar, enviar a SUNAT y registrar comprobantes' },
   { clave: 'asistente_ia', nombre: 'Asistente IA', grupo: 'Inteligencia', lectura: 'Ver conversaciones', completo: 'Consultar al asistente (con los datos que el rol puede ver)' },
   { clave: 'configuracion', nombre: 'Configuración', grupo: 'Sistema', lectura: 'Ver la configuración y la auditoría', completo: 'Cambiar usuarios, permisos, empresa e integraciones' },
