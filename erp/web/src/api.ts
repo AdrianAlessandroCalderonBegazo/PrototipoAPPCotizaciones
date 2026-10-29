@@ -67,3 +67,18 @@ export async function subirImagen(archivo: File): Promise<string> {
   const r = await api<{ ruta: string }>("POST", "/subidas", { binario: archivo, consulta: { ext } });
   return r.ruta;
 }
+
+/** Foto de un recibo de la caja (API de Finanzas en /api-caja, con la misma sesión). Devuelve una URL local para mostrarla. */
+export async function fotoCaja(id: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`/api-caja/caja/adjuntos/${encodeURIComponent(id)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  } catch {
+    throw new ErrorApi(0, "No hay conexión con el servidor.");
+  }
+  if (!res.ok) {
+    const j = await res.json().catch(() => null);
+    throw new ErrorApi(res.status, j?.error?.message ?? (res.status === 403 ? "Tu rol no tiene acceso a las fotos de la caja chica." : "No se pudo abrir la foto."));
+  }
+  return URL.createObjectURL(await res.blob());
+}

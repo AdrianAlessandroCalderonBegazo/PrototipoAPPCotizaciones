@@ -24,20 +24,20 @@ const entero = (v, nombre = 'id') => {
 export async function sqlGastos(filtro = '') {
   const partes = [
     `SELECT 'cuenta_principal' AS origen, m.id::text AS id, m.fecha::text AS fecha, m.concepto, m.categoria, m.monto::text AS monto,
-            m.registrado_por AS por, m.documento AS comprobante, 0 AS fotos, NULL::text AS ciudad, m.proyecto_id, m.creado_en::text AS registrado_en
+            m.registrado_por AS por, m.documento AS comprobante, '{}'::text[] AS adjuntos, NULL::text AS ciudad, m.proyecto_id, m.creado_en::text AS registrado_en
        FROM cuenta_movimientos m WHERE m.tipo = 'egreso' AND NOT m.anulado AND m.proyecto_id IS NOT NULL ${filtro && `AND m.proyecto_id = ${filtro}`}`,
   ];
   if (await cajaDisponible()) {
     partes.push(
       `SELECT 'caja_chica', m.id::text, m.fecha::text, m.descripcion, COALESCE(m.subcategoria, m.categoria), m.monto::text,
-              COALESCE(u.nombre, m.created_by), NULL::text, (SELECT count(*)::int FROM caja_adjunto a WHERE a.movimiento_id = m.id), m.ciudad, m.proyecto_id,
+              COALESCE(u.nombre, m.created_by), NULL::text, ARRAY(SELECT a.id::text FROM caja_adjunto a WHERE a.movimiento_id = m.id ORDER BY a.created_at), m.ciudad, m.proyecto_id,
               (m.created_at AT TIME ZONE 'America/Lima')::text
          FROM caja_chica_mov m LEFT JOIN usuarios u ON u.id::text = m.created_by
         WHERE m.tipo = 'EGRESO' AND m.deleted_at IS NULL AND m.proyecto_id IS NOT NULL ${filtro && `AND m.proyecto_id = ${filtro}`}`,
       `SELECT 'caja_diaria', f.id::text, h.fecha::text, f.descripcion, COALESCE(f.subcategoria, f.categoria),
               (f.caja_salida_efectivo + f.caja_salida_transf + f.cta_cte_salida)::text,
               COALESCE(u.nombre, f.created_by), CASE WHEN f.comprobante = 'NINGUNO' THEN NULL ELSE f.comprobante END,
-              (SELECT count(*)::int FROM caja_adjunto a WHERE a.fila_id = f.id), h.ciudad, f.proyecto_id, (f.created_at AT TIME ZONE 'America/Lima')::text
+              ARRAY(SELECT a.id::text FROM caja_adjunto a WHERE a.fila_id = f.id ORDER BY a.created_at), h.ciudad, f.proyecto_id, (f.created_at AT TIME ZONE 'America/Lima')::text
          FROM caja_fila f JOIN caja_hoja h ON h.id = f.hoja_id LEFT JOIN usuarios u ON u.id::text = f.created_by
         WHERE f.deleted_at IS NULL AND f.proyecto_id IS NOT NULL AND (f.caja_salida_efectivo + f.caja_salida_transf + f.cta_cte_salida) > 0
           ${filtro && `AND f.proyecto_id = ${filtro}`}`,

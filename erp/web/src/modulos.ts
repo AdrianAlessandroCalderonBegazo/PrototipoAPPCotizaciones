@@ -5,7 +5,7 @@ import type { ClaveModulo, Nivel, Usuario } from "./tipos";
 export type EntradaMenu = { clave: ClaveModulo; ruta: string; nombre: string; icono: string; fase: number; ia?: boolean };
 
 /** Fase en la que se construye cada módulo (plan en erp/ESPECIFICACION.md). Las ya construidas no muestran la etiqueta. */
-export const FASE_ACTUAL = 1;
+export const FASE_ACTUAL = 2;
 
 export const MENU: { grupo: string; items: EntradaMenu[] }[] = [
   { grupo: "General", items: [{ clave: "inicio", ruta: "/", nombre: "Inicio", icono: "space_dashboard", fase: 1 }] },

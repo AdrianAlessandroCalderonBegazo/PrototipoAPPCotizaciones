@@ -303,7 +303,7 @@ export async function cajaChica(q = {}) {
   const { rows: movs } = await consulta(
     `SELECT m.id::text, m.ciudad, m.fecha::text AS fecha, m.tipo, m.descripcion, m.persona, COALESCE(m.subcategoria, m.categoria) AS categoria,
             m.monto::text AS monto, m.origen, m.proyecto_id, m.proyecto_nombre, COALESCE(u.nombre, m.created_by) AS registrado_por,
-            (SELECT count(*)::int FROM caja_adjunto a WHERE a.movimiento_id = m.id) AS fotos
+            ARRAY(SELECT a.id::text FROM caja_adjunto a WHERE a.movimiento_id = m.id ORDER BY a.created_at) AS adjuntos
        FROM caja_chica_mov m LEFT JOIN usuarios u ON u.id::text = m.created_by
       WHERE m.deleted_at IS NULL ORDER BY m.fecha DESC, m.created_at DESC LIMIT 100`,
   );

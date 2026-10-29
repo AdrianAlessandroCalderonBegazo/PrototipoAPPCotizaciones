@@ -41,3 +41,47 @@ export type RegistroAuditoria = {
   id: number; fecha: string; usuario_id: number | null; usuario: string | null; rol: string | null; accion: string; entidad: string;
   entidad_id: string | null; antes: unknown; despues: unknown; detalle: string | null;
 };
+
+// ---- Fase 2 ----
+export type EstadoProyecto = "activo" | "pausado" | "finalizado";
+export type Proyecto = {
+  id: number; codigo: string; nombre: string; presupuesto: string; moneda: "PEN" | "USD"; estado: EstadoProyecto; causa_pausa: string | null;
+  cliente: string | null; ruc_dni: string | null; tipo_sistema: string | null; marca: string | null; ubicacion: string | null; responsable: string | null; notas: string | null;
+  version: number; creado_en: string; actualizado_en: string;
+  gastado: string; saldo: string; porcentaje: number | null; n_gastos: number; ultimo_gasto: string | null;
+};
+export type GastoProyecto = {
+  origen: "cuenta_principal" | "caja_chica" | "caja_diaria"; id: string; fecha: string; concepto: string; categoria: string | null; monto: string;
+  por: string | null; comprobante: string | null; adjuntos: string[]; ciudad: string | null; registrado_en: string;
+};
+export type DetalleProyecto = {
+  proyecto: Proyecto; gastos: GastoProyecto[]; categorias: { categoria: string; monto: string; porcentaje: number }[];
+  estados: { id: number; estado: EstadoProyecto; causa: string | null; usuario: string | null; fecha: string }[];
+  fotos: { id: number; ruta: string; descripcion: string | null; subido_por: string | null; subido_en: string }[];
+  caja_disponible: boolean; causas_pausa: string[];
+};
+
+export type Cuenta = {
+  id: number; nombre: string; banco: string | null; numero: string | null; cci: string | null; moneda: "PEN" | "USD"; saldo_inicial: string | null;
+  saldo_inicial_fecha: string | null; principal: boolean; activa: boolean; saldo: string | null; ultimo_movimiento: string | null;
+};
+export type MovimientoCuenta = {
+  id: number; cuenta_id: number; fecha: string; tipo: "ingreso" | "egreso"; monto: string; concepto: string; categoria: string | null; proyecto_id: number | null;
+  proyecto_codigo: string | null; proyecto_nombre: string | null; documento: string | null; contraparte: string | null; source: "erp" | "envio_caja_chica";
+  anulado: boolean; anulado_motivo: string | null; anulado_por: string | null; anulado_en: string | null; registrado_por: string | null; creado_en: string; saldo: string | null;
+};
+export type ResumenConta = {
+  mes: string; cuentas: Cuenta[]; cuenta: Cuenta | null;
+  kpis: { ingresos_mes: string; egresos_mes: string; ingresos_mes_anterior: string; egresos_mes_anterior: string; movimientos_mes: number };
+  flujo: { mes: string; ingresos: string; egresos: string }[];
+  egresos_por_categoria: { categoria: string; monto: string; porcentaje: number }[];
+  egresos_por_proyecto: { id: number; codigo: string; nombre: string; estado: EstadoProyecto; total: string }[];
+  categorias: { ingreso: string[]; egreso: string[] };
+};
+export type MovChicaErp = {
+  id: string; ciudad: string; fecha: string; tipo: "EGRESO" | "TRANSFERENCIA" | "FONDO"; descripcion: string; persona: string; categoria: string | null; monto: string;
+  origen: string; proyecto_id: number | null; proyecto_nombre: string | null; registrado_por: string | null; adjuntos: string[];
+};
+export type CajaChicaErp =
+  | { disponible: false }
+  | { disponible: true; mes: string; saldos: { ciudad: string; nombre: string; saldo: string }[]; saldo_total: string; ingresos_mes: string; egresos_mes: string; gastos_mes: number; sin_comprobante_mes: number; movimientos: MovChicaErp[] };

@@ -102,11 +102,15 @@ finanza.{$DOMINIO} {
 }
 
 # ERP ICR: la app web (React) + la API principal en /api y los archivos subidos en /uploads (mismo origen, sin CORS).
+# /api-caja va a la API de Finanzas (fotos de recibos de la caja chica; misma sesión).
 # Los archivos con huella en el nombre (/assets/*) se guardan en caché un año; index.html nunca.
 erp.{$DOMINIO} {
 	import seguridad
 	request_body {
 		max_size 12MB
+	}
+	handle /api-caja/* {
+		reverse_proxy finanzas-api:8787
 	}
 	handle /api/* {
 		reverse_proxy api:3000

@@ -6,6 +6,9 @@ import { hoyLima, fecha } from "../formato";
 import { FASE_ACTUAL, puede } from "../modulos";
 import { useSesion } from "../sesion";
 import { useDatos } from "../usarDatos";
+import { dinero } from "../dinero";
+import type { CajaChicaErp, Proyecto, ResumenConta } from "../tipos";
+import { BarraAvance, colorAvance, pctTexto } from "./proyectos/comun";
 
 type Resumen = {
   requerimientos: Record<string, number>;
@@ -55,6 +58,10 @@ export function Inicio() {
   const verLogistica = puede(usuario, "logistica") || puede(usuario, "almacen");
   const verCotizaciones = puede(usuario, "cotizacion");
   const { datos, error } = useDatos(() => (verLogistica || verCotizaciones ? api<Resumen>("GET", "/resumen") : Promise.resolve(null)), [verLogistica, verCotizaciones]);
+  const verConta = puede(usuario, "contabilidad");
+  const verProy = puede(usuario, "proyectos");
+  const conta = useDatos(() => (verConta ? Promise.all([api<ResumenConta>("GET", "/contabilidad/resumen"), api<CajaChicaErp>("GET", "/contabilidad/caja-chica")]) : Promise.resolve(null)), [verConta]);
+  const proy = useDatos(() => (verProy ? api<{ proyectos: Proyecto[] }>("GET", "/proyectos", { consulta: { estado: "activo" } }) : Promise.resolve(null)), [verProy]);
   const nombre = usuario?.nombre.split(" ")[0] ?? "";
   const apps = [
     { sub: "cotizador" as const, nombre: "Logística", texto: "Requerimientos de materiales y salidas de herramientas", icono: "local_shipping", ver: puede(usuario, "logistica") },
@@ -71,6 +78,35 @@ export function Inicio() {
           {saludo()}, {nombre}
         </h1>
       </div>
+
+      {conta.datos ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Link to="/contabilidad" className="flex flex-col gap-1.5 rounded-[18px] p-5 font-normal text-white no-underline" style={{ background: "linear-gradient(120deg, var(--navy-a), var(--navy-b))" }}>
+            <div className="text-[12.5px] font-bold opacity-90">{conta.datos[0].cuenta ? `Cuenta principal · ${conta.datos[0].cuenta.nombre}` : "Cuenta principal"}</div>
+            <div className="num text-[28px] font-extrabold">{conta.datos[0].cuenta ? dinero(conta.datos[0].cuenta.saldo, conta.datos[0].cuenta.moneda) : "Sin dato"}</div>
+            <div className="num text-[12px] opacity-80">Este mes: ingresos {dinero(conta.datos[0].kpis.ingresos_mes)} · egresos {dinero(conta.datos[0].kpis.egresos_mes)}</div>
+          </Link>
+          <Link to="/contabilidad" className="tarjeta flex flex-col gap-1.5 p-5 font-normal text-text no-underline hover:border-primary-line">
+            <div className="flex items-center justify-between text-[12.5px] font-semibold text-text-2">Caja chica<Icono n="savings" t={19} className="text-text-3" /></div>
+            <div className="num text-[28px] font-extrabold">{conta.datos[1].disponible ? dinero(conta.datos[1].saldo_total) : "Sin dato"}</div>
+            {conta.datos[1].disponible ? <div className="flex flex-wrap gap-x-4 text-[12.5px] text-text-2">{conta.datos[1].saldos.map((x) => <span key={x.ciudad}>{x.nombre} <b className="num">{dinero(x.saldo)}</b></span>)}</div> : null}
+          </Link>
+        </div>
+      ) : null}
+      {proy.datos?.proyectos.length ? (
+        <section className="tarjeta p-5">
+          <div className="mb-3 flex items-center justify-between"><div className="titulo-seccion">Proyectos activos <span className="font-medium text-text-3">· {proy.datos.proyectos.length}</span></div><Link to="/proyectos" className="text-[13px]">Ver todos</Link></div>
+          <div className="grid gap-x-8 gap-y-3 md:grid-cols-2">
+            {proy.datos.proyectos.slice(0, 6).map((p) => (
+              <Link key={p.id} to={`/proyectos/${p.id}`} className="flex flex-col gap-1.5 rounded-lg p-1 font-normal text-text no-underline hover:bg-surface-2">
+                <div className="flex items-center justify-between gap-2 text-[13.5px]"><span className="truncate font-semibold">{p.nombre}</span><b className="num text-[12.5px]" style={{ color: colorAvance(p.porcentaje) }}>{pctTexto(p.porcentaje)}</b></div>
+                <BarraAvance pct={p.porcentaje} />
+                <div className="num text-[12px] text-text-3">{dinero(p.gastado)} de {dinero(p.presupuesto)}</div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {error ? <div className="text-[13px] text-danger">{error}</div> : null}
       {datos ? (

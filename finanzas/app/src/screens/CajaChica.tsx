@@ -67,7 +67,7 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
           <Text style={t(36, 800, C.white, { letterSpacing: -0.72, marginTop: 4, fontVariant: ["tabular-nums"] })} numberOfLines={1} accessibilityLabel={`Saldo de caja chica ${money(saldo)}`}>
             {money(saldo)}
           </Text>
-          <Text style={t(12, 400, "rgba(255,255,255,.88)", { marginTop: 2 })}>{CIUDAD_LABEL[ciudad]} · se llena con envíos desde la caja diaria</Text>
+          <Text style={t(12, 400, "rgba(255,255,255,.88)", { marginTop: 2 })}>{CIUDAD_LABEL[ciudad]} · recibe envíos de la caja diaria y de la cuenta principal</Text>
         </TealGradient>
 
         <AvisoSync estado={estado} caja={caja} />

@@ -87,3 +87,32 @@ test("enlaces a las otras apps salen del dominio del ERP", () => {
   expect(enlaceApp("finanzas", "erp.icrenergy.tech")).toBe("https://finanzas.icrenergy.tech");
   expect(enlaceApp("cotizador", "localhost")).toBeNull();
 });
+
+describe("montos en pantalla (texto exacto, sin coma flotante)", async () => {
+  const { aSoles, conMiles, dinero, esNegativo, leerMonto, restar, sumarMontos } = await import("./dinero");
+  test("formato", () => {
+    expect(conMiles("1234567.5")).toBe("1,234,567.50");
+    expect(dinero("228000.00")).toBe("S/ 228,000.00");
+    expect(dinero("-4050.20")).toBe("-S/ 4,050.20");
+    expect(dinero("12480", "USD")).toBe("US$ 12,480.00");
+    expect(dinero(null)).toBe("Sin dato");
+    expect(dinero("abc")).toBe("Sin dato");
+    expect(esNegativo("-0.01")).toBe(true);
+    expect(esNegativo("-0.00")).toBe(false);
+  });
+  test("lo que escribe la persona", () => {
+    expect(leerMonto("228,000")).toBe("228000");
+    expect(leerMonto("80,5")).toBe("80.5");
+    expect(leerMonto("12.345")).toBeNull();
+    expect(leerMonto("0")).toBeNull();
+    expect(leerMonto("-5")).toBeNull();
+  });
+  test("cuentas en céntimos", () => {
+    expect(restar("1200.05", "250.25")).toBe("949.80");
+    expect(restar("949.80", "5000")).toBe("-4050.20");
+    expect(sumarMontos("0.1", "0.2")).toBe("0.30");
+    expect(aSoles("12480.00", "3.742")).toBe("46700.16");
+    expect(aSoles("0.01", "3.7425")).toBe("0.04");
+    expect(aSoles(null, "3.7")).toBeNull();
+  });
+});
