@@ -216,6 +216,10 @@ La app central. Usa la **misma API, base de datos y usuarios** que Logística y 
 
 El zip `erp-web.zip` sale del flujo **Build ERP** de GitHub (Actions → Build ERP → Run workflow → al terminar, descargar `erp-web`).
 
+**Cada versión nueva del ERP** se sube igual: `servidor_icr.zip` (si cambió la API), `docker compose up -d --build`, y luego
+`./scripts/actualizar_erp.sh` (y `actualizar_finanzas.sh` si cambió Finanzas). Las migraciones nuevas se aplican solas al arrancar cada API.
+Con la Fase 2 (proyectos y contabilidad), lo primero en el ERP es **Contabilidad › Cuentas**: crear la cuenta principal y, si se sabe, su saldo inicial.
+
 ## 8. Respaldos (importante)
 
 ```bash

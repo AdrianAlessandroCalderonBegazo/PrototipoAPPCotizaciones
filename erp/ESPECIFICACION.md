@@ -61,8 +61,8 @@ aprobación antes de empezar.**
 |---|---|---|
 | 0 | Revisión del código y la base, este documento, `CLAUDE.md`. | ✅ |
 | 1 | **Base**: 4 roles, matriz de permisos validada en el servidor (API principal, Logística, Finanzas 1 y 2), `audit_log`, Configuración (usuarios y roles, matriz, datos de la empresa con logo, parámetros y tipo de cambio, numeración de cotizaciones, integraciones con prueba de conexión, auditoría), layout del diseño (menú lateral por permisos, barra superior con TC, modo oscuro, Ctrl+K), Inicio básico con datos reales, Almacén de consulta. Publicado en `erp.icrenergy.tech`. | ✅ |
-| 2 | **Proyectos y Contabilidad**: proyectos (nombre + presupuesto; activo / pausado con causa / finalizado; historial; fotos), cuenta principal (movimientos, saldo, flujo mensual, por categoría y proyecto, Excel/PDF), caja chica de solo lectura en el ERP, **enviar fondos a caja chica** (una transacción: egreso en la cuenta principal + ingreso en caja chica; saldo negativo solo con confirmación del Administrador; auditado). En Finanzas 1: categoría «Gasto de proyecto» con la lista de proyectos activos. | Siguiente |
-| 3 | **Cotización**: catálogo desde los productos actuales (se agregan marca, modelo, moneda, características, imágenes), importación CSV (mapear → vista previa → confirmar), imágenes por código, kits editables, cotizaciones (IGV 18 %, descuentos, estados), PDF en el servidor con el branding, WhatsApp sin API. **Se quita la cotización de Logística.** | |
+| 2 | **Proyectos y Contabilidad**: proyectos (nombre + presupuesto; activo / pausado con causa / finalizado; historial; fotos), cuenta principal (movimientos, saldo, flujo mensual, por categoría y proyecto, Excel/PDF), caja chica de solo lectura en el ERP, **enviar fondos a caja chica** (una transacción: egreso en la cuenta principal + ingreso en caja chica; saldo negativo solo con confirmación del Administrador; auditado). En Finanzas 1: categoría «Gasto de proyecto» con la lista de proyectos activos. | ✅ |
+| 3 | **Cotización** (siguiente): catálogo desde los productos actuales (se agregan marca, modelo, moneda, características, imágenes), importación CSV (mapear → vista previa → confirmar), imágenes por código, kits editables, cotizaciones (IGV 18 %, descuentos, estados), PDF en el servidor con el branding, WhatsApp sin API. **Se quita la cotización de Logística.** | |
 | 4 | **Inicio completo** (endpoint de resumen único) y **búsqueda global** Ctrl+K sobre datos. Notificaciones internas. | |
 | 5 | **Facturación SUNAT**: formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | |
 | 6 | **IA**: Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | |
@@ -70,6 +70,29 @@ aprobación antes de empezar.**
 | 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | |
 | 9 | **Activos y control** (Victron VRM con caché) y Almacén ampliado. | |
 | 10 | **Cierre**: pruebas finales, revisión de seguridad, respaldos y documentación. | |
+
+## 4b. Cómo quedó la Fase 2
+
+- **Proyectos** (`servidor/api/src/proyectos.js`): código correlativo `PRY-001`; crear pide solo nombre y presupuesto; el resto (cliente, RUC/DNI, tipo de
+  sistema, marca, ubicación, responsable, notas) se completa en el detalle. Estados con historial (`proyecto_estados`); pausar exige causa (lista del
+  diseño + detalle); **finalizado es definitivo** (solo lectura: sin gastos, fotos ni cambios). Fotos en `/uploads` (subida múltiple; se «quitan» sin borrar el archivo).
+- **Gasto de un proyecto** = egresos de la cuenta principal asignados al proyecto + gastos de **caja chica** y salidas de **caja diaria** de Finanzas 1 con
+  la categoría «Gasto de proyecto». Finanzas solo deja elegir proyectos **activos**; un gasto que ya tenía proyecto se puede corregir aunque el proyecto
+  se pause después. Los proyectos por ahora son en soles.
+- **Cuenta principal** (`servidor/api/src/contabilidad.js`): las cuentas se crean en el ERP (soles y/o dólares; una principal por moneda). El saldo es
+  `saldo inicial (al empezar su fecha) + movimientos desde esa fecha`; sin saldo inicial se muestra «Sin dato». Contabilidad **registra** ingresos y
+  egresos de la cuenta (interpretación del prompt: el ERP es donde se guardan los movimientos de la cuenta grande; lo único que el ERP escribe en la
+  caja chica es el envío de fondos). Un movimiento nunca se borra: se **anula con motivo** (auditado). Categorías fijas en el código (`CATEGORIAS`).
+- **Enviar fondos a caja chica**: una sola transacción crea el egreso en la cuenta (soles), un movimiento `FONDO` (origen `ERP`) en `caja_chica_mov`, su
+  entrada en el historial de Finanzas (`caja_auditoria`), el registro en `envios_caja_chica` y la auditoría del ERP. Si la cuenta quedaría en negativo o
+  su saldo no se conoce, solo un Administrador lo confirma (marcando la casilla). El envío no se anula desde el ERP.
+- **Finanzas 1**: migración `005_proyectos_fondos.sql` (tipo `FONDO`, origen `ERP`, `proyecto_id` + `proyecto_nombre` en gastos y filas). Regla del
+  saldo de caja chica: el egreso resta, lo demás suma. El FONDO se ve en la app como «Fondos de la cuenta principal» y no se edita ni se borra allí.
+- **Dinero**: los montos nuevos viajan como texto («1234.50») y se suman en céntimos (`servidor/api/src/dinero.js`, `erp/web/src/dinero.ts`).
+- **Fotos de recibos en el ERP**: `erp.` reenvía `/api-caja` a la API de Finanzas (misma sesión); quien no tiene acceso a caja chica ve el aviso.
+
+**Pregunta abierta:** la caja diaria de Finanzas 1 tiene columnas «Cta. cte.» (ingreso/salida). ¿Es la misma cuenta bancaria que la cuenta principal
+del ERP? Si lo es, en una fase próxima se pueden pasar esos movimientos a la cuenta principal automáticamente; por ahora siguen separados.
 
 ## 5. Migración de datos
 
