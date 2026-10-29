@@ -350,7 +350,7 @@ test("sesiones reales: el token debe estar en la base, vigente y de un usuario a
 test("las migraciones se aplican una sola vez y en orden", async () => {
   const d = await pgliteDb();
   const primera = await migrar(d);
-  assert.deepEqual(primera, ["001_caja.sql", "002_cierre_auditoria.sql", "003_comprobante_recibo.sql", "004_saldo_efectivo.sql"]);
+  assert.deepEqual(primera, ["001_caja.sql", "002_cierre_auditoria.sql", "003_comprobante_recibo.sql", "004_saldo_efectivo.sql", "005_proyectos_fondos.sql"]);
   assert.deepEqual(await migrar(d), []);
   await d.close();
 });

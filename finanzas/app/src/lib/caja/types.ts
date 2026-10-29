@@ -43,6 +43,9 @@ export type Fila = {
   subcategoria: Subcategoria | "";
   /** Depósito, retiro o envío a caja chica: mueve dinero entre cajas, NO es un ingreso ni un gasto real. */
   interno: boolean;
+  /** Proyecto del ERP (solo con la categoría «Gasto de proyecto»). El nombre es el del momento en que se registró. */
+  proyecto_id?: number | null;
+  proyecto_nombre?: string | null;
   transferencia_id?: string | null;
   adjuntos: Adjunto[];
   updated_at: string;
@@ -76,7 +79,8 @@ export type Hoja = {
   cierre?: Cierre | null;
 };
 
-export type TipoMovChica = "EGRESO" | "TRANSFERENCIA";
+/** EGRESO resta; TRANSFERENCIA (desde la caja diaria) y FONDO (desde la cuenta principal, lo crea el ERP) suman. */
+export type TipoMovChica = "EGRESO" | "TRANSFERENCIA" | "FONDO";
 export type MovChica = {
   id: string;
   ciudad: Ciudad;
@@ -87,7 +91,9 @@ export type MovChica = {
   categoria: Categoria | "";
   subcategoria: Subcategoria | "";
   monto: number; // siempre positivo; el tipo decide si suma o resta
-  origen: "MANUAL" | "CAPTURA" | "TRANSFERENCIA";
+  origen: "MANUAL" | "CAPTURA" | "TRANSFERENCIA" | "ERP";
+  proyecto_id?: number | null;
+  proyecto_nombre?: string | null;
   transferencia_id?: string | null;
   adjuntos: Adjunto[];
   updated_at: string;

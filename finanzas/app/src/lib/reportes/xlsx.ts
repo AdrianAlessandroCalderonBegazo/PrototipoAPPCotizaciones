@@ -5,7 +5,7 @@
  */
 import type { Alignment, Borders, Fill, Font, Worksheet } from "exceljs";
 import { COMPROBANTE_LABEL, TIPO_FILA_LABEL, CIUDAD_LABEL } from "../caja/types";
-import { categoriaTexto, nombreCiudades, periodoTexto, resumenPorDia, totalesReporte, type Reporte } from "./model";
+import { categoriaTexto, tipoChica, nombreCiudades, periodoTexto, resumenPorDia, totalesReporte, type Reporte } from "./model";
 
 const TEAL = "FF0E7490";
 const TINT = "FFD8F3F4";
@@ -194,7 +194,7 @@ export async function generarXlsx(r: Reporte): Promise<Uint8Array> {
       for (const mv of c.movs) {
         n++;
         const row = ws.getRow(n);
-        row.values = [new Date(mv.fecha + "T12:00:00"), CIUDAD_LABEL[mv.ciudad], mv.tipo === "TRANSFERENCIA" ? "Envío desde caja diaria" : "Egreso", mv.descripcion, mv.persona, categoriaTexto(mv.categoria, mv.subcategoria), mv.tipo === "TRANSFERENCIA" ? mv.monto : "", mv.tipo === "EGRESO" ? mv.monto : "", mv.saldo, mv.adjuntos.length || ""];
+        row.values = [new Date(mv.fecha + "T12:00:00"), CIUDAD_LABEL[mv.ciudad], tipoChica(mv.tipo), mv.descripcion, mv.persona, categoriaTexto(mv.categoria, mv.subcategoria), mv.tipo !== "EGRESO" ? mv.monto : "", mv.tipo === "EGRESO" ? mv.monto : "", mv.saldo, mv.adjuntos.length || ""];
         row.eachCell({ includeEmpty: true }, (cell, k) => {
           if (k > 10) return;
           cell.border = borde;

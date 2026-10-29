@@ -165,7 +165,7 @@ export function findCiudad(text: string): string {
 
 // ---- Categoría y descripción ------------------------------------------------
 
-type Keyworded = Exclude<Categoria, "Caja chica" | "Proveedores" | "Gastos fijos">;
+type Keyworded = Exclude<Categoria, "Caja chica" | "Proveedores" | "Gastos fijos" | "Gasto de proyecto">;
 
 const KEYWORDS: Record<Keyworded, string[]> = {
   Movilidad: ["combustible", "gasolina", "gasohol", "diesel", "petroleo", "grifo", "servicentro", "glp", "gnv", "taxi", "uber", "cabify", "didi", "indriver", "peaje", "pasaje", "estacionamiento", "primax", "repsol", "petroperu", "pecsa"],

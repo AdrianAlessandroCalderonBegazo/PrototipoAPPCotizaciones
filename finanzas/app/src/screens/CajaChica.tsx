@@ -45,7 +45,7 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
     }
     return out;
   }, [filas]);
-  const recibido = movs.filter((m) => m.tipo === "TRANSFERENCIA").reduce((a, m) => a + m.monto, 0);
+  const recibido = movs.filter((m) => m.tipo !== "EGRESO").reduce((a, m) => a + m.monto, 0);
   const gastado = movs.filter((m) => m.tipo === "EGRESO").reduce((a, m) => a + m.monto, 0);
 
   const cerrar = () => (setVer(null), setAnulando(false));
@@ -96,7 +96,7 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
               <Text style={t(11.5, 700, C.muted)}>{fdateLarga(g.fecha)}</Text>
               <View style={[card(16), { overflow: "hidden" }]}>
                 {g.items.map((m, i) => {
-                  const entra = m.tipo === "TRANSFERENCIA";
+                  const entra = m.tipo !== "EGRESO";
                   const error = errorDe(caja, m.id);
                   return (
                     <Pressable key={m.id} onPress={() => setVer(m)} accessibilityLabel={`${m.descripcion}, ${money(m.monto)}`} style={({ pressed }) => ({ flexDirection: "row", gap: 12, padding: 13, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: C.stripeA, backgroundColor: error ? "#FDF3F3" : pressed ? C.bg : C.card })}>
@@ -106,7 +106,7 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
                       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                         <Text numberOfLines={2} style={t(13, 700)}>{m.descripcion}</Text>
                         <Text numberOfLines={1} style={t(11.5, 400, C.muted)}>
-                          {[entra ? "Envío desde caja diaria" : catLabel(m.categoria, m.subcategoria), m.persona, m.adjuntos.length ? `${m.adjuntos.length} ${m.adjuntos.length === 1 ? "foto" : "fotos"}` : null].filter(Boolean).join(" · ")}
+                          {[m.tipo === "FONDO" ? "Fondos de la cuenta principal" : entra ? "Envío desde caja diaria" : catLabel(m.categoria, m.subcategoria), m.proyecto_nombre, m.persona, m.adjuntos.length ? `${m.adjuntos.length} ${m.adjuntos.length === 1 ? "foto" : "fotos"}` : null].filter(Boolean).join(" · ")}
                         </Text>
                         {error ? <Etiqueta texto="NO SE GUARDÓ" tono="error" /> : sinEnviar(caja, m.id) ? <Etiqueta texto="SIN ENVIAR" tono="info" /> : null}
                         {error ? <Text style={t(11, 600, C.red, { lineHeight: 15 })}>{error}</Text> : null}
@@ -132,11 +132,11 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
 
       {ver ? (
         <Sheet onClose={cerrar} bottomInset={bottomInset}>
-          <Text style={kicker(C.muted, 10.5)}>{ver.tipo === "TRANSFERENCIA" ? "ENVÍO DESDE CAJA DIARIA" : "EGRESO DE CAJA CHICA"}</Text>
-          <Text style={t(28, 800, ver.tipo === "TRANSFERENCIA" ? C.teal : C.red, { marginTop: 6, marginBottom: 14, fontVariant: ["tabular-nums"] })}>{ver.tipo === "TRANSFERENCIA" ? "+" : "−"}{money(ver.monto)}</Text>
+          <Text style={kicker(C.muted, 10.5)}>{ver.tipo === "FONDO" ? "FONDOS DE LA CUENTA PRINCIPAL (ERP)" : ver.tipo === "TRANSFERENCIA" ? "ENVÍO DESDE CAJA DIARIA" : "EGRESO DE CAJA CHICA"}</Text>
+          <Text style={t(28, 800, ver.tipo !== "EGRESO" ? C.teal : C.red, { marginTop: 6, marginBottom: 14, fontVariant: ["tabular-nums"] })}>{ver.tipo !== "EGRESO" ? "+" : "−"}{money(ver.monto)}</Text>
           <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 14 }}>
             <View style={[card(14), { overflow: "hidden" }]}>
-              {([["Descripción", ver.descripcion], ["Fecha", fdate(ver.fecha)], ["Persona", ver.persona || "—"], ...(ver.tipo === "EGRESO" ? ([["Categoría", catLabel(ver.categoria, ver.subcategoria)]] as [string, string][]) : [])] as [string, string][]).map(([k, v], i) => (
+              {([["Descripción", ver.descripcion], ["Fecha", fdate(ver.fecha)], ["Persona", ver.persona || "—"], ...(ver.tipo === "EGRESO" ? ([["Categoría", catLabel(ver.categoria, ver.subcategoria)]] as [string, string][]) : []), ...(ver.proyecto_nombre ? ([["Proyecto", ver.proyecto_nombre]] as [string, string][]) : [])] as [string, string][]).map(([k, v], i) => (
                 <View key={k} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, padding: 11, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: C.stripeA }}>
                   <Text style={t(12.5, 400, C.muted)}>{k}</Text>
                   <Text style={t(12.5, 700, C.ink, { textAlign: "right", flexShrink: 1 })}>{v}</Text>
@@ -148,6 +148,8 @@ export function CajaChica({ caja, estado, ciudad, setCiudad, onNuevo, onEditar, 
           <View style={{ gap: 10, marginTop: 16 }}>
             {ver.tipo === "EGRESO" ? (
               <PrimaryButton label="EDITAR O ELIMINAR" onPress={() => (onEditar(ver), cerrar())} />
+            ) : ver.tipo === "FONDO" ? (
+              <Text style={t(12, 400, C.muted, { lineHeight: 17 })}>Lo envió Contabilidad desde el ERP. No se cambia desde aquí.</Text>
             ) : anulando ? (
               <>
                 <Text style={t(12.5, 600, C.ink, { lineHeight: 18 })}>¿Anular este envío? El dinero vuelve a la caja diaria. Solo se puede si la caja chica no lo gastó ya.</Text>

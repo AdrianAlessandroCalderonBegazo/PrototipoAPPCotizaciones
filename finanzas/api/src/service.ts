@@ -10,7 +10,7 @@ import type { Storage } from "./storage";
 import { payloadDeMovChica, payloadsDeFila, type ErpMirror } from "./erp";
 import { r2, totalesHoja, validarFila } from "../../app/src/lib/caja/calc";
 import { CIUDADES, COMPROBANTES, TIPOS_FILA, type Ciudad, type Fila } from "../../app/src/lib/caja/types";
-import { CATS, SUBCATS } from "../../app/src/lib/data";
+import { CAT_PROYECTO, CATS, SUBCATS } from "../../app/src/lib/data";
 
 type Row = Record<string, any>;
 
@@ -51,23 +51,24 @@ const COLS_FILA = `f.id, f.hoja_id, f.orden, f.tipo, f.descripcion, f.responsabl
   f.caja_ingreso_efectivo::float8 AS caja_ingreso_efectivo, f.caja_ingreso_transf::float8 AS caja_ingreso_transf,
   f.caja_salida_efectivo::float8 AS caja_salida_efectivo, f.caja_salida_transf::float8 AS caja_salida_transf,
   f.cta_cte_ingreso::float8 AS cta_cte_ingreso, f.cta_cte_salida::float8 AS cta_cte_salida,
-  f.categoria, f.subcategoria, f.interno, f.transferencia_id, f.ingreso_erp_id, f.gasto_erp_id, f.erp_pendiente, f.erp_error, f.updated_at, f.version`;
+  f.categoria, f.subcategoria, f.interno, f.proyecto_id, f.proyecto_nombre, f.transferencia_id, f.ingreso_erp_id, f.gasto_erp_id, f.erp_pendiente, f.erp_error, f.updated_at, f.version`;
 
 const COLS_MOV = `m.id, m.ciudad, m.fecha::text AS fecha, m.tipo, m.descripcion, m.persona, m.categoria, m.subcategoria,
-  m.monto::float8 AS monto, m.origen, m.transferencia_id, m.gasto_erp_id, m.erp_pendiente, m.erp_error, m.updated_at, m.version`;
+  m.monto::float8 AS monto, m.origen, m.proyecto_id, m.proyecto_nombre, m.transferencia_id, m.gasto_erp_id, m.erp_pendiente, m.erp_error, m.updated_at, m.version`;
 
 const adjuntoDe = (a: Row) => ({ id: a.id, mime: a.mime, bytes: a.bytes, nombre: a.nombre ?? undefined, synced: true });
 const filaDe = (r: Row, adjuntos: Row[] = []) => ({
   id: r.id, hoja_id: r.hoja_id, orden: r.orden, tipo: r.tipo, descripcion: r.descripcion, responsable: r.responsable, comprobante: r.comprobante,
   caja_ingreso_efectivo: r.caja_ingreso_efectivo, caja_ingreso_transf: r.caja_ingreso_transf, caja_salida_efectivo: r.caja_salida_efectivo, caja_salida_transf: r.caja_salida_transf,
   cta_cte_ingreso: r.cta_cte_ingreso, cta_cte_salida: r.cta_cte_salida,
-  categoria: r.categoria ?? "", subcategoria: r.subcategoria ?? "", interno: r.interno, transferencia_id: r.transferencia_id ?? null,
+  categoria: r.categoria ?? "", subcategoria: r.subcategoria ?? "", interno: r.interno, proyecto_id: r.proyecto_id ?? null, proyecto_nombre: r.proyecto_nombre ?? null,
+  transferencia_id: r.transferencia_id ?? null,
   erp_pendiente: !!r.erp_pendiente, erp_error: r.erp_error ?? null, updated_at: iso(r.updated_at), version: r.version,
   adjuntos: adjuntos.filter((a) => a.fila_id === r.id).map(adjuntoDe),
 });
 const movDe = (r: Row, adjuntos: Row[] = []) => ({
   id: r.id, ciudad: r.ciudad, fecha: r.fecha, tipo: r.tipo, descripcion: r.descripcion, persona: r.persona, categoria: r.categoria ?? "", subcategoria: r.subcategoria ?? "",
-  monto: r.monto, origen: r.origen, transferencia_id: r.transferencia_id ?? null, erp_pendiente: !!r.erp_pendiente, erp_error: r.erp_error ?? null, updated_at: iso(r.updated_at), version: r.version,
+  monto: r.monto, origen: r.origen, proyecto_id: r.proyecto_id ?? null, proyecto_nombre: r.proyecto_nombre ?? null, transferencia_id: r.transferencia_id ?? null, erp_pendiente: !!r.erp_pendiente, erp_error: r.erp_error ?? null, updated_at: iso(r.updated_at), version: r.version,
   adjuntos: adjuntos.filter((a) => a.movimiento_id === r.id).map(adjuntoDe),
 });
 
@@ -83,11 +84,17 @@ const resumenHoja = (h: any) => ({
 export type Deps = { db: Db; storage: Storage; mirror: ErpMirror; env?: NodeJS.ProcessEnv; hoy?: () => string; permisos?: Permisos };
 
 /** Los datos del negocio de una fila (lo que se compara en el historial de cambios). */
-const NEGOCIO_FILA = ["tipo", "descripcion", "responsable", "comprobante", "caja_ingreso_efectivo", "caja_ingreso_transf", "caja_salida_efectivo", "caja_salida_transf", "cta_cte_ingreso", "cta_cte_salida", "categoria", "subcategoria", "interno"] as const;
-const NEGOCIO_MOV = ["fecha", "descripcion", "persona", "categoria", "subcategoria", "monto", "origen"] as const;
+const NEGOCIO_FILA = ["tipo", "descripcion", "responsable", "comprobante", "caja_ingreso_efectivo", "caja_ingreso_transf", "caja_salida_efectivo", "caja_salida_transf", "cta_cte_ingreso", "cta_cte_salida", "categoria", "subcategoria", "interno", "proyecto_id"] as const;
+const NEGOCIO_MOV = ["fecha", "descripcion", "persona", "categoria", "subcategoria", "monto", "origen", "proyecto_id"] as const;
 const PIE_HOJA = ["responsable_caja", "obras_realizadas", "maletas", "escaleras", "encargado_obra"] as const;
 const tomar = (r: Row | undefined, claves: readonly string[]) => (r ? Object.fromEntries(claves.map((k) => [k, r[k] ?? (typeof r[k] === "boolean" ? false : null)])) : null);
 const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Solo los egresos se editan o borran aquí: lo recibido de la caja diaria o de la cuenta principal (ERP) tiene su propio origen. */
+function noEsEgreso(m: Row) {
+  if (m.tipo === "FONDO") throw new ApiError(409, "MOVIMIENTO_DEL_ERP", "Este ingreso llegó desde la cuenta principal (ERP): no se cambia ni se borra desde aquí.");
+  if (m.tipo !== "EGRESO") throw new ApiError(409, "MOVIMIENTO_DE_TRANSFERENCIA", "Este movimiento es un envío desde caja diaria; anula la transferencia.");
+}
 
 export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, permisos = crearPermisos(env) }: Deps) {
   // ---- reglas comunes: permisos, días cerrados e historial de cambios ---------------------------
@@ -133,6 +140,28 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
     if (!Number.isInteger(version)) throw bad("version debe ser un número entero.");
     if (version !== actual) throw new ApiError(409, "CAMBIO_CONCURRENTE", `Otra persona modificó ${que} mientras lo editabas. Se actualizó con lo último: revisa y vuelve a hacer tu cambio.`);
   };
+
+  /**
+   * Proyecto de un gasto (categoría «Gasto de proyecto»). Los proyectos son del ERP (tabla proyectos de la API principal).
+   * Un proyecto nuevo en el gasto debe estar ACTIVO; si el gasto ya tenía ese proyecto, se respeta aunque luego se haya pausado.
+   * Devuelve el id y el nombre del momento (se guarda como en un recibo).
+   */
+  async function proyectoDelGasto(categoria: string, valor: unknown, anterior: Row | undefined) {
+    if (categoria !== CAT_PROYECTO) return { proyecto_id: null, proyecto_nombre: null };
+    const id = valor == null || valor === "" ? null : Number(valor);
+    if (id === null) throw bad("Elige el proyecto al que pertenece el gasto.", "FALTA_PROYECTO");
+    if (!Number.isInteger(id) || id <= 0) throw bad("proyecto_id no es válido.");
+    let p: Row | undefined;
+    try {
+      [p] = await db.query<Row>(`SELECT id, nombre, estado FROM proyectos WHERE id = $1`, [id]);
+    } catch {
+      throw new ApiError(503, "PROYECTOS_NO_DISPONIBLES", "Los proyectos del ERP todavía no están disponibles en el servidor.");
+    }
+    if (!p) throw bad("Ese proyecto no existe.", "PROYECTO_NO_EXISTE");
+    if (p.estado !== "activo" && anterior?.proyecto_id !== id)
+      throw new ApiError(409, "PROYECTO_NO_ACTIVO", `El proyecto «${p.nombre}» está ${p.estado}: elige un proyecto activo.`);
+    return { proyecto_id: id, proyecto_nombre: p.nombre as string };
+  }
 
   // ---- lecturas ---------------------------------------------------------------------------------
 
@@ -322,6 +351,9 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
       const primero = Object.values(errores)[0];
       if (primero) throw bad(primero);
 
+      const [previa] = await db.query<Row>(`SELECT proyecto_id FROM caja_fila WHERE id = $1::uuid`, [id]);
+      const proyecto = await proyectoDelGasto(f.categoria, b.proyecto_id, previa);
+
       const hecho = await db.tx(async (t) => {
         const [hoja] = await t.query<Row>(`SELECT id, ciudad, fecha::text AS fecha FROM caja_hoja WHERE id = $1::uuid`, [hojaId]);
         if (!hoja) throw new ApiError(404, "HOJA_NO_ENCONTRADA", "La hoja de esta fila no existe.");
@@ -330,22 +362,23 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
         if (ya?.transferencia_id) throw new ApiError(409, "FILA_DE_TRANSFERENCIA", "Esta fila es un envío a caja chica; anula la transferencia en lugar de editarla.");
         if (ya && ya.hoja_id !== hojaId) throw new ApiError(409, "HOJA_DISTINTA", "Una fila no puede cambiar de hoja.");
         const antes = tomar(ya, NEGOCIO_FILA);
-        const despues = { ...f, categoria: f.categoria || null, subcategoria: f.subcategoria || null };
+        const despues = { ...f, categoria: f.categoria || null, subcategoria: f.subcategoria || null, proyecto_id: proyecto.proyecto_id };
         // Reenviar lo mismo (un reintento) no cambia nada: ni versión ni historial.
         if (ya && igual(antes, despues) && (!Number.isInteger(b.orden) || b.orden === ya.orden)) return false;
         await guardiaDia(t, hoja.ciudad, hoja.fecha, u);
         if (ya) conflicto(b.version, ya.version, "este movimiento");
         await t.query(
           `INSERT INTO caja_fila (id, hoja_id, orden, tipo, descripcion, responsable, comprobante, caja_ingreso_efectivo, caja_ingreso_transf, caja_salida_efectivo, caja_salida_transf,
-                                  cta_cte_ingreso, cta_cte_salida, categoria, subcategoria, interno, created_by, updated_by)
-           VALUES ($1::uuid, $2::uuid, COALESCE($3::int, (SELECT COALESCE(MAX(orden), 0) + 1 FROM caja_fila WHERE hoja_id = $2::uuid)), $4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
+                                  cta_cte_ingreso, cta_cte_salida, categoria, subcategoria, interno, created_by, updated_by, proyecto_id, proyecto_nombre)
+           VALUES ($1::uuid, $2::uuid, COALESCE($3::int, (SELECT COALESCE(MAX(orden), 0) + 1 FROM caja_fila WHERE hoja_id = $2::uuid)), $4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17,$18,$19)
            ON CONFLICT (id) DO UPDATE SET orden = COALESCE($3::int, caja_fila.orden), tipo = EXCLUDED.tipo, descripcion = EXCLUDED.descripcion, responsable = EXCLUDED.responsable,
              comprobante = EXCLUDED.comprobante, caja_ingreso_efectivo = EXCLUDED.caja_ingreso_efectivo, caja_ingreso_transf = EXCLUDED.caja_ingreso_transf,
              caja_salida_efectivo = EXCLUDED.caja_salida_efectivo, caja_salida_transf = EXCLUDED.caja_salida_transf, cta_cte_ingreso = EXCLUDED.cta_cte_ingreso,
              cta_cte_salida = EXCLUDED.cta_cte_salida, categoria = EXCLUDED.categoria, subcategoria = EXCLUDED.subcategoria, interno = EXCLUDED.interno,
+             proyecto_id = EXCLUDED.proyecto_id, proyecto_nombre = EXCLUDED.proyecto_nombre,
              version = caja_fila.version + 1, updated_by = EXCLUDED.updated_by, updated_at = now()`,
           [id, hojaId, Number.isInteger(b.orden) ? b.orden : null, f.tipo, f.descripcion, f.responsable, f.comprobante, f.caja_ingreso_efectivo, f.caja_ingreso_transf, f.caja_salida_efectivo,
-           f.caja_salida_transf, f.cta_cte_ingreso, f.cta_cte_salida, f.categoria || null, f.subcategoria || null, f.interno, u.id],
+           f.caja_salida_transf, f.cta_cte_ingreso, f.cta_cte_salida, f.categoria || null, f.subcategoria || null, f.interno, u.id, proyecto.proyecto_id, proyecto.proyecto_nombre],
         );
         await auditar(t, u, { accion: ya ? "editar" : "crear", entidad: "fila", entidad_id: id, ciudad: hoja.ciudad, fecha_dia: hoja.fecha, antes, despues });
         return true;
@@ -422,13 +455,23 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
       return { ok: true };
     },
 
+    /** Proyectos activos del ERP, para elegir al registrar un «Gasto de proyecto». */
+    async proyectosActivos() {
+      try {
+        const proyectos = await db.query<Row>(`SELECT id, codigo, nombre FROM proyectos WHERE estado = 'activo' ORDER BY nombre`);
+        return { disponible: true, proyectos };
+      } catch {
+        return { disponible: false, proyectos: [] };
+      }
+    },
+
     async movimientosChica(q: Row) {
       const ciudad = ciudadDe(q.ciudad);
       const desde = fechaDe(q.desde, "desde");
       const hasta = fechaDe(q.hasta, "hasta");
       if (desde > hasta) throw bad("desde no puede ser posterior a hasta.");
       const [{ anterior }] = await db.query<Row>(
-        `SELECT (c.saldo_inicial_caja_chica + COALESCE((SELECT SUM(CASE m.tipo WHEN 'TRANSFERENCIA' THEN m.monto ELSE -m.monto END) FROM caja_chica_mov m
+        `SELECT (c.saldo_inicial_caja_chica + COALESCE((SELECT SUM(CASE m.tipo WHEN 'EGRESO' THEN -m.monto ELSE m.monto END) FROM caja_chica_mov m
                   WHERE m.ciudad = c.ciudad AND m.deleted_at IS NULL AND m.fecha < $2::date), 0))::float8 AS anterior FROM caja_config c WHERE c.ciudad = $1`,
         [ciudad, desde],
       );
@@ -450,23 +493,26 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
       if (categoria === "Gastos fijos" && !(SUBCATS["Gastos fijos"] as readonly string[]).includes(subcategoria)) throw bad("Elige el tipo de gasto fijo.");
       const origen = b.origen === "CAPTURA" ? "CAPTURA" : "MANUAL";
       const monto = importe(b.monto, "monto", { positivo: true });
+      const [previo] = await db.query<Row>(`SELECT proyecto_id FROM caja_chica_mov WHERE id = $1::uuid`, [id]);
+      const proyecto = await proyectoDelGasto(categoria, b.proyecto_id, previo);
       const hecho = await db.tx(async (t) => {
         const [ya] = await t.query<Row>(`SELECT ${COLS_MOV}, m.deleted_at FROM caja_chica_mov m WHERE m.id = $1::uuid FOR UPDATE`, [id]);
         if (ya?.deleted_at) throw new ApiError(409, "MOVIMIENTO_ELIMINADO", "Este movimiento ya fue eliminado.");
-        if (ya && ya.tipo !== "EGRESO") throw new ApiError(409, "MOVIMIENTO_DE_TRANSFERENCIA", "Este movimiento es un envío desde caja diaria; anula la transferencia.");
+        if (ya) noEsEgreso(ya);
         if (ya && ya.ciudad !== ciudad) throw new ApiError(409, "CIUDAD_DISTINTA", "Un movimiento no puede cambiar de ciudad.");
         const antes = tomar(ya, NEGOCIO_MOV);
-        const despues = { fecha, descripcion, persona: texto(b.persona, 120), categoria, subcategoria: subcategoria || null, monto, origen };
+        const despues = { fecha, descripcion, persona: texto(b.persona, 120), categoria, subcategoria: subcategoria || null, monto, origen, proyecto_id: proyecto.proyecto_id };
         if (ya && igual({ ...antes, subcategoria: antes?.subcategoria || null }, despues)) return false; // reintento idéntico
         await guardiaDia(t, ciudad, fecha, u, { soloPermiso: true });
         if (ya) await guardiaDia(t, ciudad, ya.fecha, u, { soloPermiso: true });
         if (ya) conflicto(b.version, ya.version, "este gasto de caja chica");
         await t.query(
-          `INSERT INTO caja_chica_mov (id, ciudad, fecha, tipo, descripcion, persona, categoria, subcategoria, monto, origen, created_by, updated_by)
-           VALUES ($1::uuid, $2, $3::date, 'EGRESO', $4, $5, $6, $7, $8, $9, $10, $10)
+          `INSERT INTO caja_chica_mov (id, ciudad, fecha, tipo, descripcion, persona, categoria, subcategoria, monto, origen, created_by, updated_by, proyecto_id, proyecto_nombre)
+           VALUES ($1::uuid, $2, $3::date, 'EGRESO', $4, $5, $6, $7, $8, $9, $10, $10, $11, $12)
            ON CONFLICT (id) DO UPDATE SET fecha = EXCLUDED.fecha, descripcion = EXCLUDED.descripcion, persona = EXCLUDED.persona, categoria = EXCLUDED.categoria,
-             subcategoria = EXCLUDED.subcategoria, monto = EXCLUDED.monto, origen = EXCLUDED.origen, version = caja_chica_mov.version + 1, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-          [id, ciudad, fecha, descripcion, despues.persona, categoria, subcategoria || null, monto, origen, u.id],
+             subcategoria = EXCLUDED.subcategoria, monto = EXCLUDED.monto, origen = EXCLUDED.origen, proyecto_id = EXCLUDED.proyecto_id, proyecto_nombre = EXCLUDED.proyecto_nombre,
+             version = caja_chica_mov.version + 1, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+          [id, ciudad, fecha, descripcion, despues.persona, categoria, subcategoria || null, monto, origen, u.id, proyecto.proyecto_id, proyecto.proyecto_nombre],
         );
         await auditar(t, u, { accion: ya ? "editar" : "crear", entidad: "mov_chica", entidad_id: id, ciudad, fecha_dia: fecha, antes, despues });
         return true;
@@ -482,7 +528,7 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
       const hecho = await db.tx(async (t) => {
         const [r] = await t.query<Row>(`SELECT ${COLS_MOV}, m.deleted_at FROM caja_chica_mov m WHERE m.id = $1::uuid FOR UPDATE`, [id]);
         if (!r || r.deleted_at) return false;
-        if (r.tipo !== "EGRESO") throw new ApiError(409, "MOVIMIENTO_DE_TRANSFERENCIA", "Este movimiento es un envío desde caja diaria; anula la transferencia.");
+        noEsEgreso(r);
         await guardiaDia(t, r.ciudad, r.fecha, u, { soloPermiso: true });
         await t.query(`UPDATE caja_chica_mov SET deleted_at = now(), deleted_by = $2, version = version + 1 WHERE id = $1::uuid`, [id, u.id]);
         await auditar(t, u, { accion: "eliminar", entidad: "mov_chica", entidad_id: id, ciudad: r.ciudad, fecha_dia: r.fecha, antes: tomar(r, NEGOCIO_MOV) });
@@ -659,7 +705,7 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
       for (const r of await db.query<Row>(
         `WITH corrida AS (
            SELECT m.ciudad, m.fecha, c.saldo_inicial_caja_chica
-                  + SUM(CASE m.tipo WHEN 'TRANSFERENCIA' THEN m.monto ELSE -m.monto END) OVER (PARTITION BY m.ciudad ORDER BY m.fecha, m.created_at, m.id) AS saldo
+                  + SUM(CASE m.tipo WHEN 'EGRESO' THEN -m.monto ELSE m.monto END) OVER (PARTITION BY m.ciudad ORDER BY m.fecha, m.created_at, m.id) AS saldo
              FROM caja_chica_mov m JOIN caja_config c ON c.ciudad = m.ciudad WHERE m.deleted_at IS NULL)
          SELECT ciudad, fecha::text AS fecha, MIN(saldo)::float8 AS minimo FROM corrida
           WHERE saldo < 0 AND fecha >= $1::date AND ($2::text IS NULL OR ciudad = $2) GROUP BY ciudad, fecha ORDER BY fecha DESC`, [desde, ciudad]))

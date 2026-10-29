@@ -6,7 +6,8 @@ import { BottomBar, ErrorText, FieldLabel, Header, OptionGrid, PrimaryButton, Sc
 import { FilaSwitch, FotosBloque, MontoCampo, Seccion, type FotoItem } from "../components/caja";
 import { cleanAmt, num } from "../lib/format";
 import { validarFila, montosParaErp } from "../lib/caja/calc";
-import { CATS, SUBCATS } from "../lib/data";
+import { CAT_PROYECTO, CATS, SUBCATS } from "../lib/data";
+import { SelectorProyecto } from "../components/SelectorProyecto";
 import { elegirFoto, FotoError } from "../lib/caja/foto";
 import { borrarFoto } from "../lib/caja/fotos";
 import { nuevoId } from "../lib/caja/ids";
@@ -34,6 +35,7 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
   });
   const [categoria, setCategoria] = useState<Fila["categoria"]>(fila?.categoria ?? "");
   const [subcategoria, setSubcategoria] = useState<Fila["subcategoria"]>(fila?.subcategoria ?? "");
+  const [proyecto, setProyecto] = useState<{ id: number; nombre: string } | null>(fila?.proyecto_id ? { id: fila.proyecto_id, nombre: fila.proyecto_nombre ?? "" } : null);
   const [interno, setInterno] = useState(fila?.interno ?? false);
   const [fotos, setFotos] = useState<FotoItem[]>((fila?.adjuntos ?? []).map((a) => ({ id: a.id, adj: a })));
   const [errFoto, setErrFoto] = useState<string | null>(null);
@@ -57,6 +59,8 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
   const actual = armada();
   const errores = useMemo(() => validarFila(actual), [tipo, descripcion, responsable, comprobante, m, categoria, subcategoria, interno]); // eslint-disable-line react-hooks/exhaustive-deps
   const gastoReal = montosParaErp(actual).salida > 0;
+  const deProyecto = gastoReal && categoria === CAT_PROYECTO;
+  const faltaProyecto = deProyecto && !proyecto;
   const mostrar = (k: keyof typeof errores) => (intento ? errores[k] : undefined);
   const sugerencias = responsables.filter((n) => n.toLowerCase().includes(responsable.trim().toLowerCase()) && n !== responsable.trim()).slice(0, 5);
 
@@ -81,9 +85,10 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
 
   const guardar = () => {
     setIntento(true);
-    if (Object.keys(errores).length) return;
+    if (Object.keys(errores).length || faltaProyecto) return;
     const id = fila?.id ?? nuevoId();
-    store.guardarFila(ciudad, fecha, { ...actual, id, categoria: gastoReal ? categoria : "", subcategoria: gastoReal && categoria === "Gastos fijos" ? subcategoria : "", transferencia_id: fila?.transferencia_id });
+    store.guardarFila(ciudad, fecha, { ...actual, id, categoria: gastoReal ? categoria : "", subcategoria: gastoReal && categoria === "Gastos fijos" ? subcategoria : "", transferencia_id: fila?.transferencia_id,
+      proyecto_id: deProyecto ? proyecto?.id ?? null : null, proyecto_nombre: deProyecto ? proyecto?.nombre ?? null : null });
     const quedan = new Set(fotos.filter((f) => f.adj).map((f) => f.adj!.id));
     for (const a of fila?.adjuntos ?? []) if (!quedan.has(a.id)) store.quitarAdjunto("fila", id, a.id);
     for (const f of fotos) if (f.nueva) store.agregarAdjunto("fila", id, f.nueva);
@@ -176,6 +181,13 @@ export function FilaForm({ ciudad, fecha, fila, responsables, onClose, topInset,
                   <FieldLabel>TIPO DE GASTO FIJO</FieldLabel>
                   <OptionGrid options={SUBCATS["Gastos fijos"]} value={subcategoria} onPick={setSubcategoria} columns={3} height={42} fontSize={12} />
                   <ErrorText>{mostrar("subcategoria")}</ErrorText>
+                </View>
+              ) : null}
+              {categoria === CAT_PROYECTO ? (
+                <View style={{ marginTop: 14 }}>
+                  <FieldLabel>PROYECTO</FieldLabel>
+                  <SelectorProyecto value={proyecto?.id ?? null} nombreActual={fila?.proyecto_nombre} onPick={(p) => setProyecto({ id: p.id, nombre: p.nombre })} />
+                  <ErrorText>{intento && faltaProyecto ? "Elige el proyecto" : undefined}</ErrorText>
                 </View>
               ) : null}
               <Text style={t(11, 400, C.muted, { marginTop: 8, lineHeight: 15 })}>Se pide porque es un gasto real: se registra en Contabilidad con esta categoría.</Text>

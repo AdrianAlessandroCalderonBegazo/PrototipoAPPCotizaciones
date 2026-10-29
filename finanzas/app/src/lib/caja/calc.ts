@@ -69,7 +69,7 @@ export function validarFila(f: Fila): ErroresFila {
   return e;
 }
 
-export const efectoChica = (m: Pick<MovChica, "tipo" | "monto">) => (m.tipo === "TRANSFERENCIA" ? m.monto : -m.monto);
+export const efectoChica = (m: Pick<MovChica, "tipo" | "monto">) => (m.tipo === "EGRESO" ? -m.monto : m.monto);
 
 /** Saldo de la caja chica = lo que había antes de los movimientos guardados aquí + el efecto de cada uno. */
 export function saldoChica(saldoBase: number, movs: Pick<MovChica, "tipo" | "monto">[]) {

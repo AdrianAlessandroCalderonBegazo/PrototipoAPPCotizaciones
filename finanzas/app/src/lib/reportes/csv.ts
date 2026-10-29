@@ -1,6 +1,6 @@
 /** CSV (UTF-8 con BOM para que Excel respete las tildes). Un solo archivo; Caja diaria y Caja chica van en secciones. */
 import { COMPROBANTE_LABEL, TIPO_FILA_LABEL, CIUDAD_LABEL } from "../caja/types";
-import { categoriaTexto, nombreCiudades, periodoTexto, type Reporte } from "./model";
+import { categoriaTexto, tipoChica, nombreCiudades, periodoTexto, type Reporte } from "./model";
 
 const celda = (v: string | number | boolean) => {
   const s = typeof v === "boolean" ? (v ? "Sí" : "No") : String(v);
@@ -27,7 +27,7 @@ export function generarCsv(r: Reporte): Uint8Array {
     L.push(linea(["CAJA CHICA"]));
     L.push(linea(["Fecha", "Ciudad", "Tipo", "Descripción", "Persona", "Categoría", "Ingreso", "Egreso", "Saldo", "Fotos"]));
     for (const c of r.chicas)
-      for (const m of c.movs) L.push(linea([m.fecha, CIUDAD_LABEL[m.ciudad], m.tipo === "TRANSFERENCIA" ? "Envío desde caja diaria" : "Egreso", m.descripcion, m.persona, categoriaTexto(m.categoria, m.subcategoria), m.tipo === "TRANSFERENCIA" ? imp(m.monto) : "", m.tipo === "EGRESO" ? imp(m.monto) : "", imp(m.saldo), m.adjuntos.length]));
+      for (const m of c.movs) L.push(linea([m.fecha, CIUDAD_LABEL[m.ciudad], tipoChica(m.tipo), m.descripcion, m.persona, categoriaTexto(m.categoria, m.subcategoria), m.tipo !== "EGRESO" ? imp(m.monto) : "", m.tipo === "EGRESO" ? imp(m.monto) : "", imp(m.saldo), m.adjuntos.length]));
   }
   return new TextEncoder().encode("﻿" + L.join("\r\n") + "\r\n");
 }

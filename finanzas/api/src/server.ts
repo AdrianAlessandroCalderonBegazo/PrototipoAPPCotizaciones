@@ -52,6 +52,7 @@ export function crearServidor(opts: { auth: Auth; svc: Servicio; fin?: Fin; modo
   ruta("PUT", "/caja/adjuntos/:id", (c) => svc.putAdjunto(c.params.id, c.query, c.contentType, c.raw, c.user), true);
   ruta("GET", "/caja/adjuntos/:id", async (c) => ({ __binario: true, ...(await svc.getAdjunto(c.params.id)) }) as Respuesta);
   ruta("DELETE", "/caja/adjuntos/:id", (c) => svc.deleteAdjunto(c.params.id, c.user));
+  ruta("GET", "/caja/proyectos", () => svc.proyectosActivos());
   ruta("GET", "/caja-chica/movimientos", (c) => svc.movimientosChica(c.query));
   ruta("PUT", "/caja-chica/movimientos/:id", (c) => svc.putMovChica(c.params.id, c.body, c.user));
   ruta("DELETE", "/caja-chica/movimientos/:id", (c) => svc.deleteMovChica(c.params.id, c.user));

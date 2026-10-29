@@ -98,7 +98,7 @@ export function crearSync({ store, api, blobFoto, hoy, ventanaDias = 45 }: SyncD
           hoja_id: hojaId, orden: f.orden, tipo: f.tipo, descripcion: f.descripcion, responsable: f.responsable, comprobante: f.comprobante,
           caja_ingreso_efectivo: f.caja_ingreso_efectivo, caja_ingreso_transf: f.caja_ingreso_transf, caja_salida_efectivo: f.caja_salida_efectivo, caja_salida_transf: f.caja_salida_transf,
           cta_cte_ingreso: f.cta_cte_ingreso, cta_cte_salida: f.cta_cte_salida, categoria: f.categoria, subcategoria: f.subcategoria, interno: f.interno,
-          version: f.servidor ? f.version : undefined,
+          proyecto_id: f.proyecto_id ?? null, version: f.servidor ? f.version : undefined,
         });
         return marcarServidor([f.id], []);
       }
@@ -107,7 +107,7 @@ export function crearSync({ store, api, blobFoto, hoy, ventanaDias = 45 }: SyncD
       case "putMov": {
         const m = buscarMov(d.ciudad, op.ref);
         if (!m) return;
-        await api.json("PUT", `/caja-chica/movimientos/${m.id}`, { ciudad: m.ciudad, fecha: m.fecha, descripcion: m.descripcion, persona: m.persona, categoria: m.categoria, subcategoria: m.subcategoria, monto: m.monto, origen: m.origen, version: m.servidor ? m.version : undefined });
+        await api.json("PUT", `/caja-chica/movimientos/${m.id}`, { ciudad: m.ciudad, fecha: m.fecha, descripcion: m.descripcion, persona: m.persona, categoria: m.categoria, subcategoria: m.subcategoria, monto: m.monto, origen: m.origen, proyecto_id: m.proyecto_id ?? null, version: m.servidor ? m.version : undefined });
         return marcarServidor([], [m.id]);
       }
       case "delMov":

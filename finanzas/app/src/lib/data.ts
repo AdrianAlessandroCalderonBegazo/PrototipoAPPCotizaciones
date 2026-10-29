@@ -4,7 +4,9 @@
  * Sin dependencias de React Native: también lo importa la API de referencia.
  */
 
-export const CATS = ["Equipos", "Caja chica", "Movilidad", "Material", "Oficina", "Fletes", "Viáticos", "Proveedores", "Gastos fijos"] as const;
+export const CATS = ["Equipos", "Caja chica", "Movilidad", "Material", "Oficina", "Fletes", "Viáticos", "Proveedores", "Gastos fijos", "Gasto de proyecto"] as const;
+/** Categoría que pide elegir un proyecto activo del ERP. */
+export const CAT_PROYECTO = "Gasto de proyecto";
 /** Categorías que abren un segundo selector. */
 export const SUBCATS = { "Gastos fijos": ["Sueldos", "Alquiler", "Servicios"] } as const;
 

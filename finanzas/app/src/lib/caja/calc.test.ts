@@ -165,3 +165,13 @@ test("sincronizar caja chica", () => {
   const r = fusionarMovs(local, servidor, new Set(["a", "n"]), new Set(["x"]));
   assert.deepEqual(r.map((x) => [x.id, x.descripcion]), [["z", "z"], ["a", "local"], ["n", "n"]]);
 });
+
+test("caja chica: el egreso resta; lo recibido de la caja diaria o de la cuenta principal (FONDO) suma", async () => {
+  const { efectoChica } = await import("./calc");
+  const { tipoChica } = await import("../reportes/model");
+  assert.equal(efectoChica({ tipo: "EGRESO", monto: 40 }), -40);
+  assert.equal(efectoChica({ tipo: "TRANSFERENCIA", monto: 100 }), 100);
+  assert.equal(efectoChica({ tipo: "FONDO", monto: 250.25 }), 250.25);
+  assert.equal(tipoChica("FONDO"), "Fondos de la cuenta principal");
+  assert.equal(tipoChica("TRANSFERENCIA"), "Envío desde caja diaria");
+});

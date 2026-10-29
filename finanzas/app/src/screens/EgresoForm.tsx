@@ -8,7 +8,8 @@ import { usePuerta } from "../components/Puerta";
 import { ConfirmSheet } from "../components/Overlays";
 import { cleanAmt, fdate, money, num, today } from "../lib/format";
 import { type Permisos } from "../lib/caja/permisos";
-import { CATS, SUBCATS, catLabel, type Egreso } from "../lib/data";
+import { CAT_PROYECTO, CATS, SUBCATS, catLabel, type Egreso } from "../lib/data";
+import { SelectorProyecto } from "../components/SelectorProyecto";
 import { elegirFoto, FotoError } from "../lib/caja/foto";
 import { borrarFoto, urlFoto } from "../lib/caja/fotos";
 import { nuevoId } from "../lib/caja/ids";
@@ -16,7 +17,7 @@ import { store } from "../lib/caja/runtime";
 import { CIUDAD_LABEL, type Ciudad, type MovChica } from "../lib/caja/types";
 import type { FotoGuardada } from "../lib/caja/fotos";
 
-type Errores = Partial<Record<"fecha" | "persona" | "desc" | "categoria" | "subcategoria" | "monto", string>>;
+type Errores = Partial<Record<"fecha" | "persona" | "desc" | "categoria" | "subcategoria" | "proyecto" | "monto", string>>;
 
 /**
  * Egreso de la caja chica: manual, o con los datos que leyó el OCR de la foto del recibo (marcados AUTO).
@@ -41,6 +42,7 @@ export function EgresoForm({ ciudad, mov, inicial, fotoCaptura, saldoChica, resp
     ? { fecha: mov.fecha, persona: mov.persona, desc: mov.descripcion, ciudad: "", categoria: mov.categoria, subcategoria: mov.subcategoria, monto: String(mov.monto) }
     : inicial ?? { fecha: today(), persona: "", desc: "", ciudad: "", categoria: "", subcategoria: "", monto: "" };
   const [e, setE] = useState<Egreso>(base);
+  const [proyecto, setProyecto] = useState<{ id: number; nombre: string } | null>(mov?.proyecto_id ? { id: mov.proyecto_id, nombre: mov.proyecto_nombre ?? "" } : null);
   const [fotos, setFotos] = useState<FotoItem[]>(mov ? mov.adjuntos.map((a) => ({ id: a.id, adj: a })) : fotoCaptura ? [{ id: nuevoId(), nueva: fotoCaptura }] : []);
   const [errFoto, setErrFoto] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -63,6 +65,7 @@ export function EgresoForm({ ciudad, mov, inicial, fotoCaptura, saldoChica, resp
     if (!e.desc.trim()) x.desc = "Agrega una descripción";
     if (!e.categoria) x.categoria = "Elige una categoría";
     else if (e.categoria === "Gastos fijos" && !e.subcategoria) x.subcategoria = "Elige el tipo de gasto fijo";
+    else if (e.categoria === CAT_PROYECTO && !proyecto) x.proyecto = "Elige el proyecto";
     if (!(monto > 0)) x.monto = "Ingresa un monto mayor a 0";
     return x;
   };
@@ -97,7 +100,8 @@ export function EgresoForm({ ciudad, mov, inicial, fotoCaptura, saldoChica, resp
     const id = mov?.id ?? nuevoId();
     store.guardarMov({
       id, ciudad, fecha: e.fecha, descripcion: e.desc.trim(), persona: e.persona.trim(), categoria: e.categoria, subcategoria: e.categoria === "Gastos fijos" ? e.subcategoria : "",
-      monto, origen: mov ? (mov.origen === "TRANSFERENCIA" ? "MANUAL" : mov.origen) : desdeCaptura ? "CAPTURA" : "MANUAL",
+      monto, origen: mov ? (mov.origen === "TRANSFERENCIA" || mov.origen === "ERP" ? "MANUAL" : mov.origen) : desdeCaptura ? "CAPTURA" : "MANUAL",
+      proyecto_id: e.categoria === CAT_PROYECTO ? proyecto?.id ?? null : null, proyecto_nombre: e.categoria === CAT_PROYECTO ? proyecto?.nombre ?? null : null,
     });
     const quedan = new Set(fotos.filter((f) => f.adj).map((f) => f.adj!.id));
     for (const a of mov?.adjuntos ?? []) if (!quedan.has(a.id)) store.quitarAdjunto("mov", id, a.id);
@@ -164,6 +168,13 @@ export function EgresoForm({ ciudad, mov, inicial, fotoCaptura, saldoChica, resp
               <ErrorText>{err.subcategoria}</ErrorText>
             </View>
           ) : null}
+          {e.categoria === CAT_PROYECTO ? (
+            <View>
+              <FieldLabel>PROYECTO</FieldLabel>
+              <SelectorProyecto value={proyecto?.id ?? null} nombreActual={mov?.proyecto_nombre} onPick={(p) => { setProyecto({ id: p.id, nombre: p.nombre }); setErr((x) => ({ ...x, proyecto: undefined })); }} />
+              <ErrorText>{err.proyecto}</ErrorText>
+            </View>
+          ) : null}
           <View>
             <FieldLabel auto={auto("monto")}>MONTO</FieldLabel>
             <AmountField value={e.monto} onChangeText={(v) => set("monto", cleanAmt(v))} accent={C.navy} />
@@ -197,7 +208,7 @@ export function EgresoForm({ ciudad, mov, inicial, fotoCaptura, saldoChica, resp
             kicker: "CONFIRMA TU EGRESO",
             amount: `−${money(monto)}`,
             amountColor: C.red,
-            rows: [["Ciudad", CIUDAD_LABEL[ciudad]], ["Fecha", fdate(e.fecha)], ["Persona", e.persona], ["Descripción", e.desc], ["Categoría", catLabel(e.categoria, e.subcategoria)], ["Fotos", String(fotos.length)], ["Origen", desdeCaptura ? "Captura de recibo" : "Manual"]],
+            rows: [["Ciudad", CIUDAD_LABEL[ciudad]], ["Fecha", fdate(e.fecha)], ["Persona", e.persona], ["Descripción", e.desc], ["Categoría", catLabel(e.categoria, e.subcategoria)], ...(e.categoria === CAT_PROYECTO && proyecto ? ([["Proyecto", proyecto.nombre]] as [string, string][]) : []), ["Fotos", String(fotos.length)], ["Origen", desdeCaptura ? "Captura de recibo" : "Manual"]],
             newBalance: money(saldoChica - efecto),
             newBalanceLabel: "Caja chica después del registro",
             cta: mov ? "GUARDAR CAMBIOS" : "REGISTRAR EGRESO",

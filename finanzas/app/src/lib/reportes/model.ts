@@ -34,7 +34,7 @@ export function chicaReporte(ciudad: Ciudad, saldoAnterior: number, movs: MovChi
     ciudad,
     saldoAnterior,
     saldoFinal: conSaldo.length ? conSaldo[conSaldo.length - 1].saldo : saldoAnterior,
-    recibido: r2(orden.filter((m) => m.tipo === "TRANSFERENCIA").reduce((a, m) => a + m.monto, 0)),
+    recibido: r2(orden.filter((m) => m.tipo !== "EGRESO").reduce((a, m) => a + m.monto, 0)),
     gastado: r2(orden.filter((m) => m.tipo === "EGRESO").reduce((a, m) => a + m.monto, 0)),
     movs: conSaldo,
   };
@@ -110,6 +110,8 @@ export const totalesReporte = (r: Reporte) => ({
 export const nombreCiudades = (cs: Ciudad[]) => cs.map((c) => CIUDAD_LABEL[c]).join(" y ");
 export const periodoTexto = (desde: string, hasta: string) => (desde === hasta ? fdateLarga(desde) : `${fdate(desde)} al ${fdate(hasta)}`);
 export const categoriaTexto = (categoria: string, subcategoria: string) => (categoria ? catLabel(categoria, subcategoria) : "");
+/** Cómo se llama en los reportes cada tipo de movimiento de caja chica. */
+export const tipoChica = (tipo: MovChica["tipo"]) => (tipo === "EGRESO" ? "Egreso" : tipo === "FONDO" ? "Fondos de la cuenta principal" : "Envío desde caja diaria");
 
 /** "caja_AQP-MOQ_2026-10-01_a_2026-10-22" (sin extensión), para el nombre del archivo. */
 export const nombreArchivo = (r: ReporteOpciones) => {
