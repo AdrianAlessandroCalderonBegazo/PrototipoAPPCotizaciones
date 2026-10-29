@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   usuario    VARCHAR(60)  NOT NULL UNIQUE,
   nombre     VARCHAR(120) NOT NULL,
   clave_hash VARCHAR(100) NOT NULL,
-  rol        VARCHAR(20)  NOT NULL DEFAULT 'empleado'
-             CHECK (rol IN ('admin','empleado','encargado','almacen','vendedor','finanzas')),
+  rol        VARCHAR(20)  NOT NULL DEFAULT 'tecnico'
+             CHECK (rol IN ('admin','ventas','contabilidad','tecnico')),
   activo     BOOLEAN      NOT NULL DEFAULT TRUE,
   creado_en  TIMESTAMP    NOT NULL DEFAULT (now() AT TIME ZONE 'America/Lima')
 );

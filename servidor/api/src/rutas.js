@@ -3,9 +3,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { Router } from 'express';
 import {
-  actualizarUsuario, cambiarClaveEdicion, cambiarMiClave, cerrarSesion, crearUsuario, exigirRol, exigirSesion,
-  iniciarSesion, listarUsuarios, publico, verificarClaveEdicion,
+  actualizarUsuario, cambiarClaveEdicion, cambiarMiClave, cerrarSesion, conPermisos, crearUsuario, exigirRol, exigirSesion,
+  iniciarSesion, listarUsuarios, verificarClaveEdicion,
 } from './auth.js';
+import { auditar } from './auditoria.js';
+import { exigirNivel, nivelesDe } from './permisos.js';
+import { crearRutasErp } from './rutas_erp.js';
 import { consulta, enTransaccion } from './db.js';
 import {
   filaCatalogo, filaCotizacion, filaHerramientas, filaProducto, filaRequerimiento, jsonDeEntrada,
@@ -61,7 +64,7 @@ export function crearRutas() {
     await cerrarSesion(req.token);
     res.json({ ok: true });
   });
-  r.get('/yo', (req, res) => res.json(publico(req.usuario)));
+  r.get('/yo', async (req, res) => res.json(await conPermisos(req.usuario)));
   r.post('/yo/clave', async (req, res) => {
     await cambiarMiClave(req.usuario, req.body?.actual, req.body?.nueva);
     res.json({ ok: true });
@@ -69,19 +72,26 @@ export function crearRutas() {
 
   // Usuarios (solo administrador)
   r.get('/usuarios', async (req, res) => {
-    exigirRol(req.usuario, 'ver los usuarios');
+    await exigirNivel(req.usuario, 'configuracion', 'lectura', 'ver los usuarios');
     res.json(await listarUsuarios());
   });
   r.post('/usuarios', async (req, res) => {
-    exigirRol(req.usuario, 'crear usuarios');
+    await exigirNivel(req.usuario, 'configuracion', 'completo', 'crear usuarios');
+    if (req.body?.rol === 'admin') exigirRol(req.usuario, 'crear administradores');
     const u = await crearUsuario(req.body ?? {});
     await bitacora(req, 'crear', 'usuarios', u.id, `${u.usuario} (${u.rol})`);
+    await auditar(req, { accion: 'crear', entidad: 'usuario', entidadId: u.id, despues: u });
     res.status(201).json(u);
   });
   r.put('/usuarios/:id', async (req, res) => {
-    exigirRol(req.usuario, 'cambiar usuarios');
-    const u = await actualizarUsuario(entero(req.params.id), req.body ?? {}, req.usuario.id);
+    await exigirNivel(req.usuario, 'configuracion', 'completo', 'cambiar usuarios');
+    const id = entero(req.params.id);
+    const antes = (await consulta('SELECT id, usuario, nombre, rol, activo FROM usuarios WHERE id = $1', [id])).rows[0];
+    // Solo un administrador crea, cambia o quita administradores.
+    if (antes?.rol === 'admin' || req.body?.rol === 'admin') exigirRol(req.usuario, 'cambiar administradores');
+    const u = await actualizarUsuario(id, req.body ?? {}, req.usuario.id);
     await bitacora(req, 'editar', 'usuarios', u.id, `${u.usuario} (${u.rol}${u.activo ? '' : ', desactivado'})`);
+    await auditar(req, { accion: req.body?.clave !== undefined ? 'cambiar_clave' : 'editar', entidad: 'usuario', entidadId: u.id, antes, despues: u });
     res.json(u);
   });
 
@@ -90,8 +100,9 @@ export function crearRutas() {
     res.json(await verificarClaveEdicion(req.usuario, req.body?.clave));
   });
   r.put('/clave-edicion', async (req, res) => {
-    exigirRol(req.usuario, 'cambiar la clave de edición');
+    await exigirNivel(req.usuario, 'configuracion', 'completo', 'cambiar la clave de edición');
     await cambiarClaveEdicion(req.body?.nueva);
+    await auditar(req, { accion: 'editar', entidad: 'clave_edicion', detalle: 'clave de edición cambiada' });
     await bitacora(req, 'editar', 'configuracion', null, 'clave de edición cambiada');
     res.json({ ok: true });
   });
@@ -129,7 +140,7 @@ export function crearRutas() {
   });
 
   r.put('/productos/:id', async (req, res) => {
-    exigirRol(req.usuario, 'editar productos', 'encargado', 'vendedor');
+    await exigirNivel(req.usuario, 'cotizacion', 'completo', 'editar productos');
     const { rows } = await consulta(
       `UPDATE productos SET nombre=$2, categoria_producto=$3, precio_venta=$4, costo=$5, referencia_interna=$6,
          unidad_medida=$7, archivo_imagen=$8, imagen_url=$9, modificado=TRUE,
@@ -143,7 +154,7 @@ export function crearRutas() {
   });
 
   r.delete('/productos/:id', async (req, res) => {
-    exigirRol(req.usuario, 'eliminar productos', 'encargado', 'vendedor');
+    await exigirNivel(req.usuario, 'cotizacion', 'completo', 'eliminar productos');
     const id = entero(req.params.id);
     // Los agregados desde la app se borran; los del catálogo se marcan como
     // eliminados (para que no vuelvan al actualizar el catálogo).
@@ -202,7 +213,8 @@ export function crearRutas() {
   r.delete('/cotizaciones/:id', async (req, res) => {
     exigirRol(req.usuario, 'eliminar cotizaciones');
     const id = entero(req.params.id);
-    await consulta('DELETE FROM cotizaciones WHERE id=$1', [id]);
+    const { rows: [antes] } = await consulta('DELETE FROM cotizaciones WHERE id=$1 RETURNING *', [id]);
+    if (antes) await auditar(req, { accion: 'eliminar', entidad: 'cotizacion', entidadId: id, antes });
     await bitacora(req, 'eliminar', 'cotizaciones', id);
     res.json({ ok: true });
   });
@@ -216,6 +228,7 @@ export function crearRutas() {
   });
 
   r.post('/requerimientos', async (req, res) => {
+    await exigirNivel(req.usuario, 'logistica', 'lectura', 'pedir requerimientos');
     const b = req.body ?? {};
     if (!/^REQ-\d{4,}$/.test(String(b.numero ?? ''))) throw falla(400, 'El número del requerimiento no es válido.');
     const { rows } = await consulta(
@@ -246,6 +259,7 @@ export function crearRutas() {
         fecha_entrega: nulo(b.fecha_entrega), recibido_por: nulo(b.recibido_por),
         observaciones: nulo(b.observaciones), categorias_json: jsonDeEntrada(b.categorias_json),
       };
+      req.niveles = await nivelesDe(req.usuario);
       validarCambioRequerimiento(req, previo, nuevo);
       const { rows } = await c.query(
         `UPDATE requerimientos SET obra=$2, solicitante=$3, urgente=$4, estado=$5, fecha_aprobacion=$6, aprobado_por=$7,
@@ -269,7 +283,8 @@ export function crearRutas() {
   r.delete('/requerimientos/:id', async (req, res) => {
     exigirRol(req.usuario, 'eliminar requerimientos');
     const id = entero(req.params.id);
-    await consulta('DELETE FROM requerimientos WHERE id=$1', [id]);
+    const { rows: [antes] } = await consulta('DELETE FROM requerimientos WHERE id=$1 RETURNING *', [id]);
+    if (antes) await auditar(req, { accion: 'eliminar', entidad: 'requerimiento', entidadId: id, antes });
     await bitacora(req, 'eliminar', 'requerimientos', id);
     res.json({ ok: true });
   });
@@ -283,6 +298,7 @@ export function crearRutas() {
   });
 
   r.post('/herramientas', async (req, res) => {
+    await exigirNivel(req.usuario, 'logistica', 'lectura', 'registrar salidas de herramientas');
     const b = req.body ?? {};
     if (!/^HER-\d{4,}$/.test(String(b.numero ?? ''))) throw falla(400, 'El número de la salida no es válido.');
     const { rows } = await consulta(
@@ -314,6 +330,7 @@ export function crearRutas() {
         observaciones: nulo(b.observaciones), observaciones_devolucion: nulo(b.observaciones_devolucion),
         categorias_json: jsonDeEntrada(b.categorias_json),
       };
+      req.niveles = await nivelesDe(req.usuario);
       validarCambioHerramientas(req, previo, nuevo);
       const { rows } = await c.query(
         `UPDATE checklists_herramientas SET obra=$2, responsable=$3, maleta=$4, estado=$5, fecha_confirmacion_salida=$6,
@@ -337,7 +354,8 @@ export function crearRutas() {
   r.delete('/herramientas/:id', async (req, res) => {
     exigirRol(req.usuario, 'eliminar salidas de herramientas');
     const id = entero(req.params.id);
-    await consulta('DELETE FROM checklists_herramientas WHERE id=$1', [id]);
+    const { rows: [antes] } = await consulta('DELETE FROM checklists_herramientas WHERE id=$1 RETURNING *', [id]);
+    if (antes) await auditar(req, { accion: 'eliminar', entidad: 'salida_herramientas', entidadId: id, antes });
     await bitacora(req, 'eliminar', 'checklists_herramientas', id);
     res.json({ ok: true });
   });
@@ -349,7 +367,6 @@ export function crearRutas() {
     if (v !== 'materiales' && v !== 'herramientas') throw falla(400, 'Tipo de lista no válido.');
     return v;
   };
-  const GESTION = ['encargado', 'almacen'];
 
   /** Orden al final de la categoría, o una categoría nueva al final de la lista. */
   async function ordenAlFinal(tipo, categoria) {
@@ -378,7 +395,7 @@ export function crearRutas() {
   });
 
   r.put('/checklist-catalogo/:id', async (req, res) => {
-    exigirRol(req.usuario, 'editar las listas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar las listas');
     const b = req.body ?? {};
     const id = entero(req.params.id);
     const previo = (await consulta('SELECT * FROM checklist_catalogo WHERE id=$1', [id])).rows[0];
@@ -393,7 +410,7 @@ export function crearRutas() {
   });
 
   r.post('/checklist-catalogo/renombrar-categoria', async (req, res) => {
-    exigirRol(req.usuario, 'editar las listas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar las listas');
     const b = req.body ?? {};
     await consulta('UPDATE checklist_catalogo SET categoria=$3 WHERE tipo=$1 AND categoria=$2', [
       tipoLista(b.tipo), texto(b.anterior, 'Falta la categoría.'), texto(b.nueva, 'Escribe el nombre nuevo.'),
@@ -402,7 +419,7 @@ export function crearRutas() {
   });
 
   r.delete('/checklist-catalogo/:id', async (req, res) => {
-    exigirRol(req.usuario, 'editar las listas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar las listas');
     await consulta('DELETE FROM checklist_catalogo WHERE id=$1', [entero(req.params.id)]);
     res.json({ ok: true });
   });
@@ -433,23 +450,23 @@ export function crearRutas() {
   }
 
   r.post('/maletas', async (req, res) => {
-    exigirRol(req.usuario, 'crear maletas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'crear maletas');
     const max = (await consulta('SELECT COALESCE(MAX(orden), -1) AS m FROM maletas')).rows[0].m;
     const { rows } = await consulta('INSERT INTO maletas (nombre, orden) VALUES ($1,$2) RETURNING id', [texto(req.body?.nombre, 'Escribe el nombre de la maleta.'), max + 1]);
     res.status(201).json({ id: rows[0].id });
   });
   r.put('/maletas/:id', async (req, res) => {
-    exigirRol(req.usuario, 'editar maletas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar maletas');
     await consulta('UPDATE maletas SET nombre=$2 WHERE id=$1', [entero(req.params.id), texto(req.body?.nombre, 'Escribe el nombre de la maleta.')]);
     res.json({ ok: true });
   });
   r.delete('/maletas/:id', async (req, res) => {
-    exigirRol(req.usuario, 'eliminar maletas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'eliminar maletas');
     await consulta('DELETE FROM maletas WHERE id=$1', [entero(req.params.id)]);
     res.json({ ok: true });
   });
   r.post('/maletas/:id/items', async (req, res) => {
-    exigirRol(req.usuario, 'editar maletas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar maletas');
     const b = req.body ?? {};
     const id = entero(req.params.id);
     const nivel = texto(b.nivel, 'Falta el nivel.');
@@ -460,7 +477,7 @@ export function crearRutas() {
     res.status(201).json({ id: rows[0].id });
   });
   r.put('/maleta-items/:id', async (req, res) => {
-    exigirRol(req.usuario, 'editar maletas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar maletas');
     const b = req.body ?? {};
     const id = entero(req.params.id);
     const previo = (await consulta('SELECT * FROM maleta_items WHERE id=$1', [id])).rows[0];
@@ -473,12 +490,12 @@ export function crearRutas() {
     res.json({ ok: true });
   });
   r.delete('/maleta-items/:id', async (req, res) => {
-    exigirRol(req.usuario, 'editar maletas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar maletas');
     await consulta('DELETE FROM maleta_items WHERE id=$1', [entero(req.params.id)]);
     res.json({ ok: true });
   });
   r.post('/maletas/:id/niveles/renombrar', async (req, res) => {
-    exigirRol(req.usuario, 'editar maletas', ...GESTION);
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'editar maletas');
     const b = req.body ?? {};
     await consulta('UPDATE maleta_items SET nivel=$3 WHERE maleta_id=$1 AND nivel=$2', [
       entero(req.params.id), texto(b.anterior, 'Falta el nivel.'), texto(b.nuevo, 'Escribe el nombre nuevo.'),
@@ -526,8 +543,11 @@ export function crearRutas() {
     });
   });
 
+  // ERP: permisos, auditoría, empresa, parámetros, numeración e integraciones
+  r.use(crearRutasErp());
+
   r.get('/bitacora', async (req, res) => {
-    exigirRol(req.usuario, 'ver la bitácora', 'encargado');
+    await exigirNivel(req.usuario, 'logistica', 'completo', 'ver la bitácora');
     const { rows } = await consulta('SELECT * FROM bitacora ORDER BY id DESC LIMIT 200');
     res.json(rows);
   });

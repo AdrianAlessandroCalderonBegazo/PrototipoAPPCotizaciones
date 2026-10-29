@@ -1,8 +1,16 @@
 // Reglas de los documentos compartidos (requerimientos, salidas de
-// herramientas y cotizaciones): qué rol puede hacer cada cambio y cuándo se
-// pide la clave de edición. La app guarda sus ítems como JSON de categorías.
-import { esRol, exigirEdicion, exigirRol, tienePermisoEdicion } from './auth.js';
+// herramientas y cotizaciones): qué nivel de la PWA Logística hace falta para
+// cada cambio y cuándo se pide la clave de edición. La app guarda sus ítems
+// como JSON de categorías. `req.niveles` lo carga la ruta antes de validar.
+import { esRol, exigirEdicion, tienePermisoEdicion } from './auth.js';
 import { falla } from './errores.js';
+
+const ORDEN = { ninguno: 0, lectura: 1, completo: 2 };
+/** Lanza 403 si el usuario no llega a ese nivel en la PWA Logística (el administrador siempre puede). */
+function exigirLogistica(req, accion, minimo) {
+  if (req.usuario?.rol === 'admin') return;
+  if ((ORDEN[req.niveles?.logistica ?? 'ninguno'] ?? 0) < ORDEN[minimo]) throw falla(403, `Tu rol no permite ${accion}.`);
+}
 
 // ---------------------------------------------------------------------------
 // Forma que entiende la app (los mismos nombres y tipos que su base local)
@@ -89,20 +97,19 @@ function difiere(antes, despues, campos) {
 // ---------------------------------------------------------------------------
 
 const TRANSICIONES_REQ = {
-  'pendiente>aprobado': { roles: ['encargado'], accion: 'aprobar requerimientos' },
-  'aprobado>listo': { roles: ['almacen'], accion: 'marcar requerimientos como listos' },
-  'listo>entregado': { roles: ['empleado', 'encargado', 'almacen', 'vendedor'], accion: 'confirmar entregas' },
+  'pendiente>aprobado': { nivel: 'completo', accion: 'aprobar requerimientos' },
+  'aprobado>listo': { nivel: 'completo', accion: 'marcar requerimientos como listos' },
+  'listo>entregado': { nivel: 'lectura', accion: 'confirmar entregas' },
 };
 const REABRIR_REQ = new Set(['listo>aprobado', 'entregado>aprobado']);
 
 export function validarCambioRequerimiento(req, antes, despues) {
-  const u = req.usuario;
   if (antes.estado !== despues.estado) {
     const t = `${antes.estado}>${despues.estado}`;
     if (REABRIR_REQ.has(t)) {
       exigirEdicion(req); // se reabre al agregarle algo con la clave
     } else if (TRANSICIONES_REQ[t]) {
-      exigirRol(u, TRANSICIONES_REQ[t].accion, ...TRANSICIONES_REQ[t].roles);
+      exigirLogistica(req, TRANSICIONES_REQ[t].accion, TRANSICIONES_REQ[t].nivel);
     } else {
       throw falla(400, 'Ese cambio de estado no es válido.');
     }
@@ -113,7 +120,7 @@ export function validarCambioRequerimiento(req, antes, despues) {
   if (edicion) exigirEdicion(req);
   if (cambioDeAlistado(antes.categorias_json, despues.categorias_json)) {
     // Quien edita con la clave puede dejar al día lo alistado al agregar cosas.
-    if (!tienePermisoEdicion(req)) exigirRol(u, 'alistar materiales', 'almacen');
+    if (!tienePermisoEdicion(req)) exigirLogistica(req, 'alistar materiales', 'completo');
   }
 }
 
@@ -122,11 +129,10 @@ export function validarCambioRequerimiento(req, antes, despues) {
 // ---------------------------------------------------------------------------
 
 export function validarCambioHerramientas(req, antes, despues) {
-  const u = req.usuario;
   if (antes.estado !== despues.estado) {
     const t = `${antes.estado}>${despues.estado}`;
-    if (t === 'registrado>pendiente') exigirRol(u, 'confirmar salidas de herramientas', 'almacen');
-    else if (t === 'pendiente>conforme') exigirRol(u, 'confirmar devoluciones', 'almacen', 'encargado');
+    if (t === 'registrado>pendiente') exigirLogistica(req, 'confirmar salidas de herramientas', 'completo');
+    else if (t === 'pendiente>conforme') exigirLogistica(req, 'confirmar devoluciones', 'completo');
     else if (t === 'conforme>pendiente') exigirEdicion(req);
     else throw falla(400, 'Ese cambio de estado no es válido.');
   }

@@ -2,8 +2,9 @@ import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { consulta } from './db.js';
 import { falla } from './errores.js';
+import { ROLES, ROL_ETIQUETA, nivelesDe } from './permisos.js';
 
-export const ROLES = ['admin', 'empleado', 'encargado', 'almacen', 'vendedor', 'finanzas'];
+export { ROLES };
 const DIAS_SESION = 30;
 const MINUTOS_EDICION = 15;
 
@@ -39,6 +40,7 @@ export async function iniciarSesion(ip, usuario, clave, dispositivo) {
     throw falla(401, 'Usuario o clave incorrectos.');
   }
   intentos.delete(ip);
+  await consulta("UPDATE usuarios SET ultimo_acceso = now() AT TIME ZONE 'America/Lima' WHERE id = $1", [u.id]);
   await consulta('DELETE FROM sesiones WHERE expira_en < (now() AT TIME ZONE \'America/Lima\')');
   const token = randomBytes(32).toString('hex');
   await consulta(
@@ -46,10 +48,13 @@ export async function iniciarSesion(ip, usuario, clave, dispositivo) {
      VALUES ($1, $2, $3, (now() AT TIME ZONE 'America/Lima') + ($4 || ' days')::interval)`,
     [token, u.id, String(dispositivo ?? '').slice(0, 120) || null, String(DIAS_SESION)],
   );
-  return { token, usuario: publico(u) };
+  return { token, usuario: await conPermisos(u) };
 }
 
 export const publico = (u) => ({ id: u.id, usuario: u.usuario, nombre: u.nombre, rol: u.rol, activo: u.activo });
+
+/** El usuario con la etiqueta de su rol y su nivel en cada módulo (las apps muestran u ocultan según esto). */
+export const conPermisos = async (u) => ({ ...publico(u), rol_etiqueta: ROL_ETIQUETA[u.rol] ?? u.rol, niveles: await nivelesDe(u) });
 
 export async function cerrarSesion(token) {
   await consulta('DELETE FROM sesiones WHERE token = $1', [token]);
@@ -133,7 +138,7 @@ export function exigirEdicion(req) {
 // ---------------------------------------------------------------------------
 
 export async function listarUsuarios() {
-  const { rows } = await consulta('SELECT id, usuario, nombre, rol, activo FROM usuarios ORDER BY lower(nombre)');
+  const { rows } = await consulta('SELECT id, usuario, nombre, rol, activo, creado_en, ultimo_acceso FROM usuarios ORDER BY lower(nombre)');
   return rows;
 }
 

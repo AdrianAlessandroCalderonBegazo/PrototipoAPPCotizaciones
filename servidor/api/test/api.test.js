@@ -74,7 +74,7 @@ before(async () => {
   });
   base = `http://127.0.0.1:${servidor.address().port}`;
   sesiones.admin = await entrar('admin', 'admin-clave-1');
-  for (const [usuario, rol] of [['juan', 'empleado'], ['carlos', 'encargado'], ['pedro', 'almacen'], ['ana', 'almacen'], ['vera', 'vendedor'], ['fina', 'finanzas']]) {
+  for (const [usuario, rol] of [['juan', 'ventas'], ['carlos', 'tecnico'], ['pedro', 'tecnico'], ['ana', 'tecnico'], ['vera', 'ventas'], ['fina', 'contabilidad']]) {
     const r = await llamar('POST', '/api/usuarios', { token: sesiones.admin, cuerpo: { usuario, nombre: usuario.toUpperCase(), clave: 'clave-segura', rol } });
     assert.equal(r.estado, 201, JSON.stringify(r.datos));
     sesiones[usuario] = await entrar(usuario, 'clave-segura');
@@ -101,13 +101,13 @@ describe('acceso', () => {
     assert.equal((await llamar('GET', '/api/usuarios', { token: sesiones.juan })).estado, 403);
     const r = await llamar('GET', '/api/usuarios', { token: sesiones.admin });
     assert.equal(r.estado, 200);
-    assert.ok(r.datos.some((u) => u.usuario === 'carlos' && u.rol === 'encargado'));
-    assert.ok(r.datos.some((u) => u.usuario === 'fina' && u.rol === 'finanzas'));
-    assert.equal((await llamar('POST', '/api/usuarios', { token: sesiones.admin, cuerpo: { usuario: 'juan', nombre: 'x', clave: 'clave-segura', rol: 'empleado' } })).estado, 409);
+    assert.ok(r.datos.some((u) => u.usuario === 'carlos' && u.rol === 'tecnico'));
+    assert.ok(r.datos.some((u) => u.usuario === 'fina' && u.rol === 'contabilidad'));
+    assert.equal((await llamar('POST', '/api/usuarios', { token: sesiones.admin, cuerpo: { usuario: 'juan', nombre: 'x', clave: 'clave-segura', rol: 'ventas' } })).estado, 409);
   });
 
   it('un usuario desactivado pierde el acceso', async () => {
-    const r = await llamar('POST', '/api/usuarios', { token: sesiones.admin, cuerpo: { usuario: 'temporal', nombre: 'Temporal', clave: 'clave-segura', rol: 'empleado' } });
+    const r = await llamar('POST', '/api/usuarios', { token: sesiones.admin, cuerpo: { usuario: 'temporal', nombre: 'Temporal', clave: 'clave-segura', rol: 'tecnico' } });
     const token = await entrar('temporal', 'clave-segura');
     await llamar('PUT', `/api/usuarios/${r.datos.id}`, { token: sesiones.admin, cuerpo: { activo: false } });
     assert.equal((await llamar('GET', '/api/yo', { token })).estado, 401);
@@ -149,7 +149,7 @@ describe('requerimientos compartidos entre usuarios', () => {
     const visto = (await llamar('GET', '/api/requerimientos', { token: sesiones.carlos })).datos.find((r) => r.id === creado.id);
     assert.equal(visto.solicitante, 'Juan');
 
-    // Un empleado no puede aprobar; el encargado sí
+    // Ventas (solo lectura en Logística) no puede aprobar; un técnico sí
     const aprobar = (token, v) => llamar('PUT', `/api/requerimientos/${creado.id}`, {
       token, cuerpo: { ...creado, version: v, estado: 'aprobado', aprobado_por: 'Carlos', fecha_aprobacion: '2026-10-22T10:00:00.000' },
     });
@@ -159,7 +159,7 @@ describe('requerimientos compartidos entre usuarios', () => {
     assert.equal(aprobado.datos.estado, 'aprobado');
     assert.equal(aprobado.datos.version, 2);
 
-    // Pedro alista 2 de 3 (solo almacén puede)
+    // Pedro alista 2 de 3 (hace falta acceso completo a Logística)
     const cats = JSON.parse(aprobado.datos.categorias_json);
     const marcar = (cs, hasta, quien) => cs.flatMap((c) => c.items).slice(0, hasta).forEach((i) => Object.assign(i, { alistado: true, alistado_por: quien, fecha_alistado: '2026-10-22T11:00:00.000' }));
     marcar(cats, 2, 'Pedro');
@@ -244,7 +244,7 @@ describe('salidas de herramientas', () => {
     const put = (token, extra, edicion) => llamar('PUT', `/api/herramientas/${extra.version}`.replace(/\d+$/, creado.id), { token, edicion, cuerpo: { ...creado, ...extra } });
     const salida = { estado: 'pendiente', version: 1, salida_confirmada_por: 'Pedro', fecha_confirmacion_salida: '2026-10-22T09:00:00.000',
       categorias_json: JSON.stringify([{ nombre: 'Primer nivel', items: [{ texto: 'Taladro', cantidad: 1, salio: true }] }]) };
-    assert.equal((await put(sesiones.juan, salida)).estado, 403); // un empleado no confirma salidas
+    assert.equal((await put(sesiones.juan, salida)).estado, 403); // Ventas no confirma salidas
     const pendiente = await put(sesiones.pedro, salida);
     assert.equal(pendiente.estado, 200);
 
@@ -294,7 +294,7 @@ describe('cotizaciones, productos y listas', () => {
     const nuevo = await llamar('POST', '/api/productos', { token: sesiones.juan, cuerpo: { nombre: 'Cable especial', categoria_producto: 'CABLES', precio_venta: 50 } });
     assert.equal(nuevo.estado, 201);
     assert.equal(nuevo.datos.origen, 'local');
-    assert.equal((await llamar('PUT', `/api/productos/${nuevo.datos.id}`, { token: sesiones.juan, cuerpo: { ...nuevo.datos, precio_venta: 55 } })).estado, 403);
+    assert.equal((await llamar('PUT', `/api/productos/${nuevo.datos.id}`, { token: sesiones.fina, cuerpo: { ...nuevo.datos, precio_venta: 55 } })).estado, 403); // Contabilidad solo ve el catálogo
     const edit = await llamar('PUT', `/api/productos/${nuevo.datos.id}`, { token: sesiones.vera, cuerpo: { ...nuevo.datos, precio_venta: 55 } });
     assert.equal(edit.datos.precio_venta, 55);
     await llamar('DELETE', `/api/productos/${nuevo.datos.id}`, { token: sesiones.vera });
