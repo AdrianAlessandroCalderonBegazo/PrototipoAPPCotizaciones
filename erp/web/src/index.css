@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Sistema de diseño ICR ERP (ERP_ICR.zip › Sistema de diseño): petróleo como acción, navy como énfasis, ámbar solo de acento. */
+:root,
+[data-theme="light"] {
+  --bg: #f2f6f9; --surface: #ffffff; --surface-2: #f6f9fb; --track: #e4ebf0; --border: #dce4ea; --border-strong: #c3d0d9;
+  --text: #0e2233; --text-2: #4a5d6e; --text-3: #7a8b99;
+  --primary: #0f7590; --primary-btn: #0f7590; --primary-ink: #0b6680; --primary-soft: #ddf2f5; --primary-line: #86c3d1;
+  --navy: #0e2233; --hero-a: #0f7590; --hero-b: #14a3b8; --navy-a: #13407a; --navy-b: #0e2233;
+  --solar: #e9a21a; --solar-soft: #fcf0d4; --success: #17804f; --success-soft: #dcf2e6; --warning: #a86a0b; --warning-soft: #fbeed3;
+  --danger: #c0342b; --danger-soft: #fbe2df; --neutral: #5e7081; --neutral-soft: #e7edf2;
+  --ai: #6a47d6; --ai-soft: #eee9fd; --ai-line: #c9bbf5; --overlay: rgba(14, 34, 51, 0.45); --shadow: 0 12px 40px rgba(14, 34, 51, 0.16);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --bg: #08151f; --surface: #0f202c; --surface-2: #132836; --track: #1b3343; --border: #1e3647; --border-strong: #2a4558;
+  --text: #e5eef3; --text-2: #a1b4c2; --text-3: #6e8596;
+  --primary: #25b4c7; --primary-btn: #11849c; --primary-ink: #5ed0e0; --primary-soft: #0e3441; --primary-line: #1f6a7b;
+  --navy: #05101a; --hero-a: #0d5f75; --hero-b: #0f8499; --navy-a: #123563; --navy-b: #0a1a28;
+  --solar: #f2b23a; --solar-soft: #3a2c0f; --success: #3fc184; --success-soft: #0f3324; --warning: #e6a740; --warning-soft: #3a2a0e;
+  --danger: #f06a60; --danger-soft: #3e1714; --neutral: #93a6b5; --neutral-soft: #1c3040;
+  --ai: #a58cff; --ai-soft: #251c47; --ai-line: #4a3a8a; --overlay: rgba(0, 0, 0, 0.6); --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: Manrope, system-ui, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }
+input, textarea, select, button { font-family: inherit; }
+.num { font-variant-numeric: tabular-nums; }
+.icono { font-family: "Material Symbols Rounded"; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; user-select: none; }
+@keyframes icrIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.aparecer { animation: icrIn 0.15s ease; }
+
+@layer components {
+  .tarjeta { @apply rounded-[18px] border border-border bg-surface; }
+  .campo { @apply h-10 w-full rounded-[11px] border border-border bg-surface px-3 text-[14px] text-text outline-none transition-colors placeholder:text-text-3 focus:border-primary-line; }
+  .etiqueta { @apply mb-1.5 block text-[12.5px] font-semibold text-text-2; }
+  .btn { @apply inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[11px] px-4 text-[13.5px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primario { @apply btn bg-primary-btn text-white hover:brightness-110; }
+  .btn-secundario { @apply btn border border-border bg-surface text-text hover:bg-surface-2; }
+  .btn-peligro { @apply btn bg-danger text-white hover:brightness-110; }
+  .titulo-seccion { @apply text-[15px] font-bold; }
+  .sobretitulo { @apply text-[12px] font-bold uppercase tracking-[0.09em] text-text-3; }
+}

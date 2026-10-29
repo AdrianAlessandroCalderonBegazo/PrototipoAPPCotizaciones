@@ -1,0 +1,54 @@
+name: Build ERP
+
+# Prueba la API principal (con PostgreSQL) y arma el ERP web listo para subir al VPS.
+# Se lanza a mano desde la pestaña Actions ("Run workflow") y deja un zip descargable: erp-web.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: |
+            erp/web/package-lock.json
+            servidor/api/package-lock.json
+
+      # Roles, matriz de permisos, auditoría y configuración se validan en el servidor: se prueban contra Postgres real.
+      - name: Probar la API principal
+        run: npm ci && npm test
+        working-directory: servidor/api
+        env:
+          DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+
+      - name: Instalar dependencias del ERP
+        run: npm ci
+        working-directory: erp/web
+
+      - name: Revisar tipos y probar el ERP
+        run: npm run typecheck && npm test
+        working-directory: erp/web
+
+      - name: Compilar el ERP
+        run: npm run build
+        working-directory: erp/web
+
+      - name: Subir el ERP como artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: erp-web
+          path: erp/web/dist

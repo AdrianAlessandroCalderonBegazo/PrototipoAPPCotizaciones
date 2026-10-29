@@ -1,10 +1,11 @@
-# Cotizador ICR y Finanzas en el VPS (guía paso a paso)
+# ICR (ERP, Logística y Finanzas) en el VPS (guía paso a paso)
 
 Qué queda funcionando al terminar:
 
 | Dirección | Qué es |
 |---|---|
-| `https://cotizador.TUDOMINIO` | La app (PWA instalable en el celular). Varias personas, una sola base de datos. |
+| `https://erp.TUDOMINIO` | **ICR ERP**: la app central (Inicio, Almacén, Configuración: usuarios, matriz de permisos, empresa, parámetros, integraciones y auditoría; el resto de módulos se agrega por fases). |
+| `https://cotizador.TUDOMINIO` | **Logística** (antes Cotizador; PWA instalable en el celular). Varias personas, una sola base de datos. |
 | `https://app.TUDOMINIO` | Vista general: cotizaciones, requerimientos y salidas de herramientas de todos, en tablas simples. También administra usuarios. |
 | `https://api.TUDOMINIO` | La API sola (para el APK u otras apps que se hagan después). |
 | `https://finanza.TUDOMINIO` | **Finanzas 2** (versión de prueba, base de datos propia). |
@@ -25,6 +26,8 @@ Agrega registros **A**, todos con la IP del VPS (la ves en el panel del VPS):
 | A | `app` | IP del VPS |
 | A | `api` | IP del VPS |
 | A | `finanzas` | IP del VPS |
+| A | `finanza` | IP del VPS |
+| A | `erp` | IP del VPS |
 
 No borres ni cambies los registros que ya existan (sobre todo `@`, `www` y los de correo).
 Tarda de unos minutos a unas horas. Revisa en https://dnschecker.org que `cotizador.TUDOMINIO` ya muestre la IP.
@@ -177,9 +180,10 @@ Finanzas 1 no se toca.
    docker compose logs finanzas2-api | tail -10    # debe decir "Base de datos creada", "Migración aplicada: 001_fin.sql" y "API de Finanzas 2 escuchando"
    ./scripts/actualizar_finanzas2.sh /root/finanzas2_web.zip
    ```
-3. Abre `https://finanza.TUDOMINIO` (el certificado sale solo cuando el DNS ya apunta al VPS) y entra con un usuario **Administrador, Finanzas o Encargado**.
+3. Abre `https://finanza.TUDOMINIO` (el certificado sale solo cuando el DNS ya apunta al VPS) y entra con un usuario con acceso a caja chica en la matriz de permisos
+   (por defecto **Contabilidad** o **Administrador**).
 4. **Primer uso**: Libreta › Cuentas: crear *Cta. cte. 2000*, *Cta. cte. 7074* (con sus últimos 4 dígitos), *Yape Diego* y *Yape Milagros* (titular, saldo inicial y umbral 40).
-   Solo **admin y finanzas** crean cuentas. Luego Libreta › Personas.
+   Solo el **Administrador** crea o cambia cuentas. Luego Libreta › Personas.
 5. **Telegram** (opcional): crea un bot con @BotFather y pon `TELEGRAM_BOT_TOKEN=…` en el `.env`; luego `docker compose up -d`.
 
 El respaldo diario (`./scripts/respaldo.sh`) ya incluye la base `finanzas2` y sus fotos. Para descartar la prueba: `docker compose stop finanzas2-api` y, si quieres,
@@ -191,6 +195,26 @@ El `Caddyfile` incluye al final los bloques de **Relay** (`atleta.` y `coach.adr
 de icr reemplaza el Caddyfile del VPS por el de este proyecto, esos bloques **deben seguir en `servidor/Caddyfile`** en cada versión nueva; si se borran, Relay se cae.
 El contenedor `relay-web` tiene que estar en la misma red de Docker que Caddy (si Relay no responde después de actualizar: `docker network ls` y comprobar
 que `relay-web` y `icr-caddy-1` comparten una red, y `docker compose logs caddy`).
+
+## 7e. ICR ERP (`erp.TUDOMINIO`)
+
+La app central. Usa la **misma API, base de datos y usuarios** que Logística y Finanzas: no hay servicio nuevo, solo archivos (Caddy los sirve).
+
+1. **DNS**: registro **A** con nombre `erp` apuntando a la IP del VPS.
+2. Actualiza el servidor (trae el `Caddyfile` con `erp.` y la migración de roles) y publica el ERP:
+   ```bash
+   cd /opt/icr && unzip -o /root/servidor_icr.zip -d /opt/icr
+   cd /opt/icr/servidor
+   ./scripts/respaldo.sh                          # respaldo antes (cambia los roles)
+   docker compose up -d --build
+   docker compose logs api | tail -5              # debe decir "Migración aplicada: 002_erp_base.sql"
+   ./scripts/actualizar_erp.sh /root/erp-web.zip
+   docker compose restart caddy                   # para que tome el Caddyfile nuevo
+   ```
+3. Abre `https://erp.TUDOMINIO`, entra con `admin` y revisa **Configuración**: usuarios y sus roles, **Matriz de permisos**, **Datos de la empresa**
+   (RUC, logo), **Parámetros** (tipo de cambio) e **Integraciones**.
+
+El zip `erp-web.zip` sale del flujo **Build ERP** de GitHub (Actions → Build ERP → Run workflow → al terminar, descargar `erp-web`).
 
 ## 8. Respaldos (importante)
 
@@ -243,11 +267,10 @@ Las tablas de Finanzas viven en `finanzas/db/migrations/` y la API de Finanzas l
 | "Otra persona modificó esto..." | Es normal: alguien más cambió el mismo documento. Se actualiza solo; revisa y repite el cambio. |
 | Olvidé la clave del administrador | `./scripts/clave_usuario.sh admin` pone una clave nueva. Lo más fácil es tener **dos administradores** desde el inicio. |
 
-## Cómo se conecta el ERP después
+## El ERP y las apps
 
-El ERP puede correr en el mismo VPS (otro contenedor, subdominio `erp.TUDOMINIO` con otra entrada en el `Caddyfile`).
-Para compartir los usuarios y los productos se conectará a esta API o a la base de datos (ya está previsto
-`productos.codigo_erp`). Eso se define cuando se sepa qué ERP es.
+El ERP (`erp.TUDOMINIO`) es una app web que habla con la misma API (`/api`): comparte usuarios, sesiones, roles y la matriz de permisos con
+Logística y Finanzas. El plan por fases y las decisiones están en `erp/ESPECIFICACION.md`.
 
 ## APK conectado al servidor (opcional)
 
