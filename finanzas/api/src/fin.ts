@@ -36,9 +36,8 @@ export type DepsFin = { db: Db; storage: Storage; notificar?: Notificador; env?:
 
 export function crearFin({ db, storage, notificar = sinNotificador, env = {}, hoy = hoyLima }: DepsFin) {
   const quien = (u: Usuario) => u.nombre || u.email || u.id;
-  // Quién puede crear o cambiar cuentas (y la libreta de proveedores): por defecto admin y finanzas (FIN_ROLES_CONFIG=admin,finanzas).
-  const rolesConfig = ((env.FIN_ROLES_CONFIG ?? "").trim() ? env.FIN_ROLES_CONFIG! : "admin,finanzas").split(",").map((r) => r.trim().toLowerCase()).filter(Boolean);
-  const puedeConfigurar = (u: Usuario) => (u.rol ?? "").toLowerCase() === "admin" || rolesConfig.includes((u.rol ?? "").toLowerCase());
+  // Crear o cambiar cuentas (y probar su aviso) es configuración: solo el Administrador, igual que los saldos iniciales de Finanzas 1.
+  const puedeConfigurar = (u: Usuario) => (u.rol ?? "").toLowerCase() === "admin";
 
   async function movsDe(q: Db, where: string, params: unknown[]) {
     const movs = await q.query<Row>(`SELECT ${COLS_MOV} FROM fin_mov m WHERE m.deleted_at IS NULL ${where} ORDER BY m.fecha, m.hora, m.creado, m.id`, params);

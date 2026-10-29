@@ -24,7 +24,7 @@ before(async () => {
   const loginPrincipal: LoginPrincipal = {
     async entrar(usuario, clave) {
       if (clave !== "clave-buena") throw new ApiError(401, "CREDENCIALES", "Usuario o clave incorrectos.");
-      const rol = usuario.startsWith("emp") ? "empleado" : "finanzas";
+      const rol = usuario.startsWith("emp") ? "ventas" : "contabilidad";
       return { token: `tok-${usuario}`, usuario: { usuario, nombre: usuario.toUpperCase(), rol } };
     },
     async salir(token) {
@@ -42,10 +42,11 @@ after(async () => {
 
 type R = { status: number; data?: any; error?: { code: string; message: string } };
 const ADMIN = "dev:ana:admin";
-const FINANZAS = "dev:carla:finanzas";
-const ENCARGADO = "dev:beto:encargado";
-const EMPLEADO = "dev:dani:empleado";
-const ALMACEN = "dev:eva:almacen";
+const FINANZAS = "dev:carla:contabilidad";
+const ENCARGADO = "dev:beto:tecnico:lectura"; // técnico con solo lectura en caja chica
+const CAJERO = "dev:luis:tecnico:completo"; // técnico al que la matriz le dio acceso completo
+const EMPLEADO = "dev:dani:ventas";
+const ALMACEN = "dev:eva:tecnico";
 
 async function call(method: string, path: string, body?: unknown, user: string | null = ADMIN, raw?: { mime: string; bytes: Buffer }): Promise<R> {
   const res = await fetch(base + path, {
@@ -76,8 +77,11 @@ test("cada rol entra solo a lo suyo: empleado y almacén no ven Finanzas", async
   const p = await call("GET", "/caja/permisos", undefined, EMPLEADO);
   assert.equal(p.status, 200);
   assert.equal(p.data.permisos.acceso, false);
-  assert.deepEqual((await call("GET", "/caja/permisos", undefined, FINANZAS)).data.permisos, { acceso: true, corregir_pasado: true, cerrar: true, reabrir: false, configurar: false, revisar: true });
-  assert.equal((await call("GET", "/caja/permisos", undefined, ENCARGADO)).data.permisos.corregir_pasado, false);
+  assert.deepEqual((await call("GET", "/caja/permisos", undefined, FINANZAS)).data.permisos, { acceso: true, escribir: true, corregir_pasado: true, cerrar: true, reabrir: false, configurar: false, revisar: true });
+  const lectura = (await call("GET", "/caja/permisos", undefined, ENCARGADO)).data.permisos;
+  assert.equal(lectura.acceso, true);
+  assert.equal(lectura.escribir, false);
+  assert.equal(lectura.corregir_pasado, false);
 });
 
 test("los saldos iniciales solo los cambia un administrador", async () => {
@@ -92,28 +96,31 @@ test("los saldos iniciales solo los cambia un administrador", async () => {
   assert.equal(c.usuario, "ana");
 });
 
-test("el día de hoy lo registra cualquiera con acceso; corregir un día anterior solo Finanzas o admin (lo decide el servidor)", async () => {
-  const hoyHoja = await abrir("AQP", HOY, ENCARGADO);
+test("con solo lectura se ve la caja pero no se registra nada; con acceso completo se registra y corrige (lo decide el servidor)", async () => {
+  const hoyHoja = await abrir("AQP", HOY, CAJERO);
   const f1 = uid();
-  assert.equal((await call("PUT", `/caja/filas/${f1}`, fila(hoyHoja.id), ENCARGADO)).status, 200);
-
-  const ayer = await abrir("AQP", "2026-10-21", ENCARGADO); // abrir la hoja no es corregir
+  assert.equal((await call("PUT", `/caja/filas/${f1}`, fila(hoyHoja.id), CAJERO)).status, 200);
+  const ayer = await abrir("AQP", "2026-10-21", CAJERO);
   const f2 = uid();
-  const rechazo = await call("PUT", `/caja/filas/${f2}`, fila(ayer.id), ENCARGADO);
-  assert.equal(rechazo.status, 403);
-  assert.equal(rechazo.error?.code, "SIN_PERMISO");
-  assert.equal((await call("PUT", `/caja/filas/${f2}`, fila(ayer.id), FINANZAS)).status, 200);
+  assert.equal((await call("PUT", `/caja/filas/${f2}`, fila(ayer.id), CAJERO)).status, 200);
 
-  // tampoco puede borrarla, editar las observaciones ni subir fotos a un día anterior
+  // Lectura: ni hoy ni un día anterior
+  assert.equal((await call("POST", "/caja/hojas/abrir", { ciudad: "AQP", fecha: "2026-10-19" }, ENCARGADO)).error?.code, "SIN_PERMISO");
+  for (const hojaId of [hoyHoja.id, ayer.id]) {
+    const r = await call("PUT", `/caja/filas/${uid()}`, fila(hojaId), ENCARGADO);
+    assert.equal(r.status, 403);
+    assert.equal(r.error?.code, "SIN_PERMISO");
+  }
   assert.equal((await call("DELETE", `/caja/filas/${f2}`, undefined, ENCARGADO)).status, 403);
-  assert.equal((await call("PATCH", `/caja/hojas/${ayer.id}`, { obras_realizadas: "Losa" }, ENCARGADO)).status, 403);
+  assert.equal((await call("PATCH", `/caja/hojas/${ayer.id}`, { responsable_caja: "Beto" }, ENCARGADO)).status, 403);
   const png = { mime: "image/png", bytes: Buffer.from("89504e470d0a1a0a0000000d", "hex") };
   assert.equal((await call("PUT", `/caja/adjuntos/${uid()}?fila_id=${f2}`, undefined, ENCARGADO, png)).status, 403);
-  assert.equal((await call("PUT", `/caja/adjuntos/${uid()}?fila_id=${f2}`, undefined, FINANZAS, png)).status, 200);
-  // y la caja chica de un día anterior sigue la misma regla
-  const mov = { ciudad: "AQP", fecha: "2026-10-20", descripcion: "Plumón", persona: "Luis", categoria: "Oficina", monto: 5 };
+  assert.equal((await call("PUT", `/caja/adjuntos/${uid()}?fila_id=${f2}`, undefined, CAJERO, png)).status, 200);
+  const mov = { ciudad: "AQP", fecha: HOY, descripcion: "Plumón", persona: "Luis", categoria: "Oficina", monto: 5 };
   assert.equal((await call("PUT", `/caja-chica/movimientos/${uid()}`, mov, ENCARGADO)).status, 403);
-  assert.equal((await call("PUT", `/caja-chica/movimientos/${uid()}`, { ...mov, fecha: HOY }, ENCARGADO)).status, 200);
+  assert.equal((await call("PUT", `/caja-chica/movimientos/${uid()}`, { ...mov, fecha: "2026-10-20" }, CAJERO)).status, 200);
+  // pero sí puede ver
+  assert.equal((await call("GET", `/caja/hojas?ciudad=AQP&desde=${HOY}&hasta=${HOY}`, undefined, ENCARGADO)).status, 200);
 });
 
 test("historial de cambios: qué, quién, cuándo y el valor anterior", async () => {
@@ -138,7 +145,7 @@ test("historial de cambios: qué, quién, cuándo y el valor anterior", async ()
   assert.equal(lista[3].despues, null);
   for (const c of lista) {
     assert.equal(c.usuario, "carla");
-    assert.equal(c.rol, "finanzas");
+    assert.equal(c.rol, "contabilidad");
     assert.ok(c.creado_en);
     assert.equal(c.fecha_dia, "2026-10-21");
   }
@@ -148,10 +155,10 @@ test("historial de cambios: qué, quién, cuándo y el valor anterior", async ()
 test("dos personas editando lo mismo: la segunda recibe un aviso y no pisa a la primera", async () => {
   const h = await abrir("AQP", HOY);
   const id = uid();
-  const creada = (await call("PUT", `/caja/filas/${id}`, fila(h.id, { descripcion: "Venta A" }), ENCARGADO)).data.fila;
+  const creada = (await call("PUT", `/caja/filas/${id}`, fila(h.id, { descripcion: "Venta A" }), CAJERO)).data.fila;
   assert.equal(creada.version, 1);
   // Beto la edita (versión 1 → 2)
-  const beto = await call("PUT", `/caja/filas/${id}`, { ...fila(h.id, { descripcion: "Venta A (Beto)" }), version: 1 }, ENCARGADO);
+  const beto = await call("PUT", `/caja/filas/${id}`, { ...fila(h.id, { descripcion: "Venta A (Beto)" }), version: 1 }, CAJERO);
   assert.equal(beto.data.fila.version, 2);
   // Carla todavía tenía la versión 1
   const carla = await call("PUT", `/caja/filas/${id}`, { ...fila(h.id, { descripcion: "Venta A (Carla)" }), version: 1 }, FINANZAS);
@@ -164,8 +171,8 @@ test("dos personas editando lo mismo: la segunda recibe un aviso y no pisa a la 
   assert.equal((await call("PUT", `/caja/filas/${id}`, { ...fila(h.id, { descripcion: "Venta A (Carla)" }), version: 2 }, FINANZAS)).status, 200);
   // lo mismo con las observaciones del día
   const v = (await hoja("AQP", HOY)).version;
-  assert.equal((await call("PATCH", `/caja/hojas/${h.id}`, { maletas: "2", version: v }, ENCARGADO)).status, 200);
-  assert.equal((await call("PATCH", `/caja/hojas/${h.id}`, { maletas: "3", version: v }, FINANZAS)).error?.code, "CAMBIO_CONCURRENTE");
+  assert.equal((await call("PATCH", `/caja/hojas/${h.id}`, { responsable_caja: "Beto", version: v }, CAJERO)).status, 200);
+  assert.equal((await call("PATCH", `/caja/hojas/${h.id}`, { responsable_caja: "Carla", version: v }, FINANZAS)).error?.code, "CAMBIO_CONCURRENTE");
 });
 
 test("cierre del día: efectivo contado, diferencia, bloqueo y reapertura con motivo", async () => {
@@ -267,7 +274,7 @@ test("alertas: cajas en negativo, movimientos sin comprobante, días sin cerrar 
   assert.ok(!cerrado.data.alertas.some((a: any) => a.tipo === "DIA_SIN_CERRAR" && a.fecha === "2026-09-30"));
 
   // caja chica en negativo y gastos sin foto
-  await call("PUT", `/caja-chica/movimientos/${uid()}`, { ciudad: "MOQ", fecha: HOY, descripcion: "Taxi", persona: "Luis", categoria: "Movilidad", monto: 40 }, ENCARGADO);
+  await call("PUT", `/caja-chica/movimientos/${uid()}`, { ciudad: "MOQ", fecha: HOY, descripcion: "Taxi", persona: "Luis", categoria: "Movilidad", monto: 40 }, CAJERO);
   const chica = await call("GET", "/caja/alertas?ciudad=MOQ&dias=30", undefined, ADMIN);
   assert.ok(chica.data.alertas.some((a: any) => a.tipo === "CAJA_CHICA_NEGATIVA" && a.fecha === HOY));
   assert.equal(chica.data.resumen.alta >= 3, true);
@@ -306,7 +313,7 @@ test("inicio de sesión con el usuario de la plataforma: solo entran los roles c
   const ok = await call("POST", "/auth/login", { email: "carlos", password: "clave-buena" }, null);
   assert.equal(ok.status, 200);
   assert.equal(ok.data.token, "tok-carlos");
-  assert.deepEqual(ok.data.user, { nombre_completo: "CARLOS", email: "carlos", rol_codigo: "finanzas" });
+  assert.deepEqual(ok.data.user, { nombre_completo: "CARLOS", email: "carlos", rol_codigo: "contabilidad" });
   assert.equal(ok.data.permisos.cerrar, true);
   assert.equal((await call("POST", "/auth/login", { usuario: "carlos", clave: "clave-buena" }, null)).status, 200); // acepta "usuario" y "clave" también
 
@@ -325,14 +332,16 @@ test("sesiones reales: el token debe estar en la base, vigente y de un usuario a
   const d = await pgliteDb();
   await d.exec(`CREATE TABLE usuarios (id serial PRIMARY KEY, usuario text, nombre text, rol text, activo boolean DEFAULT true);
     CREATE TABLE sesiones (token char(64) PRIMARY KEY, usuario_id int REFERENCES usuarios(id), expira_en timestamp NOT NULL);
-    INSERT INTO usuarios (usuario, nombre, rol) VALUES ('carlos', 'Carlos Pérez', 'finanzas'), ('inactivo', 'Inactivo', 'admin');
+    INSERT INTO usuarios (usuario, nombre, rol) VALUES ('carlos', 'Carlos Pérez', 'contabilidad'), ('inactivo', 'Inactivo', 'admin');
+    CREATE TABLE rol_permisos (rol text, modulo text, nivel text, PRIMARY KEY (rol, modulo));
+    INSERT INTO rol_permisos VALUES ('contabilidad', 'caja_chica', 'completo');
     UPDATE usuarios SET activo = false WHERE usuario = 'inactivo';`);
   const futuro = "(now() AT TIME ZONE 'America/Lima') + interval '1 day'";
   const pasado = "(now() AT TIME ZONE 'America/Lima') - interval '1 minute'";
   await d.exec(`INSERT INTO sesiones VALUES (repeat('a', 64), 1, ${futuro}), (repeat('b', 64), 1, ${pasado}), (repeat('c', 64), 2, ${futuro})`);
   const auth = authSesiones(d);
   const u = await auth(`Bearer ${"a".repeat(64)}`);
-  assert.deepEqual({ ...u, token: undefined }, { id: "1", nombre: "Carlos Pérez", email: "carlos", rol: "finanzas", token: undefined });
+  assert.deepEqual({ ...u, token: undefined }, { id: "1", nombre: "Carlos Pérez", email: "carlos", rol: "contabilidad", token: undefined, nivelCaja: "completo" });
   for (const malo of [`Bearer ${"b".repeat(64)}`, `Bearer ${"c".repeat(64)}`, `Bearer ${"z".repeat(64)}`, "Bearer ", undefined, "Basic abc"])
     await assert.rejects(() => auth(malo), (e: unknown) => e instanceof ApiError && e.status === 401);
   await d.close();

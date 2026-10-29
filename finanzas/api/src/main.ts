@@ -5,7 +5,7 @@
  * Desarrollo:  AUTH_MODE=dev npm start   (Postgres en memoria con PGlite + migración aplicada; nada se guarda)
  *
  * MODO=fin → ICR Finanzas 2 (rutas /v2, MIGRACIONES_DIR=db/migrations-fin, CREAR_BASE=1 crea su base; AUTH_DATABASE_URL = base donde están los usuarios y sesiones).
- * Variables: PORT (8787), DATABASE_URL, MAIN_API_URL (la API de usuarios) | AUTH_MODE=dev, UPLOAD_DIR (./uploads), FINANZAS_ROLES… (ver permisos.ts),
+ * Variables: PORT (8787), DATABASE_URL, MAIN_API_URL (la API de usuarios) | AUTH_MODE=dev, UPLOAD_DIR (./uploads), (los permisos salen de la matriz del ERP: ver permisos.ts),
  *   ERP_API_URL (si se define, cada ingreso/gasto real se refleja en el ERP; si no, no se refleja nada),
  *   CORS_ORIGIN (solo si la app vive en otro origen), API_PREFIX (p. ej. /api-caja).
  */

@@ -19,7 +19,7 @@ const MAX_BINARIO = 11 * 1024 * 1024;
 
 /** Inicio de sesión contra la API principal (la que maneja los usuarios): devuelve el token y los datos de la persona. */
 export type LoginPrincipal = {
-  entrar(usuario: string, clave: string): Promise<{ token: string; usuario: { usuario: string; nombre: string; rol: string } }>;
+  entrar(usuario: string, clave: string): Promise<{ token: string; usuario: { usuario: string; nombre: string; rol: string; niveles?: Record<string, string> } }>;
   salir(token: string): Promise<void>;
 };
 
@@ -122,17 +122,20 @@ export function crearServidor(opts: { auth: Auth; svc: Servicio; fin?: Fin; modo
         const clave = String(cuerpo.clave ?? cuerpo.password ?? "");
         if (!usuario || !clave) throw new ApiError(400, "DATOS_INVALIDOS", "Ingresa tu usuario y tu clave.");
         const r = await loginPrincipal.entrar(usuario, clave);
-        if (!permisos.acceso({ rol: r.usuario.rol })) {
+        const quien = { rol: r.usuario.rol, nivelCaja: r.usuario.niveles?.caja_chica as Usuario["nivelCaja"] };
+        if (!permisos.acceso(quien)) {
           await loginPrincipal.salir(r.token).catch(() => {});
           throw new ApiError(403, "SIN_ACCESO", "Tu rol no tiene acceso a Finanzas. Pídele acceso al administrador.");
         }
-        return json(200, { status: "success", data: { token: r.token, user: { nombre_completo: r.usuario.nombre, email: r.usuario.usuario, rol_codigo: r.usuario.rol }, permisos: permisos.de({ rol: r.usuario.rol }) } });
+        return json(200, { status: "success", data: { token: r.token, user: { nombre_completo: r.usuario.nombre, email: r.usuario.usuario, rol_codigo: r.usuario.rol }, permisos: permisos.de(quien) } });
       }
 
       const r = rutas.find((x) => x.metodo === req.method && x.patron.test(path));
       if (!r) throw new ApiError(404, "RUTA_NO_ENCONTRADA", "No existe esa ruta.");
       const user = await auth(req.headers.authorization);
       if (path !== "/caja/permisos" && !permisos.acceso(user)) throw new ApiError(403, "SIN_ACCESO", "Tu rol no tiene acceso a Finanzas. Pídele acceso al administrador.");
+      // Con acceso de solo lectura se ve todo, pero no se registra ni se cambia nada.
+      if (req.method !== "GET" && !permisos.escribir(user)) throw new ApiError(403, "SIN_PERMISO", "Tu rol solo puede ver Finanzas: no puede registrar ni cambiar nada.");
       const m = r.patron.exec(path)!;
       const params = Object.fromEntries(r.claves.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
       const raw = ["POST", "PUT", "PATCH"].includes(req.method!) ? await leer(req, r.binario ? MAX_BINARIO : MAX_JSON) : Buffer.alloc(0);

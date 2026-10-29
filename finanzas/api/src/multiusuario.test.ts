@@ -37,6 +37,7 @@ after(async () => {
 });
 
 /** Un teléfono/computadora de una persona con su rol: tiene su propio almacén en memoria y habla con la API por HTTP. */
+/** `rol` puede llevar el nivel de caja chica: "tecnico:lectura". */
 function persona(nombre: string, rol: string) {
   const store = crearStore({ hoy: () => HOY });
   const api: SyncApi = {
@@ -52,7 +53,9 @@ function persona(nombre: string, rol: string) {
     },
   };
   const sync = crearSync({ store, api, blobFoto: async () => null, hoy: () => HOY });
-  return { store, sync, permisos: permisosDeRol(rol) };
+  const [r, nivel] = rol.split(":");
+  const permisos = nivel === "lectura" ? { ...permisosDeRol("tecnico"), acceso: true, revisar: true } : nivel === "completo" ? { ...permisosDeRol("contabilidad") } : permisosDeRol(r);
+  return { store, sync, permisos };
 }
 
 let n = 0;
@@ -60,8 +63,8 @@ const uid = () => `20000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
 const venta = (monto: number, p: Partial<Fila> = {}) => ({ id: uid(), tipo: "VTA" as const, descripcion: "Venta", responsable: "Ana", comprobante: "BOLETA" as const, caja_ingreso_efectivo: monto, caja_ingreso_transf: 0, caja_salida_efectivo: 0, caja_salida_transf: 0, cta_cte_ingreso: 0, cta_cte_salida: 0, categoria: "" as const, subcategoria: "" as const, interno: false, ...p });
 
 test("dos personas trabajan a la vez: cada una ve lo que registró la otra", async () => {
-  const ana = persona("ana", "finanzas");
-  const beto = persona("beto", "encargado");
+  const ana = persona("ana", "contabilidad");
+  const beto = persona("beto", "tecnico:completo");
   ana.store.abrirHoja("AQP", HOY);
   ana.store.guardarFila("AQP", HOY, venta(100));
   await ana.sync.sincronizar(true);
@@ -75,16 +78,17 @@ test("dos personas trabajan a la vez: cada una ve lo que registró la otra", asy
   assert.equal(saldosDe(h).totales.caja.ingreso, 150);
 });
 
-test("el encargado no puede corregir días anteriores; Finanzas sí", async () => {
-  const ana = persona("ana", "finanzas");
-  const beto = persona("beto", "encargado");
+test("con solo lectura no se registra nada (ni hoy ni días anteriores); con acceso completo sí", async () => {
+  const ana = persona("ana", "contabilidad");
+  const beto = persona("beto", "tecnico:lectura");
   assert.equal(motivoSoloLectura(beto.permisos, AYER, HOY, false)?.includes("solo lectura"), true);
+  assert.equal(motivoSoloLectura(beto.permisos, HOY, HOY, false)?.includes("solo lectura"), true);
   assert.equal(motivoSoloLectura(ana.permisos, AYER, HOY, false), null);
   ana.store.abrirHoja("MOQ", AYER);
   await ana.sync.sincronizar(true);
   beto.store.guardarFila("MOQ", AYER, venta(30)); // el servidor lo rechaza
   await beto.sync.sincronizar(true);
-  assert.match(beto.store.get().avisos.map((a) => a.texto).join(" "), /Solo Finanzas/); // el servidor lo rechazó y se le avisó
+  assert.match(beto.store.get().avisos.map((a) => a.texto).join(" "), /solo puede ver/); // el servidor lo rechazó y se le avisó
   assert.equal(beto.store.get().outbox.length, 0);
   ana.store.guardarFila("MOQ", AYER, venta(30));
   await ana.sync.sincronizar(true);
@@ -92,30 +96,32 @@ test("el encargado no puede corregir días anteriores; Finanzas sí", async () =
 });
 
 test("cerrar el día desde la app: la diferencia queda guardada, el día se bloquea para todos y solo el admin lo reabre", async () => {
-  const ana = persona("ana", "finanzas");
-  const beto = persona("beto", "encargado");
+  const ana = persona("ana", "contabilidad");
+  const beto = persona("beto", "tecnico:lectura");
   const admin = persona("root", "admin");
   ana.store.abrirHoja("MOQ", HOY);
   ana.store.guardarFila("MOQ", HOY, venta(200));
   await ana.sync.sincronizar(true);
-  // el encargado no puede cerrar
+  // con solo lectura no se puede cerrar
   await assert.rejects(() => beto.sync.cerrarHoja("MOQ", AYER, 0, ""), /permiso|Solo|403|encontr/i);
   assert.equal((await ana.sync.cerrarHoja("MOQ", AYER, 30, "")).diferencia, 0); // los días se cierran en orden
   const cierre = await ana.sync.cerrarHoja("MOQ", HOY, 220, "faltaron 10 de vuelto");
   assert.equal(cierre.diferencia, -10);
   assert.equal(cierre.saldo_calculado, saldosDe(ana.store.get().hojas[hojaKey("MOQ", HOY)]).saldo_final_caja);
-  // el encargado lo ve cerrado y no puede agregar nada
+  // quien solo lee lo ve cerrado
   await beto.sync.sincronizar(true);
   assert.ok(beto.store.get().hojas[hojaKey("MOQ", HOY)].cierre);
   assert.equal(diaCerrado(beto.store.get().hojas, "MOQ", HOY), true);
   assert.match(motivoSoloLectura(beto.permisos, HOY, HOY, true) ?? "", /cerrado/i);
-  beto.store.quitarAviso(beto.store.get().avisos[0]?.id ?? "");
-  beto.store.guardarFila("MOQ", HOY, venta(5));
-  await beto.sync.sincronizar(true);
-  assert.match(beto.store.get().avisos.map((a) => a.texto).join(" "), /cerrado/i);
+  // y ni con acceso completo se puede agregar algo a un día cerrado
+  const luis = persona("luis", "tecnico:completo");
+  await luis.sync.sincronizar(true);
+  luis.store.guardarFila("MOQ", HOY, venta(5));
+  await luis.sync.sincronizar(true);
+  assert.match(luis.store.get().avisos.map((a) => a.texto).join(" "), /cerrado/i);
   await ana.sync.sincronizar(true);
-  assert.equal(ana.store.get().hojas[hojaKey("MOQ", HOY)].filas.length, 1); // lo de beto no entró
-  // Finanzas no puede reabrir; el administrador sí, con motivo
+  assert.equal(ana.store.get().hojas[hojaKey("MOQ", HOY)].filas.length, 1); // lo de luis no entró
+  // Contabilidad no puede reabrir; el administrador sí, con motivo
   await assert.rejects(() => ana.sync.reabrirHoja("MOQ", HOY, "me equivoqué"));
   await admin.sync.sincronizar(true);
   await admin.sync.reabrirHoja("MOQ", HOY, "faltaba un recibo");

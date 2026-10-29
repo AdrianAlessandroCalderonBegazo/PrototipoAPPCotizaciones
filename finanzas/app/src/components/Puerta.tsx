@@ -26,7 +26,8 @@ export function usePuerta(permisos: Permisos, bottomInset: number) {
   const [aviso, setAviso] = useState<{ titulo: string; texto: string } | null>(null);
   const pedir = (pasado: boolean, accion: () => void, cerrado = false) => {
     if (cerrado) return setAviso({ titulo: "Día cerrado", texto: "Este día ya se cerró y no se puede cambiar. Si hay un error, un administrador puede reabrirlo." });
-    if (pasado && !permisos.corregir_pasado) return setAviso({ titulo: "Día anterior", texto: "Solo Finanzas o un administrador pueden corregir días anteriores. Pídeselo a ellos." });
+    if (!permisos.escribir) return setAviso({ titulo: "Solo lectura", texto: "Tu rol solo puede ver la caja. Para registrar o corregir, pide acceso completo a un administrador." });
+    if (pasado && !permisos.corregir_pasado) return setAviso({ titulo: "Día anterior", texto: "Solo Contabilidad o un administrador pueden corregir días anteriores. Pídeselo a ellos." });
     accion();
   };
   const modal: ReactNode = aviso ? <AvisoSheet {...aviso} bottomInset={bottomInset} onClose={() => setAviso(null)} /> : null;

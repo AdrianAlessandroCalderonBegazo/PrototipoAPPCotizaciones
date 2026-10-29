@@ -8,7 +8,7 @@
  * Formato de respuesta:  { status: "success", data }  |  { status: "error", error: { code, message } }
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { permisosDeRol, type Permisos } from "./caja/permisos";
+import { normalizarPermisos, type Permisos } from "./caja/permisos";
 
 // En producción la web y la API viven en el mismo dominio (finanzas.…/api-caja), así que basta la ruta relativa.
 const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || "/api-caja").replace(/\/+$/, "");
@@ -29,7 +29,7 @@ export async function loadSession(): Promise<Session | null> {
   try {
     const raw = await AsyncStorage.getItem(SESSION_KEY);
     const guardada = raw ? (JSON.parse(raw) as Session) : null;
-    session = guardada ? { ...guardada, permisos: guardada.permisos ?? permisosDeRol(guardada.rolCodigo) } : null;
+    session = guardada ? { ...guardada, permisos: normalizarPermisos(guardada.permisos, guardada.rolCodigo) } : null;
   } catch {
     session = null;
   }
@@ -104,7 +104,7 @@ export async function login(usuario: string, clave: string): Promise<Session> {
   const data = payload.data;
   const next: Session = {
     token: data.token, nombre: data.user.nombre_completo, email: data.user.email, rolCodigo: data.user.rol_codigo,
-    permisos: data.permisos ?? permisosDeRol(data.user.rol_codigo),
+    permisos: normalizarPermisos(data.permisos, data.user.rol_codigo),
   };
   await saveSession(next);
   return next;
@@ -115,7 +115,7 @@ export async function refrescarPermisos(): Promise<Session | null> {
   if (!session) return null;
   try {
     const r = await apiJson<{ usuario: { nombre: string; rol: string }; permisos: Permisos }>("GET", "/caja/permisos");
-    await saveSession({ ...session, nombre: r.usuario.nombre || session.nombre, rolCodigo: r.usuario.rol, permisos: r.permisos });
+    await saveSession({ ...session, nombre: r.usuario.nombre || session.nombre, rolCodigo: r.usuario.rol, permisos: normalizarPermisos(r.permisos, r.usuario.rol) });
   } catch {
     // sin conexión: se queda con los que ya tenía
   }

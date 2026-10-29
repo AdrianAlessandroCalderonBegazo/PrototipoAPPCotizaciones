@@ -101,7 +101,7 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
    */
   async function guardiaDia(q: Db, ciudad: string, fecha: string, u: Usuario, { soloPermiso = false } = {}) {
     if (fecha < hoy() && !permisos.corregirPasado(u))
-      throw new ApiError(403, "SIN_PERMISO", "Solo Finanzas o un administrador pueden corregir días anteriores.");
+      throw new ApiError(403, "SIN_PERMISO", "Tu rol no puede corregir días anteriores: necesitas acceso completo a la caja chica.");
     if (soloPermiso) return;
     const [h] = await q.query<Row>(`SELECT 1 AS x FROM caja_hoja WHERE ciudad = $1 AND fecha = $2::date AND cerrada_en IS NOT NULL`, [ciudad, fecha]);
     if (h) throw new ApiError(409, "DIA_CERRADO", `El ${fecha} ya está cerrado. Un administrador debe reabrirlo para corregirlo.`);
@@ -559,7 +559,7 @@ export function crearServicio({ db, storage, mirror, env = {}, hoy = hoyLima, pe
      */
     async cerrarHoja(idIn: string, b: Row, u: Usuario) {
       const id = uuid(idIn, "id");
-      if (!permisos.cerrar(u)) throw new ApiError(403, "SIN_PERMISO", "Solo Finanzas o un administrador pueden cerrar la caja.");
+      if (!permisos.cerrar(u)) throw new ApiError(403, "SIN_PERMISO", "Tu rol no puede cerrar la caja: necesitas acceso completo a la caja chica.");
       const contado = b.efectivo_contado == null || b.efectivo_contado === "" ? NaN : Number(b.efectivo_contado);
       if (!Number.isFinite(contado) || contado < 0 || contado > 999_999_999) throw bad("Escribe el efectivo contado (puede ser 0).");
       const nota = texto(b.nota, 500);

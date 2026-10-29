@@ -1,28 +1,32 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diaCerrado, motivoSoloLectura, permisosDeRol, puedeEditarDia, SIN_PERMISOS } from "./permisos";
+import { diaCerrado, motivoSoloLectura, normalizarPermisos, permisosDeRol, puedeEditarDia, SIN_PERMISOS } from "./permisos";
 import { describirCambio, diferencias } from "./revision";
 
 const HOY = "2026-10-22";
 
-test("cada rol tiene su alcance; los demás roles no entran", () => {
+test("cada rol tiene su alcance por defecto; los demás dependen de la matriz del ERP", () => {
   assert.equal(permisosDeRol("admin").reabrir, true);
-  assert.equal(permisosDeRol("finanzas").cerrar, true);
-  assert.equal(permisosDeRol("finanzas").reabrir, false);
-  assert.equal(permisosDeRol("encargado").corregir_pasado, false);
-  assert.equal(permisosDeRol("encargado").revisar, true);
-  assert.deepEqual(permisosDeRol("almacen"), SIN_PERMISOS);
-  assert.deepEqual(permisosDeRol("EMPLEADO"), SIN_PERMISOS);
+  assert.equal(permisosDeRol("contabilidad").cerrar, true);
+  assert.equal(permisosDeRol("contabilidad").reabrir, false);
+  assert.deepEqual(permisosDeRol("tecnico"), SIN_PERMISOS);
+  assert.deepEqual(permisosDeRol("VENTAS"), SIN_PERMISOS);
 });
 
-test("un día se puede editar según rol, fecha y cierre", () => {
-  const enc = permisosDeRol("encargado");
-  const fin = permisosDeRol("finanzas");
-  assert.equal(puedeEditarDia(enc, HOY, HOY, false), true);
-  assert.equal(puedeEditarDia(enc, "2026-10-21", HOY, false), false);
+test("permisos guardados por la versión anterior: sin `escribir`, se deduce de corregir_pasado", () => {
+  const viejoEncargado = { acceso: true, corregir_pasado: false, cerrar: false, reabrir: false, configurar: false, revisar: true };
+  assert.equal(normalizarPermisos(viejoEncargado, "tecnico").escribir, false);
+  assert.equal(normalizarPermisos({ ...viejoEncargado, corregir_pasado: true }, "contabilidad").escribir, true);
+  assert.equal(normalizarPermisos(null, "admin").escribir, true);
+});
+
+test("un día se puede editar según nivel, fecha y cierre", () => {
+  const lectura = { ...SIN_PERMISOS, acceso: true, revisar: true };
+  const fin = permisosDeRol("contabilidad");
+  assert.equal(puedeEditarDia(lectura, HOY, HOY, false), false);
   assert.equal(puedeEditarDia(fin, "2026-10-21", HOY, false), true);
   assert.equal(puedeEditarDia(fin, HOY, HOY, true), false);
-  assert.match(motivoSoloLectura(enc, "2026-10-21", HOY, false) ?? "", /solo lectura/);
+  assert.match(motivoSoloLectura(lectura, HOY, HOY, false) ?? "", /solo lectura/);
   assert.match(motivoSoloLectura(fin, HOY, HOY, true) ?? "", /cerrado/);
   assert.equal(motivoSoloLectura(fin, HOY, HOY, false), null);
 });

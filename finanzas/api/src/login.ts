@@ -11,7 +11,7 @@ export function loginHttp(base: string, fetchFn: typeof fetch = fetch): LoginPri
       } catch {
         throw new ApiError(503, "SERVIDOR_NO_DISPONIBLE", "No se pudo comunicar con el servidor de usuarios. Intenta de nuevo.");
       }
-      const datos = (await res.json().catch(() => null)) as { token?: string; usuario?: { usuario: string; nombre: string; rol: string }; error?: string } | null;
+      const datos = (await res.json().catch(() => null)) as { token?: string; usuario?: { usuario: string; nombre: string; rol: string; niveles?: Record<string, string> }; error?: string } | null;
       if (!res.ok || !datos?.token || !datos.usuario) {
         const status = res.status >= 400 && res.status < 500 ? res.status : 502;
         throw new ApiError(status, status === 401 ? "CREDENCIALES" : "LOGIN_RECHAZADO", datos?.error || "No se pudo iniciar sesión.");

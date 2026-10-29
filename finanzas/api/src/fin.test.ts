@@ -69,11 +69,11 @@ test("sin sesión no se entra a nada", async () => {
   assert.equal((await call("PUT", `/v2/mov/${uid()}`, egreso(), "")).status, 401);
 });
 
-test("cuentas: solo quien tiene permiso las crea o cambia; validan nombre, tipo y umbral", async () => {
+test("cuentas: solo el administrador las crea o cambia; validan nombre, tipo y umbral", async () => {
   assert.equal((await call("PUT", `/v2/cuentas/${BANCO}`, cuenta(BANCO, { nombre: "Cta. cte. 2000", tipo: "BANCO", referencia: "2000", saldo_inicial: 5000 }))).status, 200);
   assert.equal((await call("PUT", `/v2/cuentas/${DIEGO}`, cuenta(DIEGO, { nombre: "Yape Diego", titular: "Diego", saldo_inicial: 300, umbral: 40, aviso_telegram: "111" }))).status, 200);
   assert.equal((await call("PUT", `/v2/cuentas/${MILAGROS}`, cuenta(MILAGROS, { nombre: "Yape Milagros", titular: "Milagros", saldo_inicial: 300 }))).status, 200);
-  assert.equal((await call("PUT", `/v2/cuentas/${uid()}`, cuenta("x"), "dev:bob:encargado")).error?.code, "SIN_PERMISO");
+  assert.equal((await call("PUT", `/v2/cuentas/${uid()}`, cuenta("x"), "dev:bob:contabilidad")).error?.code, "SIN_PERMISO");
   assert.equal((await call("PUT", `/v2/cuentas/${uid()}`, cuenta("x", { nombre: " " }))).status, 400);
   assert.equal((await call("PUT", `/v2/cuentas/${uid()}`, cuenta("x", { tipo: "CHEQUE" }))).status, 400);
   assert.equal((await call("PUT", `/v2/cuentas/${uid()}`, cuenta("x", { umbral: -1 }))).status, 400);
@@ -82,9 +82,9 @@ test("cuentas: solo quien tiene permiso las crea o cambia; validan nombre, tipo 
   assert.deepEqual(s.cuentas.map((c: any) => [c.nombre, c.saldo_inicial, c.saldo_base]), [["Cta. cte. 2000", 5000, 5000], ["Yape Diego", 300, 300], ["Yape Milagros", 300, 300]]);
 });
 
-test("libreta: cualquiera con acceso a Finanzas la edita; alias y menú se guardan", async () => {
+test("libreta: cualquiera que registra en Finanzas la edita; alias y menú se guardan", async () => {
   const id = uid();
-  const r = await call("PUT", `/v2/personas/${id}`, { nombre: "Ricardo Coaquira", tipo: "PRACTICANTE", alias: ["Ricardo Coa*", " "], menu_monto: 11, activa: true }, "dev:bob:encargado");
+  const r = await call("PUT", `/v2/personas/${id}`, { nombre: "Ricardo Coaquira", tipo: "PRACTICANTE", alias: ["Ricardo Coa*", " "], menu_monto: 11, activa: true }, "dev:bob:contabilidad");
   assert.equal(r.status, 200);
   assert.deepEqual(r.data.persona.alias, ["Ricardo Coa*"]);
   assert.equal(r.data.persona.menu_monto, 11);
@@ -245,7 +245,7 @@ test("mensaje de prueba del aviso", async () => {
   assert.equal(avisos.length, 1);
   assert.match(avisos[0].texto, /Mensaje de prueba/);
   assert.equal((await call("POST", `/v2/cuentas/${MILAGROS}/aviso-prueba`)).status, 400); // sin chat
-  assert.equal((await call("POST", `/v2/cuentas/${DIEGO}/aviso-prueba`, undefined, "dev:bob:encargado")).error?.code, "SIN_PERMISO");
+  assert.equal((await call("POST", `/v2/cuentas/${DIEGO}/aviso-prueba`, undefined, "dev:bob:contabilidad")).error?.code, "SIN_PERMISO");
   telegramCaido = true;
   assert.equal((await call("POST", `/v2/cuentas/${DIEGO}/aviso-prueba`)).error?.code, "TELEGRAM_FALLO");
   telegramCaido = false;
@@ -280,8 +280,8 @@ test("los saldos de la app y los de la vista SQL dan lo mismo (movimientos aleat
 test("el servicio de la versión 2 solo trae las rutas /v2 (la versión 1 es otro servicio con otra base) y exige un rol con acceso a Finanzas", async () => {
   assert.equal((await call("GET", "/caja/estado?ciudad=AQP")).status, 404);
   assert.equal((await call("GET", "/health", undefined, "")).status, 200);
-  const sinAcceso = await call("GET", "/v2/snapshot", undefined, "dev:eva:almacen");
+  const sinAcceso = await call("GET", "/v2/snapshot", undefined, "dev:eva:ventas");
   assert.equal(sinAcceso.status, 403);
   assert.equal(sinAcceso.error?.code, "SIN_ACCESO");
-  assert.equal((await call("GET", "/v2/snapshot", undefined, "dev:pepe:finanzas")).status, 200);
+  assert.equal((await call("GET", "/v2/snapshot", undefined, "dev:pepe:contabilidad")).status, 200);
 });

@@ -69,8 +69,8 @@ export function CajaDiariaFlujo({ caja, estado, ciudad, setCiudad, permisos, irA
   }, [irA?.n]);
   // La hoja de hoy existe desde que se abre la app (así el saldo anterior ya está calculado).
   useEffect(() => {
-    if (permisos.acceso && !caja.hojas[hojaKey(ciudad, hoy)]) store.abrirHoja(ciudad, hoy);
-  }, [ciudad, hoy, caja.hojas, permisos.acceso]);
+    if (permisos.escribir && !caja.hojas[hojaKey(ciudad, hoy)]) store.abrirHoja(ciudad, hoy);
+  }, [ciudad, hoy, caja.hojas, permisos.escribir]);
 
   const hoja = caja.hojas[hojaKey(ciudad, fecha)];
   const inset = { topInset, bottomInset };
