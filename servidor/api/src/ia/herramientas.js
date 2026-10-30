@@ -6,6 +6,7 @@ import { cajaChica, listarMovimientos, resumen as resumenConta } from '../contab
 import { calcular } from '../cotizar.js';
 import { consulta } from '../db.js';
 import { aCentimos, deCentimos, monto } from '../dinero.js';
+import { listarArticulos } from '../almacen.js';
 import { buscar as buscarEnProveedores } from '../comparador.js';
 import { listarComprobantes } from '../facturacion.js';
 import { detalleKit, listarKits } from '../kits.js';
@@ -480,9 +481,25 @@ const precios_proveedores = {
   },
 };
 
+const stock_almacen = {
+  nombre: 'stock_almacen', fuente: 'Almacén', modulo: 'almacen',
+  descripcion: 'Stock actual del almacén: cuánto hay de un artículo (o de todos los que están bajo su mínimo), su unidad y ubicación.',
+  parametros: { type: 'object', properties: { articulo: { type: 'string', description: 'Nombre, código o categoría; vacío = solo los que están bajo el mínimo' } } },
+  async ejecutar(a) {
+    const q = String(a.articulo ?? '').trim();
+    const r = await listarArticulos(q ? { q } : { bajo: '1' });
+    const filas = r.articulos.slice(0, 15);
+    return {
+      modelo: { consulta: q || 'bajo el mínimo', articulos: filas.map((x) => ({ nombre: x.nombre, stock: `${x.stock} ${x.unidad}`, minimo: x.stock_minimo ?? 'Sin dato', bajo_minimo: x.bajo, ubicacion: x.ubicacion ?? 'Sin dato' })), total: r.articulos.length },
+      bloques: filas.length ? [tabla(q ? `Stock · «${q.slice(0, 40)}»` : 'Artículos bajo su stock mínimo', [['Artículo'], ['Stock', 'right'], ['Mínimo', 'right'], ['Ubicación']],
+        filas.map((x) => [x.nombre, `${x.stock} ${x.unidad}`, x.stock_minimo ?? 'Sin dato', x.ubicacion ?? 'Sin dato']), null)] : [],
+    };
+  },
+};
+
 export const HERRAMIENTAS = {
   cotizador: [buscar_productos, ver_kits, proponer_cotizacion],
-  asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_chica, requerimientos, buscar_productos, precios_proveedores],
+  asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_chica, requerimientos, buscar_productos, precios_proveedores, stock_almacen],
   finanzas: [gastos_caja_chica, caja_diaria, saldos_caja, gastos_proyecto_caja],
 };
 

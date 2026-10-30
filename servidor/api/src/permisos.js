@@ -14,8 +14,8 @@ const ORDEN = { ninguno: 0, lectura: 1, completo: 2 };
 export const MODULOS = [
   { clave: 'inicio', nombre: 'Inicio', grupo: 'General', lectura: 'Ver el panel de inicio', completo: 'Ver el panel de inicio' },
   { clave: 'proyectos', nombre: 'Proyectos', grupo: 'Operación', lectura: 'Ver proyectos, gastos y fotos', completo: 'Crear proyectos, cambiar su estado y subir fotos' },
-  { clave: 'almacen', nombre: 'Almacén', grupo: 'Operación', lectura: 'Ver requerimientos y checklists', completo: 'Ver requerimientos y checklists' },
-  { clave: 'activos', nombre: 'Activos y control', grupo: 'Operación', lectura: 'Ver el panel Victron', completo: 'Ver el panel Victron y pedir resúmenes' },
+  { clave: 'almacen', nombre: 'Almacén', grupo: 'Operación', lectura: 'Ver inventario, kardex, requerimientos y checklists', completo: 'Registrar entradas, salidas y ajustes; crear artículos' },
+  { clave: 'activos', nombre: 'Activos y control', grupo: 'Operación', lectura: 'Ver sistemas instalados, equipos y el portal Victron VRM', completo: 'Registrar y editar sistemas y equipos' },
   { clave: 'cotizacion', nombre: 'Cotización', grupo: 'Comercial', lectura: 'Ver catálogo y cotizaciones', completo: 'Crear y editar cotizaciones, productos, kits e importar listas' },
   { clave: 'cotizador_ia', nombre: 'Cotizador IA', grupo: 'Comercial', lectura: 'Ver las conversaciones', completo: 'Cotizar con IA y editar el contexto' },
   { clave: 'comparador', nombre: 'Comparador de proveedores', grupo: 'Comercial', lectura: 'Buscar y comparar precios', completo: 'Gestionar proveedores y cargar listas' },

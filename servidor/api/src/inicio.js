@@ -7,6 +7,8 @@ import { consulta } from './db.js';
 import { aCentimos } from './dinero.js';
 import { tieneNivel } from './permisos.js';
 import { listarProyectos } from './proyectos.js';
+import { garantiasPorVencer } from './activos.js';
+import { articulosBajos } from './almacen.js';
 
 const hoyLima = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 const sumarDias = (f, n) => {
@@ -23,7 +25,8 @@ async function permisosDe(u) {
   const proyectosCompleto = await tieneNivel(u, 'proyectos', 'completo');
   const cotizacionCompleto = await tieneNivel(u, 'cotizacion', 'completo');
   const contabilidadCompleto = await tieneNivel(u, 'contabilidad', 'completo');
-  return { proyectos, contabilidad, cotizacion, logistica: logistica || almacen, caja_chica: cajaChicaN || contabilidad, configuracion, facturacion, proyectosCompleto, cotizacionCompleto, contabilidadCompleto, facturacionCompleto };
+  const activos = await tieneNivel(u, 'activos');
+  return { almacen, activos, proyectos, contabilidad, cotizacion, logistica: logistica || almacen, caja_chica: cajaChicaN || contabilidad, configuracion, facturacion, proyectosCompleto, cotizacionCompleto, contabilidadCompleto, facturacionCompleto };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -93,6 +96,25 @@ export async function calcularAlertas(u, datos = {}) {
     );
     if (rows[0].urgentes) out.push({ clave: `req_urgentes:${rows[0].urgentes}`, nivel: 'alta', icono: 'priority_high', titulo: `${rows[0].urgentes} requerimiento${rows[0].urgentes === 1 ? '' : 's'} urgente${rows[0].urgentes === 1 ? '' : 's'} sin entregar.`, origen: 'Logística', ruta: '/almacen', cta: 'Ver almacén' });
     if (rows[0].pendientes) out.push({ clave: `req_pendientes:${rows[0].pendientes}`, nivel: 'media', icono: 'pending_actions', titulo: `${rows[0].pendientes} requerimiento${rows[0].pendientes === 1 ? '' : 's'} por aprobar.`, origen: 'Logística', ruta: '/almacen', cta: 'Ver almacén' });
+  }
+
+  if (p.almacen) {
+    const bajos = await articulosBajos();
+    if (bajos.length) {
+      const sin = bajos.filter((a) => aCentimos(a.stock) === 0).length;
+      out.push({
+        clave: `stock_bajo:${bajos.map((a) => a.id).join('-').slice(0, 150)}`, nivel: sin ? 'alta' : 'media', icono: 'inventory',
+        titulo: bajos.length === 1 ? `Stock bajo: ${bajos[0].nombre} (quedan ${bajos[0].stock} ${bajos[0].unidad}, mínimo ${bajos[0].stock_minimo}).` : `${bajos.length} artículos del almacén en o bajo su stock mínimo${sin ? ` (${sin} sin stock)` : ''}.`,
+        origen: 'Almacén', ruta: '/almacen?tab=inventario&bajo=1', cta: 'Ver inventario',
+      });
+    }
+  }
+
+  if (p.activos) {
+    const g = await garantiasPorVencer();
+    for (const e of g.slice(0, 5)) {
+      out.push({ clave: `garantia:${e.id}:${e.garantia_hasta}`, nivel: 'info', icono: 'verified_user', titulo: `La garantía de ${[e.marca, e.modelo].filter(Boolean).join(' ')} (${e.sistema}) vence el ${e.garantia_hasta.split('-').reverse().join('/')}.`, origen: 'Activos', ruta: `/activos?sistema=${e.activo_id}`, cta: 'Ver sistema' });
+    }
   }
 
   if (p.facturacion) {
