@@ -85,3 +85,33 @@ export type MovChicaErp = {
 export type CajaChicaErp =
   | { disponible: false }
   | { disponible: true; mes: string; saldos: { ciudad: string; nombre: string; saldo: string }[]; saldo_total: string; ingresos_mes: string; egresos_mes: string; gastos_mes: number; sin_comprobante_mes: number; movimientos: MovChicaErp[] };
+
+// ---- Fase 3 ----
+export type Producto = {
+  id: number; codigo: string | null; nombre: string; marca: string | null; modelo: string | null; categoria: string; unidad: string | null;
+  precio: string | null; costo?: string | null; moneda: "PEN" | "USD"; caracteristicas: string | null; referencia_interna: string | null;
+  origen: string; source: string | null; actualizado_en: string; precio_actualizado_en: string | null; imagen: string | null;
+};
+export type KitItem = {
+  id?: number; producto_id: number | null; descripcion: string; unidad: string | null; cantidad: string; precio_unitario: string | null;
+  descuento_pct: string; codigo?: string | null; producto_nombre?: string | null; precio_catalogo?: string | null; precio_efectivo?: string | null; sin_producto?: boolean;
+};
+export type TotalesCot = { subtotal: string | null; descuento_lineas: string | null; descuento: string | null; total: string | null; valor_venta: string | null; igv: string | null };
+export type Kit = {
+  id: number; nombre: string; descripcion: string | null; variante_de: number | null; source: string; version: number; creado_en: string; actualizado_en: string;
+  n_items?: number; sin_precio?: number; items?: KitItem[]; totales: TotalesCot | null;
+};
+export type EstadoCot = "borrador" | "enviada" | "aceptada" | "rechazada";
+export type LineaCot = {
+  producto_id: number | null; codigo: string | null; descripcion: string; detalle: string | null; unidad: string | null; cantidad: string; precio_unitario: string;
+  descuento_pct: string; importe_bruto?: string; descuento?: string; importe?: string;
+};
+export type CotizacionResumen = {
+  id: number; numero: string; origen: "logistica" | "erp"; estado: EstadoCot | null; cliente: string; ruc_dni: string | null; vendedor: string | null;
+  fecha: string; total: string | null; validez_dias: number | null; valida_hasta: string | null; kit_id: number | null; proyecto_id: number | null; n_items: number;
+};
+export type Cotizacion = CotizacionResumen & {
+  telefono: string | null; direccion: string | null; atencion: string | null; correo: string | null; sistema: string | null; banco: string | null; moneda: string | null;
+  nro_cuenta: string | null; cci: string | null; condiciones: string | null; version: number; actualizado_por: string | null; actualizado_en: string;
+  enviada_en: string | null; respondida_en: string | null; motivo_rechazo: string | null; creado_por: string | null; items: LineaCot[]; totales: TotalesCot;
+};

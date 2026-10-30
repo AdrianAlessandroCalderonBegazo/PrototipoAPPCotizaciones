@@ -5,6 +5,9 @@ import { Shell } from "./componentes/Shell";
 import { CONFIGURACION, TODAS, puede, type EntradaMenu } from "./modulos";
 import { Almacen } from "./paginas/Almacen";
 import { Contabilidad } from "./paginas/contabilidad/Contabilidad";
+import { Cotizacion } from "./paginas/cotizacion/Cotizacion";
+import { CotizacionEditor } from "./paginas/cotizacion/CotizacionEditor";
+import { CotizacionVer } from "./paginas/cotizacion/CotizacionVer";
 import { ProyectoDetalle } from "./paginas/proyectos/ProyectoDetalle";
 import { Proyectos } from "./paginas/proyectos/Proyectos";
 import { Configuracion } from "./paginas/configuracion/Configuracion";
@@ -13,7 +16,7 @@ import { Login } from "./paginas/Login";
 import { Pendiente, SinAcceso } from "./paginas/Pendiente";
 import { ProveedorSesion, useSesion } from "./sesion";
 
-const CONSTRUIDOS: Partial<Record<EntradaMenu["clave"], () => JSX.Element | null>> = { inicio: Inicio, almacen: Almacen, proyectos: Proyectos, contabilidad: Contabilidad };
+const CONSTRUIDOS: Partial<Record<EntradaMenu["clave"], () => JSX.Element | null>> = { inicio: Inicio, almacen: Almacen, proyectos: Proyectos, contabilidad: Contabilidad, cotizacion: Cotizacion };
 
 function Rutas() {
   const { usuario, cargando } = useSesion();
@@ -28,6 +31,9 @@ function Rutas() {
           return <Route key={m.clave} path={m.ruta} element={conAcceso(m, C ? <C /> : <Pendiente modulo={m} />)} />;
         })}
         <Route path="/proyectos/:id" element={conAcceso(TODAS.find((m) => m.clave === "proyectos")!, <ProyectoDetalle />)} />
+        <Route path="/cotizacion/nueva" element={puede(usuario, "cotizacion", "completo") ? <CotizacionEditor key="nueva" /> : <SinAcceso />} />
+        <Route path="/cotizacion/:id/editar" element={puede(usuario, "cotizacion", "completo") ? <CotizacionEditor /> : <SinAcceso />} />
+        <Route path="/cotizacion/:id" element={conAcceso(TODAS.find((m) => m.clave === "cotizacion")!, <CotizacionVer />)} />
         <Route path="/configuracion" element={<Navigate to="/configuracion/usuarios" replace />} />
         <Route path="/configuracion/:seccion" element={conAcceso(CONFIGURACION, <Configuracion />)} />
         <Route path="*" element={<Navigate to="/" replace />} />

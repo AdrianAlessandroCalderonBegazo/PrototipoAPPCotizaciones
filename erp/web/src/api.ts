@@ -82,3 +82,18 @@ export async function fotoCaja(id: string): Promise<string> {
   }
   return URL.createObjectURL(await res.blob());
 }
+
+/** Descarga un archivo de la API (con la sesión) como Blob; p. ej. el PDF de una cotización. */
+export async function descargarBlob(ruta: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`/api${ruta}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  } catch {
+    throw new ErrorApi(0, "No hay conexión con el servidor.");
+  }
+  if (!res.ok) {
+    const j = await res.json().catch(() => null);
+    throw new ErrorApi(res.status, j?.error ?? `El servidor respondió ${res.status}.`);
+  }
+  return res.blob();
+}

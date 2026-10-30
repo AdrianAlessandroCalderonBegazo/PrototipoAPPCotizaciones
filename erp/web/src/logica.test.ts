@@ -116,3 +116,38 @@ describe("montos en pantalla (texto exacto, sin coma flotante)", async () => {
     expect(aSoles(null, "3.7")).toBeNull();
   });
 });
+
+describe("cotización: misma cuenta que el servidor", async () => {
+  const { calcularTotales, importeLinea } = await import("./paginas/cotizacion/calculo");
+  test("totales con IGV incluido", () => {
+    expect(calcularTotales([
+      { descripcion: "Panel", cantidad: "36", precio_unitario: "650.00", descuento_pct: "5" },
+      { descripcion: "Inversor", cantidad: "1", precio_unitario: "14999.90" },
+    ], "500")).toEqual({ subtotal: "38399.90", descuento_lineas: "1170.00", descuento: "500.00", total: "36729.90", valor_venta: "31127.03", igv: "5602.87" });
+    expect(calcularTotales([{ descripcion: "x", cantidad: "3", precio_unitario: "0.10" }])?.igv).toBe("0.05");
+    expect(importeLinea({ descripcion: "cable", cantidad: "12.5", precio_unitario: "3.99" })).toBe("49.88");
+  });
+  test("datos inválidos → null", () => {
+    expect(calcularTotales([{ descripcion: "x", cantidad: "0", precio_unitario: "1" }])).toBeNull();
+    expect(calcularTotales([{ descripcion: "x", cantidad: "1", precio_unitario: "1.234" }])).toBeNull();
+    expect(calcularTotales([{ descripcion: "x", cantidad: "1", precio_unitario: "10" }], "10.01")).toBeNull();
+  });
+});
+
+describe("CSV", async () => {
+  const { leerCsv, mapeoAutomatico } = await import("./paginas/cotizacion/csv");
+  test("comas, punto y coma, comillas y BOM", () => {
+    expect(leerCsv('﻿Código;Descripción;Precio\nHW-50;"Inversor; 50 kW";"28,500.00"\n\n')).toEqual([["Código", "Descripción", "Precio"], ["HW-50", "Inversor; 50 kW", "28,500.00"]]);
+    expect(leerCsv('a,b\n"x ""y""",2\r\n')).toEqual([["a", "b"], ['x "y"', "2"]]);
+  });
+  test("mapeo automático por títulos", () => {
+    expect(mapeoAutomatico(["SKU", "Descripción", "Marca", "P. Venta", "Moneda", "Otra"])).toEqual(["codigo", "nombre", "marca", "precio", "moneda", ""]);
+  });
+});
+
+test("número de WhatsApp peruano", async () => {
+  const { numeroWhatsapp } = await import("./paginas/cotizacion/CotizacionVer");
+  expect(numeroWhatsapp("959 214 377")).toBe("51959214377");
+  expect(numeroWhatsapp("+51 959214377")).toBe("51959214377");
+  expect(numeroWhatsapp(null)).toBe("");
+});
