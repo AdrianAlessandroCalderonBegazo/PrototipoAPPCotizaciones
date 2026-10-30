@@ -9,10 +9,13 @@
     "start": "node src/index.js",
     "test": "node --test --test-concurrency=1 test/*.test.js"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "express": "^5.1.0",
+    "pdfkit": "0.17.2",
     "pg": "^8.13.1"
   }
 }

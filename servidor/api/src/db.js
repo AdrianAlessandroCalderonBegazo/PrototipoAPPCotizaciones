@@ -65,6 +65,11 @@ export async function prepararBase() {
     const archivoSeed = join(carpetaDb, 'seed.sql');
     if (existsSync(archivoSeed) && (await consulta('SELECT 1 FROM productos LIMIT 1')).rowCount === 0) {
       await enTransaccion((c) => c.query(readFileSync(archivoSeed, 'utf8')));
+      // La migración 004 llena el código de cada producto con su referencia interna (si no se repite); en una base nueva
+      // los productos llegan recién aquí, después de las migraciones, así que se hace de nuevo.
+      await consulta(`UPDATE productos p SET codigo_erp = p.referencia_interna
+        WHERE p.codigo_erp IS NULL AND NULLIF(trim(p.referencia_interna), '') IS NOT NULL
+          AND (SELECT count(*) FROM productos q WHERE q.referencia_interna = p.referencia_interna) = 1`);
       console.log('Datos iniciales cargados (productos, listas y maletas).');
     }
     await consulta("INSERT INTO configuracion (clave, valor) VALUES ('seed_aplicado', '1') ON CONFLICT DO NOTHING");

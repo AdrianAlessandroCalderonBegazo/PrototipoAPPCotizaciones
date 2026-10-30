@@ -10,6 +10,7 @@ import { auditar } from './auditoria.js';
 import { exigirNivel, nivelesDe } from './permisos.js';
 import { crearRutasErp } from './rutas_erp.js';
 import { crearRutasF2 } from './rutas_f2.js';
+import { crearRutasF3 } from './rutas_f3.js';
 import { consulta, enTransaccion } from './db.js';
 import {
   filaCatalogo, filaCotizacion, filaHerramientas, filaProducto, filaRequerimiento, jsonDeEntrada,
@@ -547,6 +548,7 @@ export function crearRutas() {
   // ERP: permisos, auditoría, empresa, parámetros, numeración e integraciones
   r.use(crearRutasErp());
   r.use(crearRutasF2());
+  r.use(crearRutasF3());
 
   r.get('/bitacora', async (req, res) => {
     await exigirNivel(req.usuario, 'logistica', 'completo', 'ver la bitácora');

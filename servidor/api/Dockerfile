@@ -8,6 +8,7 @@ COPY api/package.json api/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY api/src ./src
+COPY api/recursos ./recursos
 COPY db ./db
 COPY portal ./portal
 
