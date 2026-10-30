@@ -173,6 +173,13 @@ export async function inicio(u) {
 const SIN_TILDES = (col) => `translate(lower(${col}), 'áéíóúüñ', 'aeiouun')`;
 const limpiar = (q) => String(q ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').slice(0, 80);
 
+// «79800.5» → «S/ 79,800.50» (solo texto, sin pasar por float)
+function monto(t, moneda = 'PEN') {
+  if (t === null || t === undefined) return null;
+  const [e, d = ''] = String(t).replace('-', '').split('.');
+  return `${moneda === 'USD' ? 'US$' : 'S/'} ${e.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${(d + '00').slice(0, 2)}`;
+}
+
 export async function buscar(u, qIn) {
   const q = limpiar(qIn);
   if (q.length < 2) return { grupos: [] };
@@ -185,22 +192,22 @@ export async function buscar(u, qIn) {
   }
   if (p.cotizacion) {
     const { rows } = await consulta(`SELECT id, numero, cliente, total::text AS total, estado FROM cotizaciones WHERE lower(numero) LIKE $1 OR ${SIN_TILDES('cliente')} LIKE $1 ORDER BY fecha DESC LIMIT 5`, [like]);
-    if (rows.length) grupos.push({ grupo: 'Cotizaciones', items: rows.map((r) => ({ titulo: `${r.numero} · ${r.cliente || 'Cliente sin nombre'}`, detalle: [r.estado ?? 'sin estado', r.total ? `S/ ${r.total}` : null].filter(Boolean).join(' · '), icono: 'request_quote', ruta: `/cotizacion/${r.id}` })) });
+    if (rows.length) grupos.push({ grupo: 'Cotizaciones', items: rows.map((r) => ({ titulo: `${r.numero} · ${r.cliente || 'Cliente sin nombre'}`, detalle: [r.estado ?? 'sin estado', monto(r.total)].filter(Boolean).join(' · '), icono: 'request_quote', ruta: `/cotizacion/${r.id}` })) });
     const { rows: pr } = await consulta(
-      `SELECT id, nombre, codigo_erp AS codigo, marca, precio_venta::text AS precio FROM productos
+      `SELECT id, nombre, codigo_erp AS codigo, marca, precio_venta::text AS precio, moneda FROM productos
         WHERE NOT eliminado AND (${SIN_TILDES('nombre')} LIKE $1 OR lower(coalesce(codigo_erp,'')) LIKE $1 OR lower(coalesce(referencia_interna,'')) LIKE $1 OR ${SIN_TILDES("coalesce(marca,'')")} LIKE $1)
         ORDER BY nombre LIMIT 6`,
       [like],
     );
-    if (pr.length) grupos.push({ grupo: 'Productos', items: pr.map((r) => ({ titulo: r.nombre, detalle: [r.codigo, r.marca, r.precio ? `S/ ${r.precio}` : null].filter(Boolean).join(' · '), icono: 'inventory_2', ruta: `/cotizacion?tab=catalogo&q=${encodeURIComponent(r.codigo ?? r.nombre)}` })) });
+    if (pr.length) grupos.push({ grupo: 'Productos', items: pr.map((r) => ({ titulo: r.nombre, detalle: [r.codigo, r.marca, monto(r.precio, r.moneda)].filter(Boolean).join(' · '), icono: 'inventory_2', ruta: `/cotizacion?tab=catalogo&q=${encodeURIComponent(r.codigo ?? r.nombre)}` })) });
   }
   if (p.contabilidad) {
     const { rows } = await consulta(
-      `SELECT m.id, m.concepto, m.fecha::text AS fecha, m.monto::text AS monto, m.tipo, m.documento FROM cuenta_movimientos m
+      `SELECT m.id, m.concepto, m.fecha::text AS fecha, m.monto::text AS monto, m.tipo, m.documento, c.moneda FROM cuenta_movimientos m JOIN cuentas c ON c.id = m.cuenta_id
         WHERE ${SIN_TILDES('m.concepto')} LIKE $1 OR lower(coalesce(m.documento,'')) LIKE $1 OR ${SIN_TILDES("coalesce(m.contraparte,'')")} LIKE $1 ORDER BY m.fecha DESC LIMIT 5`,
       [like],
     );
-    if (rows.length) grupos.push({ grupo: 'Movimientos de la cuenta', items: rows.map((r) => ({ titulo: r.concepto, detalle: [r.fecha.split('-').reverse().join('/'), `${r.tipo === 'ingreso' ? '+' : '−'} S/ ${r.monto}`, r.documento].filter(Boolean).join(' · '), icono: 'account_balance', ruta: '/contabilidad' })) });
+    if (rows.length) grupos.push({ grupo: 'Movimientos de la cuenta', items: rows.map((r) => ({ titulo: r.concepto, detalle: [r.fecha.split('-').reverse().join('/'), `${r.tipo === 'ingreso' ? '+' : '−'} ${monto(r.monto, r.moneda)}`, r.documento].filter(Boolean).join(' · '), icono: 'account_balance', ruta: `/contabilidad?q=${encodeURIComponent(r.concepto)}` })) });
   }
   if (p.logistica) {
     const { rows } = await consulta(`SELECT id, numero, obra, estado FROM requerimientos WHERE lower(numero) LIKE $1 OR ${SIN_TILDES('obra')} LIKE $1 OR ${SIN_TILDES('solicitante')} LIKE $1 ORDER BY fecha_creacion DESC LIMIT 5`, [like]);

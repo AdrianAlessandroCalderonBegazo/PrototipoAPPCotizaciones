@@ -115,3 +115,16 @@ export type Cotizacion = CotizacionResumen & {
   nro_cuenta: string | null; cci: string | null; condiciones: string | null; version: number; actualizado_por: string | null; actualizado_en: string;
   enviada_en: string | null; respondida_en: string | null; motivo_rechazo: string | null; creado_por: string | null; items: LineaCot[]; totales: TotalesCot;
 };
+
+// ---- Fase 4 ----
+export type Alerta = { clave: string; nivel: "alta" | "media" | "info"; icono: string; titulo: string; origen: string; ruta: string | null; cta: string; leida?: boolean };
+export type InicioDatos = {
+  fecha: string;
+  permisos: Record<"proyectos" | "contabilidad" | "cotizacion" | "logistica" | "caja_chica" | "configuracion" | "proyectosCompleto" | "cotizacionCompleto" | "contabilidadCompleto", boolean>;
+  finanzas?: { cuenta: Cuenta | null; cuentas: Cuenta[]; kpis: ResumenConta["kpis"]; caja: CajaChicaErp };
+  proyectos?: { activos: Proyecto[]; pausados: (Proyecto & { pausado_desde: string | null })[]; total_activos: number; con_alerta: number; aviso_pct: number; limite_pct: number };
+  cotizaciones?: { ultimas: { id: number; numero: string; cliente: string; sistema: string | null; estado: EstadoCot | null; origen: string; fecha: string; total: string | null }[]; del_mes: number; monto_mes: string; aceptadas_mes: number };
+  logistica?: { por_aprobar: number; por_entregar: number; urgentes: number; herramientas_fuera: number; salidas_por_confirmar: number };
+  alertas: Alerta[];
+};
+export type GrupoBusqueda = { grupo: string; items: { titulo: string; detalle: string; icono: string; ruta: string }[] };

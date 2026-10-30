@@ -165,7 +165,7 @@ export function Catalogo({ productos, setProductos, editar, param, nuevo, onNuev
   productos: Producto[]; setProductos: (f: (p: Producto[]) => Producto[]) => void; editar: boolean; param: Parametros | null;
   nuevo: boolean; onNuevoCerrado: () => void; onAgregar?: (p: Producto) => void; textoAgregar?: string;
 }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");
   const [cat, setCat] = useState("");
   const [marca, setMarca] = useState("");
   const [pmin, setPmin] = useState("");

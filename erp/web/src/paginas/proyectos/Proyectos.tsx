@@ -78,7 +78,7 @@ export function Proyectos() {
   const [filtro, setFiltro] = useState<EstadoProyecto | "">("");
   const [q, setQ] = useState("");
   const [vista, setVistaRaw] = useState(leerVista);
-  const [nuevo, setNuevo] = useState(false);
+  const [nuevo, setNuevo] = useState(() => editar && new URLSearchParams(window.location.search).get("nuevo") === "1");
   const setVista = (v: "tabla" | "tarjetas") => {
     setVistaRaw(v);
     try {

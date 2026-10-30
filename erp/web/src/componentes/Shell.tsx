@@ -7,6 +7,7 @@ import { useSesion } from "../sesion";
 import { ponerTema, temaActual, type Tema } from "../tema";
 import type { Parametros } from "../tipos";
 import { CambiarClave } from "./CambiarClave";
+import { Campana } from "./Campana";
 import { Icono } from "./Icono";
 import { Paleta } from "./Paleta";
 
@@ -216,25 +217,26 @@ export function Shell({ children }: { children: ReactNode }) {
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-3 sm:gap-3 sm:px-6">
+        <header className="relative z-30 flex h-16 flex-shrink-0 items-center gap-2 border-b border-border bg-surface px-3 sm:gap-3 sm:px-6">
           {movil ? (
             <button onClick={() => setCajon(true)} title="Menú" className="grid h-10 w-10 place-items-center rounded-[11px] text-text-2 hover:bg-surface-2">
               <Icono n="menu" t={22} />
             </button>
           ) : null}
           {movil ? (
-            <button onClick={() => setPaleta(true)} title="Ir a un módulo" className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[11px] border border-border bg-surface-2 text-text-3">
+            <button onClick={() => setPaleta(true)} title="Buscar" className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[11px] border border-border bg-surface-2 text-text-3">
               <Icono n="search" />
             </button>
           ) : (
             <button onClick={() => setPaleta(true)} className="flex h-10 min-w-0 max-w-[520px] flex-1 items-center gap-2.5 rounded-xl border border-border bg-surface-2 pl-3.5 pr-2.5 text-left text-[13.5px] text-text-3 hover:border-primary-line">
               <Icono n="search" />
-              <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">Ir a un módulo o acción…</span>
+              <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">Buscar proyectos, cotizaciones, productos…</span>
               <span className="flex-shrink-0 whitespace-nowrap rounded-md border border-border bg-surface px-1.5 py-0.5 font-mono text-[11px] text-text-2">Ctrl K</span>
             </button>
           )}
           <div className="flex-1" />
           {ancho >= 640 ? <ChipTipoCambio ancho={ancho} /> : null}
+          <Campana />
           <button onClick={cambiarTema} title="Modo claro / oscuro" className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[11px] border border-border bg-surface text-text-2 hover:bg-surface-2">
             <Icono n={tema === "dark" ? "light_mode" : "dark_mode"} t={21} />
           </button>

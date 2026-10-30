@@ -46,9 +46,9 @@ export function Contabilidad() {
   const editar = puede(usuario, "contabilidad", "completo");
   const [tab, setTab] = useState<"principal" | "caja">("principal");
   const [cuentaId, setCuentaId] = useState<number | null>(null);
-  const [f, setF] = useState({ q: "", desde: "", hasta: "", tipo: "", categoria: "", anulados: false });
+  const [f, setF] = useState({ q: new URLSearchParams(window.location.search).get("q") ?? "", desde: "", hasta: "", tipo: "", categoria: "", anulados: false });
   const [pagina, setPagina] = useState(1);
-  const [modal, setModal] = useState<"nuevo" | "cuentas" | "fondos" | null>(null);
+  const [modal, setModal] = useState<"nuevo" | "cuentas" | "fondos" | null>(() => (new URLSearchParams(window.location.search).get("accion") === "enviar" ? "fondos" : null));
   const [detalle, setDetalle] = useState<MovimientoCuenta | null>(null);
   const [exp, setExp] = useState(false);
   const [visor, setVisor] = useState<FotoVisor[] | null>(null);
