@@ -51,9 +51,9 @@ aprobación antes de empezar.**
 | Voz | Primero la **Web Speech API** del navegador (gratis, sin carga en el VPS); whisper en el servidor solo si la calidad no alcanza. |
 | «Darle acceso completo a la IA a todos los archivos» | La IA ve **solo lo que el rol de quien pregunta puede ver** (como pide la especificación). Así un técnico no puede leer la contabilidad preguntándole a la IA. |
 | Extensión SUNAT | Proyecto aparte `extension/` (Chrome MV3). Rellena hasta la revisión final y **nunca pulsa «Emitir»**. Los selectores del portal en un solo archivo de configuración porque SUNAT cambia su web. |
-| VRM en iframe | VRM probablemente bloquea iframes (`X-Frame-Options`). Se verifica en la Fase 9; si lo bloquea, botón «Abrir VRM en pestaña nueva» + panel propio con la API oficial. |
+| VRM en iframe | Decisión del dueño (Fase 9): la API de VRM no funcionó, así que VRM va **solo embebido (iframe)** con la sesión de cada persona, más el botón «Abrir en pestaña nueva» por si VRM bloquea la vista embebida. Sin panel propio ni token de VRM. |
 | Scraping de proveedores | Solo donde `robots.txt` lo permita, con límites de frecuencia y cola de tareas; preferir listas Excel/CSV y APIs. |
-| Almacén | Adelantado a la Fase 1 en modo consulta («En construcción» + requerimientos y salidas de Logística con filtros). El inventario queda para después. |
+| Almacén | Adelantado a la Fase 1 en modo consulta (requerimientos y salidas de Logística). El inventario se agregó en la Fase 9. |
 
 ## 4. Plan por fases
 
@@ -68,8 +68,8 @@ aprobación antes de empezar.**
 | 6 | **IA**: Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | ✅ |
 | 7 | **IA en Finanzas 1**: consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | ✅ |
 | 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | ✅ |
-| 9 | **Activos y control** (siguiente): Victron VRM con caché y Almacén ampliado. | |
-| 10 | **Cierre**: pruebas finales, revisión de seguridad, respaldos y documentación. | |
+| 9 | **Activos y control** (sistemas instalados, equipos y garantías, portal Victron VRM embebido) y **Almacén** con inventario y kardex. | ✅ |
+| 10 | **Cierre** (siguiente): pruebas finales, revisión de seguridad, respaldos y documentación. | |
 
 ## 4b. Cómo quedó la Fase 2
 
@@ -210,6 +210,27 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
 - **Historial de precios**: gráfico mensual por proveedor (colores fijos validados para daltonismo, también en modo oscuro) y tabla con el origen.
 - El **Asistente IA** puede consultar estos precios (herramienta `precios_proveedores`, solo lectura).
 - Rutas: `servidor/api/src/rutas_f8.js`; lógica: `comparador.js`; migración `009_comparador.sql`; pruebas `test/f8.test.js` y `erp/web/src/comparador.test.ts`.
+
+## 4i. Cómo quedó la Fase 9 (Almacén y Activos y control)
+
+- **Almacén** (Operación › Almacén), pestañas **Inventario**, **Movimientos**, **Requerimientos de materiales** y **Salidas de herramientas**
+  (estas dos siguen siendo consulta de lo que se registra en Logística).
+  - Artículos con código, categoría, unidad, ubicación y **stock mínimo** (vacío = sin aviso). Se crean a mano o «Desde el catálogo» de Cotización.
+  - **Movimientos**: entrada (proveedor, guía/factura, costo unitario opcional), salida (proyecto y/o requerimiento) y **ajuste por conteo**
+    (la persona escribe lo que contó; nota obligatoria). Varios artículos a la vez, **todo o nada**. El stock **nunca queda negativo**.
+  - **Kardex solo-agregar**: `almacen_movimientos` tiene un disparador que impide cambiar o borrar; un error se corrige con **Anular**
+    (movimiento contrario con motivo; el original queda).
+  - **Salida desde un requerimiento** de Logística: propone sus materiales con el artículo del mismo nombre; lo que no coincide lo elige la
+    persona. Si el requerimiento ya tuvo salida, pide confirmar antes de registrar otra. Logística no cambia.
+  - Alerta en Inicio y campana: artículos en o bajo su mínimo. El Asistente IA consulta el stock (`stock_almacen`, solo lectura).
+- **Activos y control** (Operación › Activos y control), pestañas **Sistemas instalados** y **Victron VRM**.
+  - Sistemas (cliente/sitio, ubicación, fecha de instalación, proyecto, **dirección de la instalación en VRM**) y sus **equipos** (tipo, marca,
+    modelo, n.° de serie, cantidad, **garantía hasta**). Aviso en Inicio de garantías que vencen en 60 días.
+  - **VRM embebido** (decisión del dueño: la API no funcionó): iframe del portal oficial con la sesión de cada persona y «Abrir en pestaña nueva».
+    Solo se aceptan direcciones `https://vrm.victronenergy.com/…`. No hay token ni datos de VRM en el servidor.
+- Permisos: el **Técnico** pasa a «completo» en Almacén y Activos (registra movimientos y equipos; antes «lectura» y «completo» hacían lo mismo
+  aquí). Ventas y Contabilidad: lectura. Editable en Configuración.
+- Rutas: `servidor/api/src/rutas_f9.js`; lógica: `almacen.js`, `activos.js`; migración `010_almacen_activos.sql`; pruebas `test/f9.test.js`.
 
 ## 5. Migración de datos
 

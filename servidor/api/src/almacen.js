@@ -127,7 +127,8 @@ async function mover(c, articuloId, m, u) {
   if (m.tipo === 'ajuste' && delta === 0) throw falla(400, `El conteo de «${a.nombre}» es igual al stock: no hay nada que ajustar.`);
   const despues = stock + delta;
   if (despues < 0) {
-    throw falla(409, `No hay stock suficiente de «${a.nombre}»: hay ${deCentimos(stock)} ${a.unidad}${m.tipo === 'salida' ? ` y se quiere sacar ${deCentimos(q)}` : ''}.`, { articulo_id: a.id, stock: deCentimos(stock) });
+    const corto = (c) => deCentimos(c).replace(/\.00$/, '');
+    throw falla(409, `No hay stock suficiente de «${a.nombre}»: hay ${corto(stock)} ${a.unidad}${m.tipo === 'salida' ? ` y se quiere sacar ${corto(q)}` : ''}.`, { articulo_id: a.id, stock: deCentimos(stock) });
   }
   await c.query("UPDATE almacen_articulos SET stock = $2, actualizado_en = now() AT TIME ZONE 'America/Lima' WHERE id = $1", [a.id, deCentimos(despues)]);
   const { rows: mv } = await c.query(

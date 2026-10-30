@@ -256,6 +256,15 @@ Se publica subiendo el servidor y el ERP como siempre (la migración `009_compar
    leerla, no muestra precios…). No hace falta abrir puertos ni instalar nada.
 3. Para listas en archivo: **Cargar lista**, elige el proveedor, la fecha, si incluye IGV y el archivo (Excel, CSV o PDF).
 
+## 7i. Almacén y Activos y control (Fase 9)
+
+Se publica como siempre (la migración `010_almacen_activos.sql` se aplica sola). Después, en el ERP:
+1. **Almacén › Nuevo artículo** (o «Desde el catálogo») con lo que hay hoy como **stock inicial** y, si quieres aviso, el **stock mínimo**.
+2. Desde ahí, cada llegada o salida de material se registra con **Registrar movimiento** (o «Registrar salida» en un requerimiento).
+3. **Activos y control › Nuevo sistema** por cada cliente con sistema instalado. Para verlo en la pestaña «Victron VRM», abre la instalación en
+   VRM, copia la dirección del navegador y pégala en «Dirección en VRM». Cada persona inicia sesión en VRM dentro del recuadro (o usa
+   «Abrir en pestaña nueva» si el navegador no lo muestra). No hace falta token de VRM.
+
 ## 8. Respaldos (importante)
 
 ```bash

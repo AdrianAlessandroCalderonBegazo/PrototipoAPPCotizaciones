@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { api } from "../api";
-import { Cargando, ErrorCarga, Vacio } from "../componentes/Estado";
-import { Icono } from "../componentes/Icono";
-import { Pildora, type TonoPildora } from "../componentes/Pildora";
-import { enlaceApp } from "../enlaces";
-import { fecha, texto } from "../formato";
-import { useDatos } from "../usarDatos";
+import { api } from "../../api";
+import { Cargando, ErrorCarga, Vacio } from "../../componentes/Estado";
+import { Icono } from "../../componentes/Icono";
+import { Pildora, type TonoPildora } from "../../componentes/Pildora";
+import { enlaceApp } from "../../enlaces";
+import { fecha, texto } from "../../formato";
+import { useDatos } from "../../usarDatos";
 
 type Requerimiento = { id: number; numero: string; obra: string; solicitante: string; urgente: boolean; estado: string; fecha_creacion: string; aprobado_por?: string | null; categorias_json: string };
 type Salida = { id: number; numero: string; obra: string; responsable: string; maleta: string | null; estado: string; fecha_salida: string; fecha_devolucion: string | null; categorias_json: string };
@@ -68,8 +68,8 @@ function BarraFiltros({ f, setF, estados, persona }: { f: Filtros; setF: (f: Fil
 
 const VACIO: Filtros = { q: "", desde: "", hasta: "", estado: "" };
 
-export function Almacen() {
-  const [pestana, setPestana] = useState<"req" | "her">("req");
+/** Consulta de lo que se registra en la app de Logística: requerimientos de materiales y salidas de herramientas. */
+export function ConsultaLogistica({ pestana, onSalida }: { pestana: "req" | "her"; onSalida?: (id: number) => void }) {
   const [f, setF] = useState<Filtros>(VACIO);
   const req = useDatos(() => api<Requerimiento[]>("GET", "/requerimientos"));
   const her = useDatos(() => api<Salida[]>("GET", "/herramientas"));
@@ -84,43 +84,12 @@ export function Almacen() {
     return (her.datos ?? []).filter((s) => (!t || sinTildes(`${s.numero} ${s.obra} ${s.responsable} ${s.maleta ?? ""}`).includes(t)) && (!f.estado || s.estado === f.estado) && enRango(s.fecha_salida, f.desde, f.hasta));
   }, [her.datos, f]);
 
-  const cambiar = (p: "req" | "her") => {
-    setPestana(p);
-    setF(VACIO);
-  };
-
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="sobretitulo">Operación</div>
-          <h1 className="mt-1 text-[28px] font-extrabold tracking-tight">Almacén</h1>
-        </div>
-        {logistica ? (
-          <a href={logistica} target="_blank" rel="noreferrer" className="btn-secundario no-underline">
-            <Icono n="open_in_new" t={18} />
-            Abrir Logística
-          </a>
-        ) : null}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-text-3">
+        <span className="inline-flex items-center gap-1.5"><Icono n="local_shipping" t={16} />Se registran en la app de Logística (aquí solo se consultan).</span>
+        {logistica ? <a href={logistica} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold"><Icono n="open_in_new" t={16} />Abrir Logística</a> : null}
       </div>
-
-      <div className="flex items-start gap-3 rounded-2xl border border-solar bg-solar-soft p-4 text-[13.5px]">
-        <Icono n="construction" t={22} className="text-warning" />
-        <div>
-          <div className="font-bold">En construcción</div>
-          <div className="text-text-2">El inventario todavía no está digitalizado. Aquí ves, solo para consulta, los requerimientos de materiales y las salidas de herramientas que se registran en la app de Logística.</div>
-        </div>
-      </div>
-
-      <div className="flex gap-1.5">
-        {([["req", "Requerimientos de materiales", "inventory_2"], ["her", "Salidas de herramientas", "construction"]] as const).map(([k, l, i]) => (
-          <button key={k} onClick={() => cambiar(k)} className={`btn h-10 ${pestana === k ? "bg-primary-soft text-primary-ink" : "text-text-2 hover:bg-surface-2"}`}>
-            <Icono n={i} t={19} />
-            {l}
-          </button>
-        ))}
-      </div>
-
       <div className="tarjeta flex flex-col gap-4 p-4 sm:p-5">
         <BarraFiltros f={f} setF={setF} estados={pestana === "req" ? EST_REQ : EST_SAL} persona={pestana === "req" ? "solicitante" : "responsable"} />
         {pestana === "req" ? (
@@ -131,7 +100,7 @@ export function Almacen() {
               <table className="w-full min-w-[720px] border-collapse text-left text-[13.5px]">
                 <thead>
                   <tr className="border-b border-border text-[12px] font-bold uppercase tracking-wide text-text-3">
-                    <th className="px-3 py-2.5">Número</th><th className="px-3 py-2.5">Obra</th><th className="px-3 py-2.5">Solicitante</th><th className="px-3 py-2.5">Ítems</th><th className="px-3 py-2.5">Estado</th><th className="px-3 py-2.5">Fecha</th>
+                    <th className="px-3 py-2.5">Número</th><th className="px-3 py-2.5">Obra</th><th className="px-3 py-2.5">Solicitante</th><th className="px-3 py-2.5">Ítems</th><th className="px-3 py-2.5">Estado</th><th className="px-3 py-2.5">Fecha</th>{onSalida ? <th className="px-3 py-2.5 text-right">Almacén</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -145,6 +114,7 @@ export function Almacen() {
                         <td className="num px-3 py-2.5">{contarItems(r.categorias_json)}</td>
                         <td className="px-3 py-2.5"><Pildora tono={t}>{l}</Pildora></td>
                         <td className="num whitespace-nowrap px-3 py-2.5">{fecha(r.fecha_creacion)}</td>
+                        {onSalida ? <td className="px-3 py-2 text-right"><button className="btn-secundario h-8 whitespace-nowrap" onClick={() => onSalida(r.id)}><Icono n="output" t={16} />Registrar salida</button></td> : null}
                       </tr>
                     );
                   })}

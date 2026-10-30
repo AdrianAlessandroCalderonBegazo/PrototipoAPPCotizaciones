@@ -53,10 +53,10 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
   (`servidor/api/src/dinero.js`; en pantalla `erp/web/src/dinero.ts`). Las fechas `DATE` también se leen como `::text`.
 - **Caja chica**: `caja_chica_mov.tipo` = `EGRESO` (resta) | `TRANSFERENCIA` (desde caja diaria) | `FONDO` (desde la cuenta principal, lo crea el ERP).
   Las tablas de la caja son de Finanzas (`finanzas/db/migrations`); la API principal las lee si existen (`servidor/api/src/caja.js`).
-- **Módulos del ERP construidos**: Inicio (con alertas, campana y búsqueda Ctrl+K), Almacén (consulta), Proyectos, Contabilidad, Cotización (catálogo,
+- **Módulos del ERP construidos**: Inicio (con alertas, campana y búsqueda Ctrl+K), Almacén (inventario, kardex y consulta de Logística), Activos y control (sistemas, equipos, VRM embebido), Proyectos, Contabilidad, Cotización (catálogo,
   CSV, imágenes, kits, cotizaciones, PDF, WhatsApp), Facturación SUNAT, Cotizador IA, Asistente IA, Comparador de proveedores, Configuración. Rutas: `servidor/api/src/rutas_erp.js` (fase 1), `rutas_f2.js` (proyectos,
-  contabilidad, inicio/notificaciones/búsqueda) `rutas_f3.js` (catálogo, kits, cotizaciones) `rutas_f5.js` (facturación), `rutas_f6.js` (IA) y `rutas_f8.js` (comparador). Pruebas: `servidor/api/test/erp.test.js`,
-  `f2.test.js`, `f3.test.js`, `f4.test.js`, `f5.test.js`, `f6.test.js`, `f7.test.js`, `f8.test.js` (aplican también las migraciones de Finanzas).
+  contabilidad, inicio/notificaciones/búsqueda) `rutas_f3.js` (catálogo, kits, cotizaciones) `rutas_f5.js` (facturación), `rutas_f6.js` (IA), `rutas_f8.js` (comparador) y `rutas_f9.js` (almacén y activos). Pruebas: `servidor/api/test/erp.test.js`,
+  `f2.test.js`, `f3.test.js`, `f4.test.js`, `f5.test.js`, `f6.test.js`, `f7.test.js`, `f8.test.js`, `f9.test.js` (aplican también las migraciones de Finanzas).
 - **Cotización**: los precios del catálogo **incluyen IGV**; valor de venta = total ÷ 1.18. Misma cuenta en `servidor/api/src/cotizar.js` y
   `erp/web/src/paginas/cotizacion/calculo.ts`. Imágenes de productos: `assets/productos/` se copian al build del ERP (`scripts/copiar-imagenes.mjs`).
 - **Facturación**: el ERP prepara, la extensión rellena SOL y la persona emite; **la extensión nunca pulsa «Emitir»** ni guarda la clave SOL. El número lo
@@ -68,6 +68,10 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
 - **Comparador** (`servidor/api/src/comparador.js`, `comparador_web.js`): el historial de precios es **solo agregar** (disparador en
   `proveedor_precios`); toda lista pide si incluye IGV; se compara en soles con IGV; las decisiones «es / no es el mismo» las toma una persona.
   Lectura web solo de páginas públicas, respetando robots.txt y con pausa; las listas se leen en el navegador (`paginas/comparador/lector.ts`).
+- **Almacén** (`servidor/api/src/almacen.js`): kardex **solo agregar** (disparador en `almacen_movimientos`; los errores se anulan con un
+  movimiento contrario); el stock nunca queda negativo; cantidades en texto con 2 decimales (como el dinero). Logística no se modifica.
+- **Activos / VRM** (`servidor/api/src/activos.js`): decisión del dueño: VRM **solo en iframe** con la sesión de cada persona (la API de VRM no
+  funcionó); solo direcciones `https://vrm.victronenergy.com/…`; no hay token de VRM.
 - **Caja diaria ≠ cuenta principal**: la «Cta. cte.» de la caja diaria es Yape; los depósitos de efectivo al banco se registran en el ERP como ingreso
   «Depósito de caja diaria (efectivo)».
 - **Fechas**: la base guarda hora de Lima sin zona (`now() AT TIME ZONE 'America/Lima'`).
@@ -76,5 +80,5 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
 - **Diseño del ERP**: tokens del sistema de diseño en `erp/web/src/index.css` (variables CSS, modo oscuro con `data-theme`), clases en
   `tailwind.config.js`. Respetar el diseño de `ERP_ICR.zip`; no cambiarlo sin consultar.
 - **Fases**: el ERP se construye por fases (ver `erp/ESPECIFICACION.md`); al empezar cada una se presenta el plan y se espera aprobación.
-  La cotización ya se quitó de Logística (Fase 3). Fase actual: 8 terminada (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
+  La cotización ya se quitó de Logística (Fase 3). Fase actual: 9 terminada (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
 - Rama de trabajo: `claude/checklist-productos-apk-build-xruncz`.

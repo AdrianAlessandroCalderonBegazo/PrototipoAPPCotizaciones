@@ -141,7 +141,7 @@ const INTEGRACIONES = [
   { clave: 'logistica', nombre: 'PWA Logística', descripcion: 'Requerimientos de materiales y checklists (misma base de datos).' },
   { clave: 'finanzas', nombre: 'PWA Finanzas', descripcion: 'Caja chica: movimientos, cierres y gastos de proyecto.' },
   { clave: 'ollama', nombre: 'Ollama (IA local)', descripcion: 'Modelo de IA en el VPS para el Cotizador IA y el Asistente.' },
-  { clave: 'vrm', nombre: 'Victron VRM', descripcion: 'Datos de los sistemas Victron para Activos y control.' },
+  { clave: 'vrm', nombre: 'Victron VRM', descripcion: 'Activos y control muestra el portal VRM embebido con la sesión de cada persona (no necesita token). El token solo sirve para una futura conexión por API.' },
   { clave: 'padron', nombre: 'Consulta RUC / DNI', descripcion: 'Trae la razón social y dirección al escribir un RUC o DNI en Facturación (servicio externo con token, opcional).' },
   { clave: 'sunat', nombre: 'Extensión SUNAT', descripcion: 'Extensión de Chrome que rellena el portal SOL. Se detecta en el navegador.' },
 ];
@@ -171,7 +171,7 @@ export async function probarIntegracion(clave, env = process.env) {
         : { estado: 'error', detalle: `Ollama responde, pero falta el modelo ${modelo} (hay: ${modelos.join(', ') || 'ninguno'}).`, probado_en: ahora };
     }
     if (clave === 'vrm') {
-      if (!env.VRM_TOKEN) return { estado: 'no_configurado', detalle: 'Falta VRM_TOKEN (se configura en la fase de Activos y control).', probado_en: ahora };
+      if (!env.VRM_TOKEN) return { estado: 'no_configurado', detalle: 'Sin token (no hace falta: el portal VRM se ve embebido en Activos y control con tu propia sesión).', probado_en: ahora };
       const r = await conTiempo('https://vrmapi.victronenergy.com/v2/users/me', { headers: { 'X-Authorization': `Token ${env.VRM_TOKEN}` } }, 8000);
       return r.ok ? { estado: 'conectado', detalle: 'El token de VRM es válido.', probado_en: ahora } : { estado: 'error', detalle: `VRM respondió ${r.status}.`, probado_en: ahora };
     }

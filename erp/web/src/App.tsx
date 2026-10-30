@@ -3,12 +3,13 @@ import { ProveedorAvisos } from "./componentes/Avisos";
 import { Cargando } from "./componentes/Estado";
 import { Shell } from "./componentes/Shell";
 import { CONFIGURACION, TODAS, puede, type EntradaMenu } from "./modulos";
-import { Almacen } from "./paginas/Almacen";
+import { Almacen } from "./paginas/almacen/Almacen";
 import { Contabilidad } from "./paginas/contabilidad/Contabilidad";
 import { AsistenteIA } from "./paginas/ia/AsistenteIA";
 import { CotizadorIA } from "./paginas/ia/CotizadorIA";
 import { ComprobanteVer, Facturacion } from "./paginas/facturacion/Facturacion";
 import { Comparador } from "./paginas/comparador/Comparador";
+import { Activos } from "./paginas/activos/Activos";
 import { FlujoComprobante } from "./paginas/facturacion/Flujo";
 import { Cotizacion } from "./paginas/cotizacion/Cotizacion";
 import { CotizacionEditor } from "./paginas/cotizacion/CotizacionEditor";
@@ -21,7 +22,7 @@ import { Login } from "./paginas/Login";
 import { Pendiente, SinAcceso } from "./paginas/Pendiente";
 import { ProveedorSesion, useSesion } from "./sesion";
 
-const CONSTRUIDOS: Partial<Record<EntradaMenu["clave"], () => JSX.Element | null>> = { inicio: Inicio, almacen: Almacen, proyectos: Proyectos, contabilidad: Contabilidad, cotizacion: Cotizacion, facturacion: Facturacion, cotizador_ia: CotizadorIA, asistente_ia: AsistenteIA, comparador: Comparador };
+const CONSTRUIDOS: Partial<Record<EntradaMenu["clave"], () => JSX.Element | null>> = { inicio: Inicio, almacen: Almacen, proyectos: Proyectos, contabilidad: Contabilidad, cotizacion: Cotizacion, facturacion: Facturacion, cotizador_ia: CotizadorIA, asistente_ia: AsistenteIA, comparador: Comparador, activos: Activos };
 
 function Rutas() {
   const { usuario, cargando } = useSesion();

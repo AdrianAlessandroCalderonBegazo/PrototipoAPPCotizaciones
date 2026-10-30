@@ -189,3 +189,35 @@ export type BusquedaProv = { referencia: { id: number; descripcion: string; prov
 export type DetalleProv = { producto: ResultadoProv; mismos: ResultadoProv[]; historial: { producto_id: number; proveedor: string; precio: string; moneda: "PEN" | "USD"; incluye_igv: boolean; origen: string; origen_detalle: string | null; fecha_lista: string; obtenido_en: string; tc_usado: string | null }[]; serie: Record<string, Record<string, string>>; tipo_cambio: string | null };
 export type FilaImport = { fila: number; codigo: string | null; descripcion: string | null; marca: string | null; modelo: string | null; categoria: string | null; precio?: string; moneda?: string; estado: "nuevo" | "cambio" | "igual" | "error" | "duplicado"; mensaje?: string; aviso?: string | null; precio_anterior?: string | null };
 export type RespuestaImport = { confirmado: boolean; carga_id?: number; resumen: { filas: number; nuevos: number; cambiaron: number; sin_cambios: number; errores: number; duplicados: number; sin_dato: Record<string, number> }; filas: FilaImport[]; duplicados: { descripcion: string; filas: number[]; precios: string[] }[] };
+
+// ---- Fase 9 ----
+export type Articulo = {
+  id: number; codigo: string | null; nombre: string; categoria: string | null; unidad: string; stock: string; stock_minimo: string | null; ubicacion: string | null;
+  producto_id: number | null; activo: boolean; actualizado_en: string; bajo: boolean; ultimo_movimiento: string | null;
+};
+export type ListaArticulos = { articulos: Articulo[]; categorias: string[]; resumen: { articulos: number; bajos: number; sin_stock: number } };
+export type TipoMovAlmacen = "entrada" | "salida" | "ajuste" | "anulacion";
+export type MovAlmacen = {
+  id: number; articulo_id: number; articulo: string; unidad: string; codigo: string | null; tipo: TipoMovAlmacen; cantidad: string; delta: string; stock_despues: string; fecha: string;
+  proyecto_id: number | null; proyecto: string | null; requerimiento_id: number | null; requerimiento: string | null; obra: string | null; proveedor_id: number | null; proveedor: string | null;
+  documento: string | null; costo_unitario: string | null; moneda: "PEN" | "USD" | null; nota: string | null; anula_id: number | null; creado_por: string | null; creado_en: string; anulado: boolean;
+};
+export type Kardex = { articulo: Articulo; movimientos: MovAlmacen[]; entradas: string; salidas: string };
+export type OpcionesAlmacen = {
+  productos: { id: number; codigo: string | null; nombre: string; categoria: string | null; unidad: string | null }[];
+  proyectos: { id: number; nombre: string; estado: string }[];
+  proveedores: { id: number; nombre: string }[];
+  requerimientos: { id: number; numero: string; obra: string; estado: string; fecha: string; con_salida: boolean }[];
+};
+export type PropuestaSalida = {
+  requerimiento: { id: number; numero: string; obra: string; estado: string };
+  items: { texto: string; categoria: string | null; cantidad: string; unidad: string | null; articulo: { id: number; nombre: string; unidad: string; stock: string } | null }[];
+  salida_registrada: string | null;
+};
+export type TipoEquipo = "inversor" | "bateria" | "panel" | "controlador" | "monitoreo" | "otro";
+export type Equipo = { id: number; activo_id: number; tipo: TipoEquipo; marca: string | null; modelo: string | null; serie: string | null; cantidad: number; garantia_hasta: string | null; notas: string | null; garantia: "vigente" | "por_vencer" | "vencida" | null };
+export type Sistema = {
+  id: number; nombre: string; cliente: string | null; proyecto_id: number | null; proyecto: string | null; ubicacion: string | null; fecha_instalacion: string | null; vrm_url: string | null;
+  notas: string | null; activo: boolean; actualizado_en: string; equipos: Equipo[]; por_vencer?: number; vencidas?: number;
+};
+export type ListaSistemas = { activos: Sistema[]; resumen: { sistemas: number; con_vrm: number; equipos: number; por_vencer: number }; dias_aviso: number; tipos: TipoEquipo[] };
