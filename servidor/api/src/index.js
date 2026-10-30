@@ -41,4 +41,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // Índice de la IA: al arrancar se pone al día en segundo plano (si Ollama está instalado).
   const { programarReindexado } = await import('./ia/indice.js');
   programarReindexado(20_000);
+  // Comparador: lee las páginas de los proveedores según su frecuencia (una a la vez).
+  const { iniciarProgramador } = await import('./comparador_web.js');
+  iniciarProgramador();
 }

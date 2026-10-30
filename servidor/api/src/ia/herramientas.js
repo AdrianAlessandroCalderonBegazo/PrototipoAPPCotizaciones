@@ -6,6 +6,7 @@ import { cajaChica, listarMovimientos, resumen as resumenConta } from '../contab
 import { calcular } from '../cotizar.js';
 import { consulta } from '../db.js';
 import { aCentimos, deCentimos, monto } from '../dinero.js';
+import { buscar as buscarEnProveedores } from '../comparador.js';
 import { listarComprobantes } from '../facturacion.js';
 import { detalleKit, listarKits } from '../kits.js';
 import { tieneNivel } from '../permisos.js';
@@ -462,9 +463,26 @@ const gastos_proyecto_caja = {
   },
 };
 
+const precios_proveedores = {
+  nombre: 'precios_proveedores', fuente: 'Lista de proveedor', modulo: 'comparador',
+  descripcion: 'Compara precios de un producto entre proveedores (listas y páginas web): costo en soles con IGV, cuál es el más barato con precio vigente y de cuándo es cada precio.',
+  parametros: { type: 'object', properties: { producto: { type: 'string', description: 'Producto, modelo o código, por ejemplo «MultiPlus-II 48/3000»' } }, required: ['producto'] },
+  async ejecutar(a) {
+    const r = await buscarEnProveedores({ q: String(a.producto ?? '') });
+    const filas = r.resultados.slice(0, 10);
+    const mejor = filas.find((x) => x.id === r.mejor?.id);
+    return {
+      modelo: { referencia: r.referencia?.descripcion ?? null, mejor_opcion: mejor ? { proveedor: mejor.proveedor, costo_total: soles(mejor.total), fecha_precio: mejor.fecha_lista } : null, ahorro_vs_siguiente: r.mejor?.ahorro ? soles(r.mejor.ahorro) : null,
+        resultados: filas.map((x) => ({ proveedor: x.proveedor, descripcion: x.descripcion, coincidencia: x.coincidencia, precio: soles(x.precio, x.moneda), en_soles_con_igv: soles(x.soles), costo_total: soles(x.total), vigente: x.vigente, fecha: x.fecha_lista })) },
+      bloques: filas.length ? [tabla(`Precios de proveedores · «${String(a.producto).slice(0, 40)}»`, [['Proveedor'], ['Producto'], ['Coincidencia'], ['Precio', 'right'], ['Costo total S/', 'right'], ['Fecha']],
+        filas.map((x) => [x.proveedor, x.descripcion, x.coincidencia, soles(x.precio, x.moneda), soles(x.total), `${fechaPe(x.fecha_lista)}${x.vigente ? '' : ' (desactualizado)'}`]), filas.findIndex((x) => x.id === r.mejor?.id) >= 0 ? filas.findIndex((x) => x.id === r.mejor?.id) : null)] : [],
+    };
+  },
+};
+
 export const HERRAMIENTAS = {
   cotizador: [buscar_productos, ver_kits, proponer_cotizacion],
-  asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_chica, requerimientos, buscar_productos],
+  asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_chica, requerimientos, buscar_productos, precios_proveedores],
   finanzas: [gastos_caja_chica, caja_diaria, saldos_caja, gastos_proyecto_caja],
 };
 

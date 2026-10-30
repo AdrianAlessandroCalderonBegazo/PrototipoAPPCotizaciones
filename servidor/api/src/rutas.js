@@ -13,6 +13,7 @@ import { crearRutasF2 } from './rutas_f2.js';
 import { crearRutasF3 } from './rutas_f3.js';
 import { crearRutasF5 } from './rutas_f5.js';
 import { crearRutasF6 } from './rutas_f6.js';
+import { crearRutasF8 } from './rutas_f8.js';
 import { consulta, enTransaccion } from './db.js';
 import {
   filaCatalogo, filaCotizacion, filaHerramientas, filaProducto, filaRequerimiento, jsonDeEntrada,
@@ -553,6 +554,7 @@ export function crearRutas() {
   r.use(crearRutasF3());
   r.use(crearRutasF5());
   r.use(crearRutasF6());
+  r.use(crearRutasF8());
 
   r.get('/bitacora', async (req, res) => {
     await exigirNivel(req.usuario, 'logistica', 'completo', 'ver la bitácora');
