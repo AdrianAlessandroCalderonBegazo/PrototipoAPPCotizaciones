@@ -62,9 +62,9 @@ aprobación antes de empezar.**
 | 0 | Revisión del código y la base, este documento, `CLAUDE.md`. | ✅ |
 | 1 | **Base**: 4 roles, matriz de permisos validada en el servidor (API principal, Logística, Finanzas 1 y 2), `audit_log`, Configuración (usuarios y roles, matriz, datos de la empresa con logo, parámetros y tipo de cambio, numeración de cotizaciones, integraciones con prueba de conexión, auditoría), layout del diseño (menú lateral por permisos, barra superior con TC, modo oscuro, Ctrl+K), Inicio básico con datos reales, Almacén de consulta. Publicado en `erp.icrenergy.tech`. | ✅ |
 | 2 | **Proyectos y Contabilidad**: proyectos (nombre + presupuesto; activo / pausado con causa / finalizado; historial; fotos), cuenta principal (movimientos, saldo, flujo mensual, por categoría y proyecto, Excel/PDF), caja chica de solo lectura en el ERP, **enviar fondos a caja chica** (una transacción: egreso en la cuenta principal + ingreso en caja chica; saldo negativo solo con confirmación del Administrador; auditado). En Finanzas 1: categoría «Gasto de proyecto» con la lista de proyectos activos. | ✅ |
-| 3 | **Cotización** (siguiente): catálogo desde los productos actuales (se agregan marca, modelo, moneda, características, imágenes), importación CSV (mapear → vista previa → confirmar), imágenes por código, kits editables, cotizaciones (IGV 18 %, descuentos, estados), PDF en el servidor con el branding, WhatsApp sin API. **Se quita la cotización de Logística.** | |
-| 4 | **Inicio completo** (endpoint de resumen único) y **búsqueda global** Ctrl+K sobre datos. Notificaciones internas. | |
-| 5 | **Facturación SUNAT**: formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | |
+| 3 | **Cotización**: catálogo desde los productos actuales (se agregan marca, modelo, moneda, características, imágenes), importación CSV (mapear → vista previa → confirmar), imágenes por código, kits editables, cotizaciones (IGV 18 %, descuentos, estados), PDF en el servidor con el branding, WhatsApp sin API. **Se quita la cotización de Logística.** | ✅ |
+| 4 | **Inicio completo** (endpoint de resumen único) y **búsqueda global** Ctrl+K sobre datos. Notificaciones internas. | ✅ |
+| 5 | **Facturación SUNAT** (siguiente): formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | |
 | 6 | **IA**: Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | |
 | 7 | **IA en Finanzas 1**: consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | |
 | 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | |
@@ -93,6 +93,39 @@ aprobación antes de empezar.**
 
 **Pregunta abierta:** la caja diaria de Finanzas 1 tiene columnas «Cta. cte.» (ingreso/salida). ¿Es la misma cuenta bancaria que la cuenta principal
 del ERP? Si lo es, en una fase próxima se pueden pasar esos movimientos a la cuenta principal automáticamente; por ahora siguen separados.
+
+## 4c. Cómo quedó la Fase 3 (Cotización)
+
+- **Precios con IGV**: los precios del catálogo ya incluyen IGV (como en la lista actual). Total = Σ (cantidad × precio − descuento de línea) − descuento
+  comercial; valor de venta = total ÷ 1.18 (redondeo al céntimo); IGV = total − valor de venta. La misma cuenta en el servidor (`cotizar.js`) y en
+  pantalla (`erp/web/src/paginas/cotizacion/calculo.ts`); manda la del servidor.
+- **Catálogo** (`catalogo.js`): migración `004_cotizacion.sql` agrega marca, modelo, moneda (PEN/USD), características, origen y fecha de precio. El
+  **código** del ERP se toma de la «referencia interna» actual cuando es única; si no, queda «Sin código» hasta que alguien lo ponga. Los productos en
+  dólares se pasan a soles con el tipo de cambio de Configuración (si no hay TC, no se pueden cotizar).
+- **Importar CSV**: archivo → mapear columnas → vista previa (nuevos / actualizados / sin cambios / con errores, variación de precio y kits afectados)
+  → confirmar. El código es la llave. Las cotizaciones ya hechas guardan sus precios.
+- **Imágenes**: carga masiva por nombre de archivo = código del producto (o una por una en el detalle).
+- **Kits** (`kits.js`): lista de productos del catálogo + líneas libres (instalación, etc.). Una línea sin precio propio usa el precio del catálogo
+  (si sube el producto, sube el kit). Variante = copia para modificar. **Los kits reales los enviará el usuario en zips para importarlos.**
+- **Cotizaciones** (`ventas.js`): número con la numeración de Configuración (mismo correlativo que Logística). Estados: borrador → enviada →
+  aceptada / rechazada (con motivo). Solo se edita en borrador o enviada. Las cotizaciones antiguas de Logística se ven en la lista (origen «Logística»).
+- **PDF** en el servidor (`pdf.js`, pdfkit + Manrope) con los datos de la empresa (precargados: INVERSIONES ICR S.R.L., RUC 20605309489).
+- **WhatsApp sin API**: en computadora descarga el PDF y abre WhatsApp Web con el número y el mensaje (el PDF se adjunta a mano); en celular usa
+  «Compartir» con el PDF adjunto.
+- **Logística**: se quitaron la pestaña Cotización y sus pantallas (productos, voz, chat, historial). Quedan Inicio, requerimientos y herramientas.
+
+## 4d. Cómo quedó la Fase 4 (Inicio, búsqueda, notificaciones)
+
+- **Inicio** (`GET /api/inicio`, `servidor/api/src/inicio.js`): un solo pedido arma todo según los permisos del rol: cuenta principal y caja chica,
+  ingresos / egresos / flujo neto del mes contra el mes anterior, proyectos activos (ordenados por % gastado) y pausados (causa y desde cuándo),
+  cotizaciones del mes, resumen de almacén y alertas. Accesos rápidos: Nuevo proyecto, Nueva cotización, Enviar fondos (según permisos).
+- **Alertas** (calculadas al vuelo, no se guardan): presupuesto en aviso / límite, caja chica en negativo, gastos sin foto del recibo, cuenta sin saldo
+  inicial o en negativo, cotizaciones enviadas por vencer o vencidas, tipo de cambio sin dato o viejo, requerimientos urgentes o por aprobar.
+- **Campana** (`GET /api/notificaciones`, `POST /api/notificaciones/leidas`): las mismas alertas; «leída» se guarda por persona
+  (`005_notificaciones.sql`). Si la situación cambia (por ejemplo, el proyecto pasa del aviso al límite), vuelve a salir como nueva.
+- **Búsqueda Ctrl+K** (`GET /api/buscar?q=`): proyectos, cotizaciones, productos, movimientos de la cuenta y requerimientos, sin importar tildes ni
+  mayúsculas, solo en los módulos que el rol puede ver; además lleva a cualquier módulo o sección de Configuración.
+- No se muestran datos de Victron ni de SUNAT en el Inicio hasta que esas fases estén hechas (nunca datos de ejemplo).
 
 ## 5. Migración de datos
 

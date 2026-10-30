@@ -219,6 +219,9 @@ El zip `erp-web.zip` sale del flujo **Build ERP** de GitHub (Actions → Build E
 **Cada versión nueva del ERP** se sube igual: `servidor_icr.zip` (si cambió la API), `docker compose up -d --build`, y luego
 `./scripts/actualizar_erp.sh` (y `actualizar_finanzas.sh` si cambió Finanzas). Las migraciones nuevas se aplican solas al arrancar cada API.
 Con la Fase 2 (proyectos y contabilidad), lo primero en el ERP es **Contabilidad › Cuentas**: crear la cuenta principal y, si se sabe, su saldo inicial.
+Con la Fase 3 (cotización), la cotización **sale de Logística**: hay que subir también la web de Logística nueva (`./scripts/actualizar_web.sh
+/root/cotizador-web.zip`). En el ERP conviene revisar **Configuración › Parámetros** (tipo de cambio, para los productos en dólares) y
+**Datos de la empresa** (cuentas bancarias que salen en el PDF). La Fase 4 (Inicio, campana y búsqueda) solo agrega la migración `005_notificaciones.sql`.
 
 ## 8. Respaldos (importante)
 

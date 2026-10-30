@@ -52,13 +52,17 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
   (`servidor/api/src/dinero.js`; en pantalla `erp/web/src/dinero.ts`). Las fechas `DATE` también se leen como `::text`.
 - **Caja chica**: `caja_chica_mov.tipo` = `EGRESO` (resta) | `TRANSFERENCIA` (desde caja diaria) | `FONDO` (desde la cuenta principal, lo crea el ERP).
   Las tablas de la caja son de Finanzas (`finanzas/db/migrations`); la API principal las lee si existen (`servidor/api/src/caja.js`).
-- **Módulos del ERP construidos**: Inicio, Almacén (consulta), Proyectos, Contabilidad, Configuración. Rutas: `servidor/api/src/rutas_erp.js` (fase 1)
-  y `rutas_f2.js` (proyectos y contabilidad). Pruebas: `servidor/api/test/erp.test.js`, `f2.test.js` (aplican también las migraciones de Finanzas).
+- **Módulos del ERP construidos**: Inicio (con alertas, campana y búsqueda Ctrl+K), Almacén (consulta), Proyectos, Contabilidad, Cotización (catálogo,
+  CSV, imágenes, kits, cotizaciones, PDF, WhatsApp), Configuración. Rutas: `servidor/api/src/rutas_erp.js` (fase 1), `rutas_f2.js` (proyectos,
+  contabilidad, inicio/notificaciones/búsqueda) y `rutas_f3.js` (catálogo, kits, cotizaciones). Pruebas: `servidor/api/test/erp.test.js`, `f2.test.js`,
+  `f3.test.js`, `f4.test.js` (aplican también las migraciones de Finanzas).
+- **Cotización**: los precios del catálogo **incluyen IGV**; valor de venta = total ÷ 1.18. Misma cuenta en `servidor/api/src/cotizar.js` y
+  `erp/web/src/paginas/cotizacion/calculo.ts`. Imágenes de productos: `assets/productos/` se copian al build del ERP (`scripts/copiar-imagenes.mjs`).
 - **Fechas**: la base guarda hora de Lima sin zona (`now() AT TIME ZONE 'America/Lima'`).
 - **Secretos** solo en `servidor/.env` del VPS (ver `.env.example`); nunca en el código, la base ni el chat. No pedir claves al usuario por chat.
 - **Migraciones**: archivo nuevo en `servidor/db/migraciones/` (no tocar `schema.sql` salvo para instalaciones nuevas) o en `finanzas/db/migrations*/`.
 - **Diseño del ERP**: tokens del sistema de diseño en `erp/web/src/index.css` (variables CSS, modo oscuro con `data-theme`), clases en
   `tailwind.config.js`. Respetar el diseño de `ERP_ICR.zip`; no cambiarlo sin consultar.
 - **Fases**: el ERP se construye por fases (ver `erp/ESPECIFICACION.md`); al empezar cada una se presenta el plan y se espera aprobación.
-  La cotización se quita de Logística recién en la Fase 3. Fase actual: 2 terminada (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
+  La cotización ya se quitó de Logística (Fase 3). Fase actual: 4 terminada (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
 - Rama de trabajo: `claude/checklist-productos-apk-build-xruncz`.
