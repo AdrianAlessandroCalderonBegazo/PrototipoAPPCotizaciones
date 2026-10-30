@@ -242,6 +242,11 @@ Luego, en el ERP: **Configuración › Inteligencia artificial** debe decir «En
 respuesta tarda de unos segundos a ~1 minuto (la primera del día más, porque carga el modelo). Para probar otro modelo:
 `./scripts/instalar_ia.sh qwen3:8b` y escribirlo en esa misma pantalla.
 
+## 7g. «Preguntar» en la app de Finanzas
+
+Usa la misma IA del VPS (no se instala nada nuevo). Se publica subiendo el servidor (trae el Caddyfile con `/api/ia` en `finanzas.`) y la web
+de Finanzas: `./scripts/actualizar_finanzas.sh /root/finanzas_web.zip` y `docker compose restart caddy`.
+
 ## 8. Respaldos (importante)
 
 ```bash

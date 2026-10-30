@@ -13,7 +13,7 @@ import type { FotoGuardada } from "../lib/caja/fotos";
 
 // ---- barra de pestañas -------------------------------------------------------------------------
 
-export type Pestana = "diaria" | "chica" | "historial" | "reportes";
+export type Pestana = "diaria" | "chica" | "historial" | "preguntar" | "reportes";
 
 function Icono({ tipo, color }: { tipo: Pestana; color: string }) {
   const borde = { borderWidth: 2, borderColor: color };
@@ -28,6 +28,15 @@ function Icono({ tipo, color }: { tipo: Pestana; color: string }) {
     return (
       <View style={[{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" }, borde]}>
         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+      </View>
+    );
+  if (tipo === "preguntar")
+    return (
+      <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
+        <View style={[{ width: 22, height: 17, borderRadius: 7, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 2.5 }, borde]}>
+          {[0, 1, 2].map((i) => <View key={i} style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: color }} />)}
+        </View>
+        <View style={{ position: "absolute", bottom: 1, left: 5, width: 0, height: 0, borderLeftWidth: 4, borderRightWidth: 4, borderTopWidth: 5, borderLeftColor: "transparent", borderRightColor: "transparent", borderTopColor: color }} />
       </View>
     );
   if (tipo === "historial")
@@ -50,6 +59,7 @@ const PESTANAS: { id: Pestana; label: string }[] = [
   { id: "diaria", label: "Caja diaria" },
   { id: "chica", label: "Caja chica" },
   { id: "historial", label: "Historial" },
+  { id: "preguntar", label: "Preguntar" },
   { id: "reportes", label: "Reportes" },
 ];
 

@@ -62,7 +62,7 @@ export const InsigniaIa = () => (
   </span>
 );
 
-const ICONO_FUENTE: Record<string, string> = { Catálogo: "inventory_2", Kits: "inventory", Contabilidad: "account_balance", Proyectos: "solar_power", "Caja chica": "savings", Cotización: "request_quote", "Facturación SUNAT": "verified", Logística: "local_shipping", "Generado por IA": "auto_awesome" };
+const ICONO_FUENTE: Record<string, string> = { Catálogo: "inventory_2", Kits: "inventory", Contabilidad: "account_balance", Proyectos: "solar_power", "Caja chica": "savings", "Caja diaria": "point_of_sale", Cotización: "request_quote", "Facturación SUNAT": "verified", Logística: "local_shipping", "Generado por IA": "auto_awesome" };
 export function Fuentes({ fuentes }: { fuentes: string[] }) {
   if (!fuentes.length) return null;
   return (

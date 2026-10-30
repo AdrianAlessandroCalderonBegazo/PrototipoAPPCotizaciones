@@ -423,7 +423,7 @@ const saldos_caja = {
     return {
       modelo: { saldos: filas.map(([ciudad, chica, efectivo, yape, dia]) => ({ ciudad, caja_chica: chica, caja_diaria_efectivo: efectivo, yape, ultimo_dia_caja_diaria: dia })) },
       bloques: [
-        { tipo: 'kpis', items: [{ l: 'Caja chica (total)', v: soles(sumar(ch.map((x) => x.saldo))) }, { l: 'Efectivo caja diaria', v: soles(sumar(di.map((x) => x.efectivo))) }, { l: 'Yape', v: soles(sumar(di.map((x) => x.yape))) }] },
+        { tipo: 'kpis', items: [{ l: 'Caja chica (total)', v: soles(sumar(ch.map((x) => x.saldo))) }, { l: 'Efectivo caja diaria', v: di.length ? soles(sumar(di.map((x) => x.efectivo))) : 'Sin dato' }, { l: 'Yape', v: di.length ? soles(sumar(di.map((x) => x.yape))) : 'Sin dato' }] },
         tabla('Saldos por ciudad', [['Ciudad'], ['Caja chica', 'right'], ['Efectivo', 'right'], ['Yape', 'right'], ['Último día']], filas),
       ],
     };

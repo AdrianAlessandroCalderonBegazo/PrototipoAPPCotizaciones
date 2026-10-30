@@ -56,14 +56,15 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
 - **Módulos del ERP construidos**: Inicio (con alertas, campana y búsqueda Ctrl+K), Almacén (consulta), Proyectos, Contabilidad, Cotización (catálogo,
   CSV, imágenes, kits, cotizaciones, PDF, WhatsApp), Facturación SUNAT, Cotizador IA, Asistente IA, Configuración. Rutas: `servidor/api/src/rutas_erp.js` (fase 1), `rutas_f2.js` (proyectos,
   contabilidad, inicio/notificaciones/búsqueda) `rutas_f3.js` (catálogo, kits, cotizaciones) `rutas_f5.js` (facturación) y `rutas_f6.js` (IA). Pruebas: `servidor/api/test/erp.test.js`,
-  `f2.test.js`, `f3.test.js`, `f4.test.js`, `f5.test.js`, `f6.test.js` (aplican también las migraciones de Finanzas).
+  `f2.test.js`, `f3.test.js`, `f4.test.js`, `f5.test.js`, `f6.test.js`, `f7.test.js` (aplican también las migraciones de Finanzas).
 - **Cotización**: los precios del catálogo **incluyen IGV**; valor de venta = total ÷ 1.18. Misma cuenta en `servidor/api/src/cotizar.js` y
   `erp/web/src/paginas/cotizacion/calculo.ts`. Imágenes de productos: `assets/productos/` se copian al build del ERP (`scripts/copiar-imagenes.mjs`).
 - **Facturación**: el ERP prepara, la extensión rellena SOL y la persona emite; **la extensión nunca pulsa «Emitir»** ni guarda la clave SOL. El número lo
   pone SUNAT (se registra al marcar emitido). Ítems con valor unitario **sin** IGV. Lo que depende del portal SOL está solo en `extension/selectores.js`.
 - **IA (Ollama, `servidor/api/src/ia/`)**: **la IA solo lee**; lo que propone lo guarda una persona. Herramientas de solo lectura con los permisos de quien
   pregunta; los totales, tablas y gráficos los calcula el servidor, nunca el modelo; la IA no inventa precios («Sin dato»). Ollama no se expone a internet.
-  Pruebas con `test/ollama_falso.js` (también sirve para probar la pantalla: `node test/ollama_falso.js 11434` + `OLLAMA_URL=http://127.0.0.1:11434`).
+  La app de Finanzas pregunta en la pestaña «Preguntar» (`finanzas/app/src/screens/Preguntar.tsx` → `/api/ia/finanzas`, basta
+  `caja_chica` en lectura). Pruebas con `test/ollama_falso.js` (también sirve para probar la pantalla: `node test/ollama_falso.js 11434` + `OLLAMA_URL=http://127.0.0.1:11434`).
 - **Caja diaria ≠ cuenta principal**: la «Cta. cte.» de la caja diaria es Yape; los depósitos de efectivo al banco se registran en el ERP como ingreso
   «Depósito de caja diaria (efectivo)».
 - **Fechas**: la base guarda hora de Lima sin zona (`now() AT TIME ZONE 'America/Lima'`).
@@ -72,5 +73,5 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
 - **Diseño del ERP**: tokens del sistema de diseño en `erp/web/src/index.css` (variables CSS, modo oscuro con `data-theme`), clases en
   `tailwind.config.js`. Respetar el diseño de `ERP_ICR.zip`; no cambiarlo sin consultar.
 - **Fases**: el ERP se construye por fases (ver `erp/ESPECIFICACION.md`); al empezar cada una se presenta el plan y se espera aprobación.
-  La cotización ya se quitó de Logística (Fase 3). Fase actual: 6 terminada (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
+  La cotización ya se quitó de Logística (Fase 3). Fase actual: 7 terminada (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
 - Rama de trabajo: `claude/checklist-productos-apk-build-xruncz`.

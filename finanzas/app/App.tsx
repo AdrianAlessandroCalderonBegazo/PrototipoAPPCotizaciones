@@ -14,6 +14,7 @@ import { CajaDiariaFlujo } from "./src/screens/CajaDiariaFlujo";
 import { CajaChicaFlujo } from "./src/screens/CajaChicaFlujo";
 import { Historial } from "./src/screens/Historial";
 import { Reportes } from "./src/screens/Reportes";
+import { Preguntar } from "./src/screens/Preguntar";
 import { MenuLateral, TabBar, type Pestana } from "./src/components/caja";
 import { ANCHO, useEscritorio } from "./src/lib/layout";
 import { Avisos } from "./src/components/Overlays";
@@ -95,9 +96,10 @@ function Shell() {
             {tab === "historial" ? (
               <Historial caja={caja} estado={estado} ciudad={ciudad} setCiudad={cambiarCiudad} permisos={session.permisos} onAbrirDia={(c, fecha) => (store.setCiudad(c), setIrA({ fecha, n: Date.now() }), setTab("diaria"))} {...inset} />
             ) : null}
+            {tab === "preguntar" ? <Preguntar {...inset} /> : null}
             {tab === "reportes" ? <Reportes caja={caja} estado={estado} session={session} onSalio={() => setSession(null)} {...inset} /> : null}
             </View>
-            {!escritorio && (!sinTabs || tab === "reportes" || tab === "historial") ? <TabBar activa={tab} onPick={setTab} bottomInset={insets.bottom} /> : null}
+            {!escritorio && (!sinTabs || tab === "reportes" || tab === "historial" || tab === "preguntar") ? <TabBar activa={tab} onPick={setTab} bottomInset={insets.bottom} /> : null}
             <Avisos avisos={caja.avisos} onCerrar={store.quitarAviso} topInset={insets.top} />
           </View>
           </View>

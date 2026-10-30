@@ -66,8 +66,8 @@ aprobación antes de empezar.**
 | 4 | **Inicio completo** (endpoint de resumen único) y **búsqueda global** Ctrl+K sobre datos. Notificaciones internas. | ✅ |
 | 5 | **Facturación SUNAT**: formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | ✅ |
 | 6 | **IA**: Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | ✅ |
-| 7 | **IA en Finanzas 1** (siguiente): consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | |
-| 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | |
+| 7 | **IA en Finanzas 1**: consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | ✅ |
+| 8 | **Comparador de proveedores** (siguiente): proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | |
 | 9 | **Activos y control** (Victron VRM con caché) y Almacén ampliado. | |
 | 10 | **Cierre**: pruebas finales, revisión de seguridad, respaldos y documentación. | |
 
@@ -174,6 +174,20 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
   VPS (se puede agregar después si hace falta).
 - **Pendiente:** la búsqueda en documentos (RAG de archivos) del Asistente queda para cuando el ERP guarde documentos; la calidad real de las
   respuestas se verá con `qwen3:4b` en el VPS (se probó con un Ollama simulado: `servidor/api/test/ollama_falso.js`).
+
+## 4g. Cómo quedó la Fase 7 (IA en Finanzas 1)
+
+- Nueva pestaña **Preguntar** en la app de Finanzas (celular y computadora): preguntas frecuentes de un toque, dictado por voz del navegador,
+  respuesta mientras se escribe, indicadores, barras por categoría, tablas y fuentes; «Mis consultas» (historial privado de cada persona).
+- **La usan todos los que entran a la caja** (permiso `caja_chica` en lectura o completo; decisión del dueño: son ~3 personas y todas la necesitan).
+- La responde la API principal (`/api/ia/finanzas`, misma sesión; Caddy la expone también en `finanzas.`). Herramientas de **solo lectura**
+  (`ia/herramientas.js`): gastos de caja chica (período, ciudad, categoría, persona, sin foto del recibo), caja diaria (efectivo, transferencias,
+  Yape, gastos por categoría, saldos al cierre), saldos actuales y gastos de un proyecto desde las cajas (más presupuesto si la persona ve
+  Proyectos). Períodos: hoy, ayer, semana (desde el lunes), semana anterior, mes, mes anterior o fechas exactas (`rangoDe`).
+- La lectura de recibos con la cámara (OCR) **no cambió**.
+- **Sin duplicados al reintentar:** cada fila y gasto lleva un id creado en el teléfono y el servidor lo guarda con «insertar o actualizar»;
+  enviar a caja chica reintentado no se duplica (pruebas en `finanzas/api/src/api.test.ts` y `fin.sync.test.ts`). Finanzas 1 es una app en línea:
+  sin internet no acepta cambios nuevos (decisión ya tomada), así que no hace falta una cola sin conexión.
 
 ## 5. Migración de datos
 
