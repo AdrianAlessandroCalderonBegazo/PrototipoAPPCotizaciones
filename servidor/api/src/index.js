@@ -38,4 +38,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   await prepararBase();
   const puerto = Number(process.env.PORT || 3000);
   crearApp().listen(puerto, () => console.log(`API del Cotizador ICR escuchando en el puerto ${puerto}`));
+  // Índice de la IA: al arrancar se pone al día en segundo plano (si Ollama está instalado).
+  const { programarReindexado } = await import('./ia/indice.js');
+  programarReindexado(20_000);
 }

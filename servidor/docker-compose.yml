@@ -38,8 +38,9 @@ services:
       CLAVE_EDICION: ${CLAVE_EDICION:-1234}
       # Integraciones del ERP (Configuración › Integraciones). Opcionales.
       FINANZAS_API_URL: http://finanzas-api:8787
-      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODELO: ${OLLAMA_MODELO:-qwen3:4b}
+      OLLAMA_EMBED: ${OLLAMA_EMBED:-bge-m3}
       VRM_TOKEN: ${VRM_TOKEN:-}
       CONSULTA_DOC_TOKEN: ${CONSULTA_DOC_TOKEN:-}
       CONSULTA_RUC_URL: ${CONSULTA_RUC_URL:-}
@@ -124,7 +125,21 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  # IA local (Fase 6). Solo la usa la API por la red interna: NO tiene puertos publicados (nunca se expone a internet).
+  # Los modelos se descargan una vez con ./scripts/instalar_ia.sh y quedan en el volumen «ollama».
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "2"
+    volumes:
+      - ollama:/root/.ollama
+    mem_limit: 9g
+
 volumes:
+  ollama:
   pgdata:
   uploads:
   finanzas_fotos:

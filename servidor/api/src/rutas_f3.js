@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { auditar } from './auditoria.js';
 import { CAMPOS_CSV, asignarImagenes, crearProducto, editarProducto, importarCsv, listarCatalogo, productoDe, productoPorId, verificarImagenes } from './catalogo.js';
 import { falla } from './errores.js';
+import { programarReindexado } from './ia/indice.js';
 import { crearKit, detalleKit, editarKit, eliminarKit, listarKits, varianteKit } from './kits.js';
 import { pdfCotizacion } from './pdf.js';
 import { nivel, tieneNivel } from './permisos.js';
@@ -25,18 +26,23 @@ export function crearRutasF3() {
   r.post('/catalogo', completo('agregar productos'), async (req, res) => {
     const p = await crearProducto(req.body);
     await auditar(req, { accion: 'crear', entidad: 'producto', entidadId: p.id, despues: p });
+    programarReindexado();
     res.status(201).json(productoDe(p, true));
   });
   r.put('/catalogo/:id', completo('editar productos'), async (req, res) => {
     const { antes, despues } = await editarProducto(id(req.params.id), req.body);
     if (antes !== despues) await auditar(req, { accion: 'editar', entidad: 'producto', entidadId: despues.id, antes, despues });
+    programarReindexado();
     res.json(productoDe(despues, true));
   });
   r.get('/catalogo/:id', lectura, async (req, res) => res.json(await productoPorId(id(req.params.id), await tieneNivel(req.usuario, 'cotizacion', 'completo'))));
   r.post('/catalogo/importar', completo('importar listas de precios'), async (req, res) => {
     const confirmar = req.body?.confirmar === true;
     const r2 = await importarCsv(req.body?.filas, { confirmar });
-    if (confirmar) await auditar(req, { accion: 'importar', entidad: 'catalogo', despues: r2.resumen, detalle: String(req.body?.archivo ?? '').slice(0, 200) || null });
+    if (confirmar) {
+      await auditar(req, { accion: 'importar', entidad: 'catalogo', despues: r2.resumen, detalle: String(req.body?.archivo ?? '').slice(0, 200) || null });
+      programarReindexado();
+    }
     res.json(r2);
   });
   r.post('/catalogo/imagenes/verificar', completo('cargar imágenes'), async (req, res) => res.json(await verificarImagenes(req.body?.nombres)));

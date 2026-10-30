@@ -3,6 +3,7 @@
 // Lo que no se sabe queda en null y la pantalla lo muestra como «Sin dato»: nunca se inventa.
 import { consulta } from './db.js';
 import { falla } from './errores.js';
+import { leerConfigIa } from './ia/config.js';
 import { rucValido } from './validaciones.js';
 
 async function leer(clave, porDefecto) {
@@ -160,11 +161,11 @@ export async function probarIntegracion(clave, env = process.env) {
     }
     if (clave === 'ollama') {
       const url = env.OLLAMA_URL;
-      if (!url) return { estado: 'no_configurado', detalle: 'Falta OLLAMA_URL (se instala en la fase de IA).', probado_en: ahora };
+      if (!url) return { estado: 'no_configurado', detalle: 'Falta OLLAMA_URL (la IA no está instalada).', probado_en: ahora };
       const r = await conTiempo(`${url.replace(/\/+$/, '')}/api/tags`);
       if (!r.ok) return { estado: 'error', detalle: `Ollama respondió ${r.status}.`, probado_en: ahora };
       const modelos = ((await r.json()).models ?? []).map((m) => m.name);
-      const modelo = env.OLLAMA_MODELO || 'qwen3:4b';
+      const modelo = (await leerConfigIa()).modelo;
       return modelos.includes(modelo)
         ? { estado: 'conectado', detalle: `Modelo ${modelo} disponible.`, probado_en: ahora }
         : { estado: 'error', detalle: `Ollama responde, pero falta el modelo ${modelo} (hay: ${modelos.join(', ') || 'ninguno'}).`, probado_en: ahora };
