@@ -5,6 +5,7 @@ import {
   CATEGORIAS, anularMovimiento, cajaChica, crearCuenta, editarCuenta, enviarFondos, listarCuentas, listarMovimientos, registrarMovimiento, resumen,
 } from './contabilidad.js';
 import { falla } from './errores.js';
+import { buscar, inicio, marcarLeidas, notificaciones } from './inicio.js';
 import { nivel, tieneNivel } from './permisos.js';
 import {
   CAUSAS_PAUSA, agregarFotos, cambiarEstado, crearProyecto, detalleProyecto, editarProyecto, listarProyectos, proyectosActivos, quitarFoto,
@@ -73,6 +74,12 @@ export function crearRutasF2() {
   r.post('/contabilidad/envios', nivel('contabilidad', 'completo', 'enviar fondos a caja chica'), async (req, res) => {
     res.status(201).json(await enviarFondos(req.body, req.usuario, req));
   });
+
+  // ---- Fase 4: inicio, notificaciones y búsqueda global (cada parte según los permisos del rol) ----
+  r.get('/inicio', async (req, res) => res.json(await inicio(req.usuario)));
+  r.get('/notificaciones', async (req, res) => res.json(await notificaciones(req.usuario)));
+  r.post('/notificaciones/leidas', async (req, res) => res.json(await marcarLeidas(req.usuario, req.body?.claves)));
+  r.get('/buscar', async (req, res) => res.json(await buscar(req.usuario, req.query.q)));
 
   return r;
 }
