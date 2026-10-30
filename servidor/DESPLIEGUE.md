@@ -358,6 +358,11 @@ Las tablas de Finanzas viven en `finanzas/db/migrations/` y la API de Finanzas l
 
 ## Problemas comunes
 
+- **«La conexión no es segura» / `ERR_SSL_PROTOCOL_ERROR` en un subdominio**: Caddy aún no tiene certificado para esa dirección. Corre
+  `./scripts/diagnostico.sh`: dice a qué IP apunta cada subdominio (y si tiene un registro IPv6/AAAA que estorba), si ya hay certificado y los
+  errores de Caddy. Casi siempre es el DNS: el registro **A** debe apuntar a la IP del VPS y no debe haber **AAAA** de otro servidor. Tras corregirlo,
+  `docker compose restart caddy` y esperar 1–2 minutos.
+
 | Síntoma | Qué mirar |
 |---|---|
 | El navegador dice "no es seguro" / no hay HTTPS | `docker compose logs caddy`. Casi siempre es que el DNS todavía no apunta al VPS, o los puertos 80/443 están cerrados. |
