@@ -38,6 +38,7 @@ export function Paleta({ onCerrar, onIr }: { onCerrar: () => void; onIr: (ruta: 
         ["empresa", "Datos de la empresa", "apartment"],
         ["parametros", "Parámetros y numeración", "tune"],
         ["integraciones", "Integraciones", "hub"],
+        ["ia", "Inteligencia artificial", "auto_awesome"],
         ["auditoria", "Auditoría", "history"],
       ])
         ops.push({ ruta: `${CONFIGURACION.ruta}/${ruta}`, nombre, icono, grupo: "Configuración" });

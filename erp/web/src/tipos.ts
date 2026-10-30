@@ -153,3 +153,22 @@ export type PropuestaCpe = {
   cotizacion: { id: number; numero: string; total: string; estado: string | null }; tipo: TipoCpe; cliente_doc: string | null; cliente_nombre: string | null;
   cliente_direccion: string | null; proyecto_id: number | null; items: ItemCpe[]; totales: TotalesCpe; objetivo: string; diferencia: string;
 };
+
+// ---- Fase 6 ----
+export type ModuloIa = "cotizador" | "asistente";
+export type EstadoIa = {
+  disponible: boolean; motivo: "no_instalada" | "sin_conexion" | "falta_modelo" | null; detalle: string; latencia_ms?: number; modelo: string; modelo_embeddings: string;
+  num_ctx: number; modelos?: string[]; embeddings_presente?: boolean; indice: { total: number; indexados: number; actualizado_en: string | null; modelo: string };
+};
+export type ConvIa = { id: number; modulo: ModuloIa; titulo: string; autor_id: number | null; autor_nombre: string | null; creado_en: string; actualizado_en: string; n_mensajes: number };
+export type LineaTarjeta = { producto_id: number | null; codigo: string | null; descripcion: string; unidad: string | null; cantidad: string; precio_unitario: string | null; importe: string | null; origen: string; nota?: string; moneda_original?: string };
+export type TarjetaIa = { titulo: string; items: LineaTarjeta[]; totales: { total: string; valor_venta: string; igv: string } | null; faltan_precios: number; tipo_cambio: string | null; fecha_precios: string; notas: string[] };
+export type BloqueIa =
+  | { tipo: "kpis"; items: { l: string; v: string; c?: "primario" | "peligro" }[] }
+  | { tipo: "tabla"; titulo: string; columnas: { l: string; a: "left" | "right" }[]; filas: string[][]; destacar: number | null }
+  | { tipo: "grafico"; titulo: string; barras: { l: string; v: number; texto: string }[] };
+export type MensajeIa = {
+  id: number; rol: "usuario" | "ia" | "error"; texto: string; datos: { tarjeta?: TarjetaIa | null; bloques?: BloqueIa[]; fuentes?: string[]; herramientas?: string[] } | null;
+  por_voz: boolean; autor_nombre: string | null; modelo: string | null; duracion_ms: number | null; creado_en: string;
+};
+export type ContextoIa = { reglas: string | null; notas: string | null; usar_catalogo: boolean; usar_precios: boolean; usar_reglas: boolean; usar_notas: boolean; catalogo: { total: number; indexados: number; actualizado_en: string | null }; tipo_cambio: { valor: string | null; fecha: string | null }; igv_pct: number };

@@ -8,7 +8,7 @@ import { aSoles, dinero, leerMonto } from "../../dinero";
 import { rucValido } from "../../formato";
 import { puede } from "../../modulos";
 import { useSesion } from "../../sesion";
-import type { Cotizacion as TCot, Empresa, Kit, LineaCot, Parametros, Producto } from "../../tipos";
+import type { Cotizacion as TCot, Empresa, Kit, LineaCot, Parametros, Producto, TarjetaIa } from "../../tipos";
 import { calcularTotales, importeLinea } from "./calculo";
 import { BuscadorProducto } from "./Kits";
 
@@ -60,6 +60,13 @@ export function CotizacionEditor() {
           setVersion(c.version);
         } else {
           setF({ ...VACIO, vendedor: usuario?.nombre ?? "", condiciones: emp.pie_pdf ?? "" });
+          const iaId = params.get("ia");
+          if (iaId) {
+            // Propuesta del Cotizador IA: se trae al editor; una persona revisa, completa los precios «Sin dato» y guarda.
+            const p = await api<TarjetaIa>("GET", `/ia/cotizador/propuesta/${iaId}`);
+            setItems(p.items.map((i) => ({ producto_id: i.producto_id, codigo: i.codigo, descripcion: i.descripcion, detalle: null, unidad: i.unidad, cantidad: i.cantidad, precio_unitario: i.precio_unitario ?? "", descuento_pct: "0" })));
+            setF((x) => (x ? { ...x, sistema: x.sistema || p.titulo } : x));
+          }
           const kitId = params.get("kit");
           if (kitId) {
             const k = await api<Kit>("GET", `/kits/${kitId}`);
@@ -147,7 +154,7 @@ export function CotizacionEditor() {
       </div>
       {error ? <div className="rounded-xl bg-danger-soft px-4 py-3 text-[13.5px] font-semibold text-danger">{error}</div> : null}
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-5">
           <section className="tarjeta grid gap-3.5 p-5 sm:grid-cols-2">
             <div className="titulo-seccion sm:col-span-2">Cliente</div>

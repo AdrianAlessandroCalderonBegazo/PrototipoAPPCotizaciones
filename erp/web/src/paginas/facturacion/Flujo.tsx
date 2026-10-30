@@ -473,7 +473,7 @@ export function FlujoComprobante({ id }: { id?: number }) {
       <Pasos actual={INDICE[paso]} />
 
       {paso === "editar" ? (
-        <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex flex-col gap-5">
             <section className="tarjeta grid gap-4 p-5 sm:grid-cols-2">
               <div className="sm:col-span-2">

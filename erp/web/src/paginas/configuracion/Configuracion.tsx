@@ -2,6 +2,7 @@ import { NavLink, Navigate, useParams } from "react-router-dom";
 import { Icono } from "../../componentes/Icono";
 import { Auditoria } from "./Auditoria";
 import { Empresa } from "./Empresa";
+import { Ia } from "./Ia";
 import { Integraciones } from "./Integraciones";
 import { Matriz } from "./Matriz";
 import { Parametros } from "./Parametros";
@@ -13,6 +14,7 @@ export const SECCIONES = [
   { k: "empresa", l: "Datos de la empresa", i: "apartment", C: Empresa },
   { k: "parametros", l: "Parámetros y numeración", i: "tune", C: Parametros },
   { k: "integraciones", l: "Integraciones", i: "hub", C: Integraciones },
+  { k: "ia", l: "Inteligencia artificial", i: "auto_awesome", C: Ia },
   { k: "auditoria", l: "Auditoría", i: "history", C: Auditoria },
 ] as const;
 

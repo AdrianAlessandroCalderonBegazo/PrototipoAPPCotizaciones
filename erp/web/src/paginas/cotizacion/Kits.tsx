@@ -225,7 +225,7 @@ export function Kits({ productos, editar }: { productos: Producto[]; editar: boo
             </table>
             {!k.items.length ? <div className="p-6 text-center text-[13px] text-text-3">Agrega productos del catálogo con el buscador de abajo.</div> : null}
           </div>
-          <div className="grid gap-4 border-t border-border p-5 md:grid-cols-[1fr_320px]">
+          <div className="grid gap-4 border-t border-border p-5 md:grid-cols-[minmax(0,1fr)_320px]">
             <div className="flex flex-col gap-2">
               {editar ? (
                 <>

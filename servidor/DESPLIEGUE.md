@@ -227,6 +227,21 @@ ERP › Facturación SUNAT › «Instalar extensión» (descarga un zip) → des
 descomprimida. Opcional: para que el RUC/DNI traiga solo la razón social, poner `CONSULTA_DOC_TOKEN=` en `.env` (token de decolecta.com u otro
 proveedor; ver `.env.example`) y `docker compose up -d`.
 
+## 7f. Inteligencia artificial (Cotizador IA y Asistente IA)
+
+La IA corre en el mismo VPS, en el contenedor `ollama` (no se publica a internet). Se instala una vez:
+
+```bash
+cd /opt/icr/servidor
+docker compose up -d --build          # crea el contenedor ollama (la primera vez descarga la imagen)
+./scripts/instalar_ia.sh              # descarga qwen3:4b (~2.5 GB) y bge-m3 (~1.2 GB); tarda unos minutos
+docker compose restart api            # la API indexa el catálogo en segundo plano (~1 minuto)
+```
+
+Luego, en el ERP: **Configuración › Inteligencia artificial** debe decir «En línea · qwen3:4b» y el índice con todos los productos. Sin GPU, cada
+respuesta tarda de unos segundos a ~1 minuto (la primera del día más, porque carga el modelo). Para probar otro modelo:
+`./scripts/instalar_ia.sh qwen3:8b` y escribirlo en esa misma pantalla.
+
 ## 8. Respaldos (importante)
 
 ```bash

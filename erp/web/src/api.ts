@@ -29,6 +29,7 @@ export function guardarToken(t: string | null) {
 }
 
 export const tieneToken = () => !!token;
+export const tokenActual = () => token;
 export const alVencerSesion = (fn: () => void) => void (alVencer = fn);
 
 type Opciones = { cuerpo?: unknown; binario?: Blob; consulta?: Record<string, string | number | undefined | null> };

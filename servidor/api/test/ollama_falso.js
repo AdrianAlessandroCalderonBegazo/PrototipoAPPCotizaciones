@@ -52,7 +52,10 @@ export function iniciarOllamaFalso(puerto = 0, { modelos = ['qwen3:4b', 'bge-m3:
       else if (ultimo.role === 'user') {
         const nombre = /factur|venta|comprobante/i.test(usuario) ? 'comprobantes' : /proyecto/i.test(usuario) ? 'proyectos' : 'resumen_finanzas';
         llamar(nombre, {}); // aunque no esté en la lista: el servidor debe negarse
-      } else if (ultimo.role === 'tool') await decir(`Según los datos: ${ultimo.content.slice(0, 120)}`);
+      } else if (ultimo.role === 'tool') {
+        const d = JSON.parse(ultimo.content);
+        await decir(d.error ? `No pude consultar eso: ${d.error}` : d.ingresos ? `En **${d.mes}** entraron ${d.ingresos} y salieron ${d.egresos}; el flujo neto es ${d.flujo_neto}.` : d.conteo_por_estado ? `Hay ${d.conteo_por_estado.activo} proyectos activos y ${d.conteo_por_estado.pausado} pausados.` : d.total_emitido ? `En ${d.mes} se emitieron ${d.emitidos} comprobantes por ${d.total_emitido}.` : 'Aquí tienes los datos.');
+      }
       else await decir('Listo.');
     }
     linea({ message: { role: 'assistant', content: '' }, done: true, eval_count: 10 });

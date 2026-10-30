@@ -138,7 +138,7 @@ const resumen_finanzas = {
     const neto = deCentimos(aCentimos(k.ingresos_mes) - aCentimos(k.egresos_mes));
     const netoAnt = deCentimos(aCentimos(k.ingresos_mes_anterior) - aCentimos(k.egresos_mes_anterior));
     return {
-      modelo: { mes: r.mes, cuenta: r.cuenta?.nombre ?? null, saldo_actual: r.cuenta?.saldo ?? null, ingresos: k.ingresos_mes, egresos: k.egresos_mes, flujo_neto: neto, ingresos_mes_anterior: k.ingresos_mes_anterior, egresos_mes_anterior: k.egresos_mes_anterior, variacion_ingresos: pct(k.ingresos_mes, k.ingresos_mes_anterior), variacion_egresos: pct(k.egresos_mes, k.egresos_mes_anterior), egresos_por_categoria: r.egresos_por_categoria.slice(0, 8), egresos_por_proyecto: r.egresos_por_proyecto.slice(0, 5).map((p) => ({ proyecto: p.nombre, total: p.total })) },
+      modelo: { mes: r.mes, cuenta: r.cuenta?.nombre ?? null, saldo_actual: soles(r.cuenta?.saldo ?? null), ingresos: soles(k.ingresos_mes), egresos: soles(k.egresos_mes), flujo_neto: soles(neto), ingresos_mes_anterior: soles(k.ingresos_mes_anterior), egresos_mes_anterior: soles(k.egresos_mes_anterior), variacion_ingresos: pct(k.ingresos_mes, k.ingresos_mes_anterior), variacion_egresos: pct(k.egresos_mes, k.egresos_mes_anterior), egresos_por_categoria: r.egresos_por_categoria.slice(0, 8).map((c) => ({ ...c, monto: soles(c.monto) })), egresos_por_proyecto: r.egresos_por_proyecto.slice(0, 5).map((p) => ({ proyecto: p.nombre, total: soles(p.total) })) },
       bloques: [
         { tipo: 'kpis', items: [{ l: `Ingresos ${r.mes}`, v: soles(k.ingresos_mes), c: 'primario' }, { l: `Egresos ${r.mes}`, v: soles(k.egresos_mes), c: 'peligro' }, { l: 'Flujo neto', v: soles(neto) }, { l: 'Ingresos vs. mes anterior', v: pct(k.ingresos_mes, k.ingresos_mes_anterior) }] },
         ...(r.egresos_por_categoria.length ? [barras(`Egresos por categoría · ${r.mes}`, r.egresos_por_categoria.slice(0, 8).map((c) => [c.categoria, c.monto]))] : []),
@@ -158,7 +158,7 @@ const movimientos_cuenta = {
     const r = await listarMovimientos({ desde: f(a.desde), hasta: f(a.hasta), tipo: ['ingreso', 'egreso'].includes(a.tipo) ? a.tipo : undefined, categoria: a.categoria || undefined, q: a.texto || undefined });
     const m = r.movimientos.filter((x) => !x.anulado);
     return {
-      modelo: { cuenta: r.cuenta?.nombre ?? null, cantidad: m.length, total_ingresos: r.totales.ingresos, total_egresos: r.totales.egresos, primeros: m.slice(0, 15).map((x) => ({ fecha: x.fecha, tipo: x.tipo, concepto: x.concepto, categoria: x.categoria, monto: x.monto, proyecto: x.proyecto_nombre ?? null })) },
+      modelo: { cuenta: r.cuenta?.nombre ?? null, cantidad: m.length, total_ingresos: soles(r.totales.ingresos), total_egresos: soles(r.totales.egresos), primeros: m.slice(0, 15).map((x) => ({ fecha: x.fecha, tipo: x.tipo, concepto: x.concepto, categoria: x.categoria, monto: soles(x.monto), proyecto: x.proyecto_nombre ?? null })) },
       bloques: [
         { tipo: 'kpis', items: [{ l: 'Movimientos', v: String(m.length) }, { l: 'Ingresos', v: soles(r.totales.ingresos), c: 'primario' }, { l: 'Egresos', v: soles(r.totales.egresos), c: 'peligro' }] },
         ...(m.length ? [tabla('Movimientos de la cuenta principal', [['Fecha'], ['Concepto'], ['Categoría'], ['Monto', 'right']], m.slice(0, 20).map((x) => [fechaPe(x.fecha), x.concepto, x.categoria ?? 'Sin dato', `${x.tipo === 'ingreso' ? '+' : '−'} ${soles(x.monto)}`]))] : []),
@@ -175,7 +175,7 @@ const proyectos = {
     const r = await listarProyectos({ estado: a.estado, q: a.texto });
     const ps = r.proyectos;
     return {
-      modelo: { conteo_por_estado: r.conteo, proyectos: ps.slice(0, 20).map((p) => ({ codigo: p.codigo, nombre: p.nombre, estado: p.estado, causa_pausa: p.causa_pausa, presupuesto: p.presupuesto, gastado: p.gastado, porcentaje: p.porcentaje })) },
+      modelo: { conteo_por_estado: r.conteo, proyectos: ps.slice(0, 20).map((p) => ({ codigo: p.codigo, nombre: p.nombre, estado: p.estado, causa_pausa: p.causa_pausa, presupuesto: soles(p.presupuesto), gastado: soles(p.gastado), porcentaje: p.porcentaje })) },
       bloques: [
         { tipo: 'kpis', items: [{ l: 'Activos', v: String(r.conteo.activo) }, { l: 'Pausados', v: String(r.conteo.pausado) }, { l: 'Finalizados', v: String(r.conteo.finalizado) }] },
         ...(ps.length ? [tabla('Proyectos', [['Proyecto'], ['Estado'], ['Presupuesto', 'right'], ['Gastado', 'right'], ['%', 'right']], ps.slice(0, 20).map((p) => [`${p.codigo} · ${p.nombre}`, p.estado, soles(p.presupuesto), soles(p.gastado), p.porcentaje === null ? 'Sin dato' : `${p.porcentaje}%`]))] : []),
@@ -198,7 +198,7 @@ const gastos_proyecto = {
     const porOrigen = ['cuenta_principal', 'caja_chica', 'caja_diaria'].map((o) => [o, sumar(d.gastos.filter((g) => g.origen === o).map((g) => g.monto))]);
     const nombreOrigen = { cuenta_principal: 'Cuenta principal', caja_chica: 'Caja chica', caja_diaria: 'Caja diaria' };
     return {
-      modelo: { proyecto: `${p.codigo} · ${p.nombre}`, estado: p.estado, presupuesto: p.presupuesto, gastado: p.gastado, saldo: p.saldo, porcentaje: p.porcentaje, por_categoria: d.categorias, por_origen: Object.fromEntries(porOrigen.map(([o, t2]) => [nombreOrigen[o], t2])), gastos: d.gastos.length, gastos_sin_comprobante: sinComp },
+      modelo: { proyecto: `${p.codigo} · ${p.nombre}`, estado: p.estado, presupuesto: soles(p.presupuesto), gastado: soles(p.gastado), saldo: soles(p.saldo), porcentaje: p.porcentaje, por_categoria: d.categorias.map((c) => ({ ...c, monto: soles(c.monto) })), por_origen: Object.fromEntries(porOrigen.map(([o, t2]) => [nombreOrigen[o], soles(t2)])), gastos: d.gastos.length, gastos_sin_comprobante: sinComp },
       bloques: [
         { tipo: 'kpis', items: [{ l: 'Presupuesto', v: soles(p.presupuesto) }, { l: 'Gastado', v: soles(p.gastado), c: 'peligro' }, { l: '% usado', v: p.porcentaje === null ? 'Sin dato' : `${p.porcentaje}%` }, { l: 'Sin comprobante', v: String(sinComp) }] },
         ...(d.categorias.length ? [barras(`Gasto por categoría · ${p.codigo}`, d.categorias.map((c) => [c.categoria, c.monto]))] : []),
@@ -223,7 +223,7 @@ const cotizaciones = {
     );
     const total = sumar(rows.map((r) => r.total));
     return {
-      modelo: { cantidad: rows.length, monto_total: total, por_estado: Object.fromEntries(['borrador', 'enviada', 'aceptada', 'rechazada', null].map((e) => [e ?? 'sin_estado', rows.filter((r) => r.estado === e).length])), ultimas: rows.slice(0, 10).map((r) => ({ ...r, total: monto(r.total) })) },
+      modelo: { cantidad: rows.length, monto_total: soles(total), por_estado: Object.fromEntries(['borrador', 'enviada', 'aceptada', 'rechazada', null].map((e) => [e ?? 'sin_estado', rows.filter((r) => r.estado === e).length])), ultimas: rows.slice(0, 10).map((r) => ({ ...r, total: soles(monto(r.total)) })) },
       bloques: [
         { tipo: 'kpis', items: [{ l: 'Cotizaciones', v: String(rows.length) }, { l: 'Monto total', v: soles(total), c: 'primario' }, { l: 'Aceptadas', v: String(rows.filter((r) => r.estado === 'aceptada').length) }] },
         ...(rows.length ? [tabla('Cotizaciones', [['N.º'], ['Cliente'], ['Estado'], ['Fecha'], ['Total', 'right']], rows.slice(0, 20).map((r) => [r.numero, r.cliente || 'Sin nombre', r.estado ?? 'Logística', fechaPe(r.fecha), soles(monto(r.total))]))] : []),
@@ -245,7 +245,7 @@ const comprobantes = {
     for (const c of emitidos) porCliente[c.cliente_nombre ?? 'Sin nombre'] = sumar([porCliente[c.cliente_nombre ?? 'Sin nombre'], c.totales.total]);
     const top = Object.entries(porCliente).sort((x, y) => aCentimos(y[1]) - aCentimos(x[1])).slice(0, 8);
     return {
-      modelo: { mes, comprobantes: todos.length, emitidos: emitidos.length, total_emitido_soles: total, por_cliente: Object.fromEntries(top) },
+      modelo: { mes, comprobantes: todos.length, emitidos: emitidos.length, total_emitido: soles(total), por_cliente: Object.fromEntries(top.map(([c, t2]) => [c, soles(t2)])) },
       bloques: [
         { tipo: 'kpis', items: [{ l: `Emitido ${mes}`, v: soles(total), c: 'primario' }, { l: 'Comprobantes emitidos', v: String(emitidos.length) }, { l: 'Ticket promedio', v: emitidos.length ? soles(deCentimos(Math.round(aCentimos(total) / emitidos.length))) : 'Sin dato' }] },
         ...(top.length ? [tabla(`Emitido por cliente · ${mes}`, [['Cliente'], ['Total', 'right']], top.map(([c, t]) => [c, soles(t)]), 0)] : []),
@@ -262,7 +262,7 @@ const caja_chica = {
     const r = await cajaChica({ mes: mesValido(a.mes) });
     if (!r.disponible) return { modelo: { error: 'La caja chica no está disponible en este servidor.' }, bloques: [] };
     return {
-      modelo: { mes: r.mes, saldo_total: r.saldo_total, saldos: r.saldos, ingresos_mes: r.ingresos_mes, egresos_mes: r.egresos_mes, gastos_mes: r.gastos_mes, sin_comprobante: r.sin_comprobante_mes, ultimos: r.movimientos.slice(0, 10).map((m) => ({ fecha: m.fecha, tipo: m.tipo, descripcion: m.descripcion, monto: m.monto, ciudad: m.ciudad })) },
+      modelo: { mes: r.mes, saldo_total: soles(r.saldo_total), saldos: r.saldos.map((s) => ({ ...s, saldo: soles(s.saldo) })), ingresos_mes: soles(r.ingresos_mes), egresos_mes: soles(r.egresos_mes), gastos_mes: r.gastos_mes, sin_comprobante: r.sin_comprobante_mes, ultimos: r.movimientos.slice(0, 10).map((m) => ({ fecha: m.fecha, tipo: m.tipo, descripcion: m.descripcion, monto: m.monto, ciudad: m.ciudad })) },
       bloques: [
         { tipo: 'kpis', items: [{ l: 'Saldo total', v: soles(r.saldo_total) }, { l: `Egresos ${r.mes}`, v: soles(r.egresos_mes), c: 'peligro' }, { l: 'Sin comprobante', v: String(r.sin_comprobante_mes) }] },
         tabla('Últimos movimientos de caja chica', [['Fecha'], ['Descripción'], ['Ciudad'], ['Monto', 'right']], r.movimientos.slice(0, 12).map((m) => [fechaPe(m.fecha), m.descripcion ?? 'Sin dato', m.ciudad, `${m.tipo === 'EGRESO' ? '−' : '+'} ${soles(m.monto)}`])),

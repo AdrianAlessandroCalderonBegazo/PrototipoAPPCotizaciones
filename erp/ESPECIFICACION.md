@@ -65,8 +65,8 @@ aprobación antes de empezar.**
 | 3 | **Cotización**: catálogo desde los productos actuales (se agregan marca, modelo, moneda, características, imágenes), importación CSV (mapear → vista previa → confirmar), imágenes por código, kits editables, cotizaciones (IGV 18 %, descuentos, estados), PDF en el servidor con el branding, WhatsApp sin API. **Se quita la cotización de Logística.** | ✅ |
 | 4 | **Inicio completo** (endpoint de resumen único) y **búsqueda global** Ctrl+K sobre datos. Notificaciones internas. | ✅ |
 | 5 | **Facturación SUNAT**: formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | ✅ |
-| 6 | **IA** (siguiente): Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | |
-| 7 | **IA en Finanzas 1**: consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | |
+| 6 | **IA**: Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | ✅ |
+| 7 | **IA en Finanzas 1** (siguiente): consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | |
 | 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | |
 | 9 | **Activos y control** (Victron VRM con caché) y Almacén ampliado. | |
 | 10 | **Cierre**: pruebas finales, revisión de seguridad, respaldos y documentación. | |
@@ -150,6 +150,30 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
   **Nunca pulsa «Emitir»** (lista de botones prohibidos) ni toca campos de clave. El ERP la ofrece para descargar (`/icr-autollenado-sunat.zip`) y
   detecta si está instalada. **Pendiente:** calibrarla con el portal SOL real (se probó con una página que imita el formulario).
 - No se maneja todavía: detracción, percepción, exportación, anticipos ni notas de crédito/débito (se hacen directo en SUNAT).
+
+## 4f. Cómo quedó la Fase 6 (IA)
+
+- **Regla del dueño:** la IA **solo lee**. Ningún dato del negocio cambia por la IA: lo que propone (una cotización) lo revisa y guarda una
+  persona («Abrir en Cotización» lleva la propuesta al editor; se guarda con «Crear borrador»).
+- **Servidor**: contenedor `ollama` en el docker-compose, sin puertos publicados (solo lo llama la API por la red interna). Modelos: `qwen3:4b`
+  (chat) y `bge-m3` (búsqueda por significado, multilingüe), descargados con `servidor/scripts/instalar_ia.sh`. Límite de memoria 9 GB (el VPS
+  tiene 16 GB). El modelo se cambia en ERP › Configuración › Inteligencia artificial (`servidor/api/src/ia/config.js`).
+- **Búsqueda de productos** (`ia/indice.js`): por palabras + por significado (vectores en `ia_embeddings`, en memoria; sin pgvector). Se
+  actualiza sola al cambiar el catálogo y al arrancar la API.
+- **Herramientas** (`ia/herramientas.js`), todas de solo lectura y con los permisos de quien pregunta (las que no puede usar ni se le muestran
+  al modelo, y si las pide igual, el servidor se niega): catálogo, kits, propuesta de cotización; finanzas del mes, movimientos, proyectos,
+  gastos de un proyecto, cotizaciones, comprobantes, caja chica y requerimientos. **Los totales los calcula el servidor**; las tablas,
+  indicadores y gráficos los arma el servidor (el modelo solo resume).
+- **Cotizador IA**: precios siempre del catálogo (USD → S/ con el TC de Configuración); lo que no está en el catálogo o los servicios quedan
+  «Sin dato» para que una persona ponga el precio. Contexto editable (reglas y notas de la empresa, vacías por defecto) y bloques que se pueden
+  apagar. Historial compartido con autor y fecha; eliminar consultas (borrado lógico + auditoría).
+- **Asistente IA**: historial privado de cada persona (las respuestas dependen de sus permisos). Respuestas con indicadores, gráficos, tablas y
+  fuentes; exportar a PDF (ventana de impresión). Consultas frecuentes.
+- **Streaming** (`text/event-stream`), estados: pensando (con lo que está consultando), lento, error con reintentar, modelo no disponible.
+- **Voz**: dictado del navegador (Web Speech API, Chrome/Edge); la transcripción se puede corregir antes de enviar. No se instaló Whisper en el
+  VPS (se puede agregar después si hace falta).
+- **Pendiente:** la búsqueda en documentos (RAG de archivos) del Asistente queda para cuando el ERP guarde documentos; la calidad real de las
+  respuestas se verá con `qwen3:4b` en el VPS (se probó con un Ollama simulado: `servidor/api/test/ollama_falso.js`).
 
 ## 5. Migración de datos
 
