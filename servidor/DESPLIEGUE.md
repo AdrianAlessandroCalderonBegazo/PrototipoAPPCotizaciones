@@ -222,6 +222,10 @@ Con la Fase 2 (proyectos y contabilidad), lo primero en el ERP es **Contabilidad
 Con la Fase 3 (cotización), la cotización **sale de Logística**: hay que subir también la web de Logística nueva (`./scripts/actualizar_web.sh
 /root/cotizador-web.zip`). En el ERP conviene revisar **Configuración › Parámetros** (tipo de cambio, para los productos en dólares) y
 **Datos de la empresa** (cuentas bancarias que salen en el PDF). La Fase 4 (Inicio, campana y búsqueda) solo agrega la migración `005_notificaciones.sql`.
+La Fase 5 (Facturación SUNAT) agrega `006_facturacion.sql`. Cada persona que factura instala la extensión una vez en su Chrome o Edge:
+ERP › Facturación SUNAT › «Instalar extensión» (descarga un zip) → descomprimir → `chrome://extensions` → Modo de desarrollador → Cargar
+descomprimida. Opcional: para que el RUC/DNI traiga solo la razón social, poner `CONSULTA_DOC_TOKEN=` en `.env` (token de decolecta.com u otro
+proveedor; ver `.env.example`) y `docker compose up -d`.
 
 ## 8. Respaldos (importante)
 

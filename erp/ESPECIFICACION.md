@@ -64,8 +64,8 @@ aprobación antes de empezar.**
 | 2 | **Proyectos y Contabilidad**: proyectos (nombre + presupuesto; activo / pausado con causa / finalizado; historial; fotos), cuenta principal (movimientos, saldo, flujo mensual, por categoría y proyecto, Excel/PDF), caja chica de solo lectura en el ERP, **enviar fondos a caja chica** (una transacción: egreso en la cuenta principal + ingreso en caja chica; saldo negativo solo con confirmación del Administrador; auditado). En Finanzas 1: categoría «Gasto de proyecto» con la lista de proyectos activos. | ✅ |
 | 3 | **Cotización**: catálogo desde los productos actuales (se agregan marca, modelo, moneda, características, imágenes), importación CSV (mapear → vista previa → confirmar), imágenes por código, kits editables, cotizaciones (IGV 18 %, descuentos, estados), PDF en el servidor con el branding, WhatsApp sin API. **Se quita la cotización de Logística.** | ✅ |
 | 4 | **Inicio completo** (endpoint de resumen único) y **búsqueda global** Ctrl+K sobre datos. Notificaciones internas. | ✅ |
-| 5 | **Facturación SUNAT** (siguiente): formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | |
-| 6 | **IA**: Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | |
+| 5 | **Facturación SUNAT**: formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | ✅ |
+| 6 | **IA** (siguiente): Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | |
 | 7 | **IA en Finanzas 1**: consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | |
 | 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | |
 | 9 | **Activos y control** (Victron VRM con caché) y Almacén ampliado. | |
@@ -91,8 +91,9 @@ aprobación antes de empezar.**
 - **Dinero**: los montos nuevos viajan como texto («1234.50») y se suman en céntimos (`servidor/api/src/dinero.js`, `erp/web/src/dinero.ts`).
 - **Fotos de recibos en el ERP**: `erp.` reenvía `/api-caja` a la API de Finanzas (misma sesión); quien no tiene acceso a caja chica ve el aviso.
 
-**Pregunta abierta:** la caja diaria de Finanzas 1 tiene columnas «Cta. cte.» (ingreso/salida). ¿Es la misma cuenta bancaria que la cuenta principal
-del ERP? Si lo es, en una fase próxima se pueden pasar esos movimientos a la cuenta principal automáticamente; por ahora siguen separados.
+**Caja diaria vs. cuenta principal (respondido por el dueño):** las columnas «Cta. cte.» de la caja diaria de Finanzas 1 son una cuenta de **Yape**;
+la caja diaria lleva el registro del efectivo y del Yape. **No es la cuenta principal.** Cuando el efectivo se deposita en el banco, ese depósito se
+registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «Depósito de caja diaria (efectivo)»).
 
 ## 4c. Cómo quedó la Fase 3 (Cotización)
 
@@ -126,6 +127,29 @@ del ERP? Si lo es, en una fase próxima se pueden pasar esos movimientos a la cu
 - **Búsqueda Ctrl+K** (`GET /api/buscar?q=`): proyectos, cotizaciones, productos, movimientos de la cuenta y requerimientos, sin importar tildes ni
   mayúsculas, solo en los módulos que el rol puede ver; además lleva a cualquier módulo o sección de Configuración.
 - No se muestran datos de Victron ni de SUNAT en el Inicio hasta que esas fases estén hechas (nunca datos de ejemplo).
+
+## 4e. Cómo quedó la Fase 5 (Facturación SUNAT)
+
+- **El ERP prepara, SUNAT emite**: el comprobante (boleta o factura) se arma en el ERP, la extensión de Chrome rellena el portal **SOL** y la persona
+  revisa y pulsa «Emitir» en SUNAT. **El número lo asigna SUNAT** (en SOL: series E001 para facturas y EB01 para boletas); se registra al «marcar
+  emitido». No hay correlativo propio. Migración `006_facturacion.sql`; lógica en `servidor/api/src/facturacion.js`, rutas en `rutas_f5.js`.
+- **Ítems con valor unitario sin IGV** (como lo pide SOL, hasta 4 decimales): valor de venta = cantidad × valor unitario; IGV 18 % por línea;
+  total = op. gravada + IGV. Misma cuenta en `erp/web/src/paginas/facturacion/calculo.ts`.
+- **Desde una cotización** (botón «Facturar» en una cotización aceptada, o «Importar desde cotización»): una línea con el sistema (para hitos o
+  adelantos, con %) o cada ítem; los precios con IGV se pasan a valor sin IGV y se avisa si quedan céntimos de diferencia por redondeo.
+- **Validaciones** (en pantalla y otra vez en el servidor antes de abrir SUNAT): factura con RUC válido (dígito verificador) y razón social; boleta
+  con DNI o RUC válido, obligatorio desde S/ 700; ítems completos; a crédito, cuotas que suman el total y vencen después de hoy.
+- **Estados**: borrador (se edita o elimina) → enviado a SUNAT (vuelve a borrador si SUNAT lo rechazó) → emitido (número + fecha; se adjuntan el PDF
+  y el XML de SUNAT, que se guardan en una carpeta privada y se descargan solo con sesión) → anulado (con motivo; en SUNAT se presenta la baja o la
+  nota de crédito). Todo queda en la auditoría.
+- **Consulta de RUC/DNI**: opcional con un proveedor externo (`CONSULTA_DOC_TOKEN`; por defecto decolecta.com). Sin token, el ERP propone el nombre
+  y la dirección de comprobantes o cotizaciones anteriores con ese documento; si no hay, se escribe a mano. Nunca se inventa.
+- **Extensión** (`extension/`, Manifest V3, solo permiso `storage`): recibe el comprobante por `window.postMessage` (nunca por la URL), lo guarda en
+  la memoria de la sesión del navegador (máx. 3 horas), abre SOL y muestra un panel con los pasos, «Rellenar cliente y pago», «Rellenar ítem N»
+  y los datos con botón «Copiar». Busca los campos por el texto que se ve junto a ellos; todo lo del portal está en `extension/selectores.js`.
+  **Nunca pulsa «Emitir»** (lista de botones prohibidos) ni toca campos de clave. El ERP la ofrece para descargar (`/icr-autollenado-sunat.zip`) y
+  detecta si está instalada. **Pendiente:** calibrarla con el portal SOL real (se probó con una página que imita el formulario).
+- No se maneja todavía: detracción, percepción, exportación, anticipos ni notas de crédito/débito (se hacen directo en SUNAT).
 
 ## 5. Migración de datos
 

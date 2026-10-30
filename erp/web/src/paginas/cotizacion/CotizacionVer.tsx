@@ -97,6 +97,7 @@ export function CotizacionVer() {
   const avisar = useAvisos();
   const { usuario } = useSesion();
   const editar = puede(usuario, "cotizacion", "completo");
+  const facturar = puede(usuario, "facturacion", "completo");
   const { datos: c, error, cargando, recargar } = useDatos(() => api<TCot>("GET", `/ventas/cotizaciones/${id}`), [id]);
   const empresa = useDatos(() => api<Empresa>("GET", "/empresa"));
   const [menu, setMenu] = useState(false);
@@ -177,6 +178,7 @@ export function CotizacionVer() {
             ) : null}
           </div>
         ) : null}
+        {facturar && c.estado === "aceptada" ? <button className="btn-secundario" onClick={() => navegar(`/facturacion/nuevo?cotizacion=${c.id}`)}><Icono n="receipt_long" t={18} />Facturar</button> : null}
         <button className="btn-secundario" disabled={trabajando} onClick={() => void abrirPdf(false)}><Icono n="print" t={18} />Imprimir</button>
         <button className="btn-secundario" disabled={trabajando} onClick={() => void abrirPdf(true)}><Icono n="picture_as_pdf" t={18} />Exportar PDF</button>
         <button className="btn-primario" onClick={() => setWa(true)}><Icono n="chat" t={18} />Enviar por WhatsApp</button>

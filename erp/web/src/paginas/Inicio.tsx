@@ -87,6 +87,7 @@ export function Inicio() {
   const rapidos = [
     d.permisos.proyectosCompleto && { l: "Nuevo proyecto", i: "add", go: () => navegar("/proyectos?nuevo=1"), primario: true },
     d.permisos.cotizacionCompleto && { l: "Nueva cotización", i: "request_quote", go: () => navegar("/cotizacion/nueva") },
+    d.permisos.facturacionCompleto && { l: "Nuevo comprobante", i: "receipt_long", go: () => navegar("/facturacion") },
     d.permisos.contabilidadCompleto && { l: "Enviar fondos", i: "savings", go: () => navegar("/contabilidad?accion=enviar") },
   ].filter(Boolean) as { l: string; i: string; go: () => void; primario?: boolean }[];
 
@@ -188,6 +189,14 @@ export function Inicio() {
             <div className="border-b border-border px-5 py-4"><div className="titulo-seccion">Alertas <span className="font-medium text-text-3">· {d.alertas.length}</span></div></div>
             {d.alertas.length ? d.alertas.slice(0, 8).map((a) => <AlertaFila key={a.clave} a={a} />) : <div className="flex items-center gap-2 px-5 py-4 text-[13px] text-success"><Icono n="check_circle" relleno />Todo en orden por ahora.</div>}
           </section>
+          {d.facturacion ? (
+            <section className="tarjeta p-5">
+              <div className="mb-3 flex items-center justify-between"><div className="titulo-seccion">Facturación SUNAT</div><Link to="/facturacion?tab=comprobantes" className="text-[13px]">Abrir</Link></div>
+              <div className="num text-[22px] font-extrabold">{dinero(d.facturacion.monto_mes)}</div>
+              <div className="text-[12.5px] text-text-3">emitido en {mes} · {d.facturacion.emitidos_mes} comprobante{d.facturacion.emitidos_mes === 1 ? "" : "s"}</div>
+              {d.facturacion.borradores || d.facturacion.enviados ? <div className="mt-2 text-[12.5px] text-text-2">{d.facturacion.borradores} borrador{d.facturacion.borradores === 1 ? "" : "es"} · {d.facturacion.enviados} abierto{d.facturacion.enviados === 1 ? "" : "s"} en SUNAT sin marcar</div> : null}
+            </section>
+          ) : null}
           {d.logistica ? (
             <section className="tarjeta p-5">
               <div className="mb-3 flex items-center justify-between"><div className="titulo-seccion">Almacén y logística</div><Link to="/almacen" className="text-[13px]">Abrir</Link></div>

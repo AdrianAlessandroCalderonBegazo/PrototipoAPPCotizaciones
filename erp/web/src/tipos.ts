@@ -120,7 +120,8 @@ export type Cotizacion = CotizacionResumen & {
 export type Alerta = { clave: string; nivel: "alta" | "media" | "info"; icono: string; titulo: string; origen: string; ruta: string | null; cta: string; leida?: boolean };
 export type InicioDatos = {
   fecha: string;
-  permisos: Record<"proyectos" | "contabilidad" | "cotizacion" | "logistica" | "caja_chica" | "configuracion" | "proyectosCompleto" | "cotizacionCompleto" | "contabilidadCompleto", boolean>;
+  permisos: Record<"proyectos" | "contabilidad" | "cotizacion" | "logistica" | "caja_chica" | "configuracion" | "facturacion" | "proyectosCompleto" | "cotizacionCompleto" | "contabilidadCompleto" | "facturacionCompleto", boolean>;
+  facturacion?: { emitidos_mes: number; monto_mes: string; borradores: number; enviados: number };
   finanzas?: { cuenta: Cuenta | null; cuentas: Cuenta[]; kpis: ResumenConta["kpis"]; caja: CajaChicaErp };
   proyectos?: { activos: Proyecto[]; pausados: (Proyecto & { pausado_desde: string | null })[]; total_activos: number; con_alerta: number; aviso_pct: number; limite_pct: number };
   cotizaciones?: { ultimas: { id: number; numero: string; cliente: string; sistema: string | null; estado: EstadoCot | null; origen: string; fecha: string; total: string | null }[]; del_mes: number; monto_mes: string; aceptadas_mes: number };
@@ -128,3 +129,27 @@ export type InicioDatos = {
   alertas: Alerta[];
 };
 export type GrupoBusqueda = { grupo: string; items: { titulo: string; detalle: string; icono: string; ruta: string }[] };
+
+// ---- Fase 5 ----
+export type TipoCpe = "factura" | "boleta";
+export type EstadoCpe = "borrador" | "enviado" | "emitido" | "anulado";
+export type UnidadCpe = "NIU" | "ZZ" | "MTR";
+export type ItemCpe = { descripcion: string; unidad: UnidadCpe; cantidad: string; valor_unitario: string; valor_venta?: string; igv?: string; importe?: string };
+export type CuotaCpe = { fecha: string; monto: string };
+export type TotalesCpe = { op_gravada: string; igv: string; total: string };
+export type Regla = { ok: boolean; texto: string };
+export type Comprobante = {
+  id: number; tipo: TipoCpe; estado: EstadoCpe; serie: string | null; correlativo: number | null; numero: string | null; fecha_emision: string | null;
+  moneda: "PEN" | "USD"; cliente_tipo_doc: "RUC" | "DNI" | null; cliente_doc: string | null; cliente_nombre: string | null; cliente_direccion: string | null;
+  cliente_fuente: "sunat" | "reniec" | "historial" | null; forma_pago: "contado" | "credito"; cuotas: CuotaCpe[]; items: ItemCpe[]; observacion: string | null;
+  totales: TotalesCpe; cotizacion_id: number | null; cotizacion_numero: string | null; proyecto_id: number | null; proyecto_nombre: string | null;
+  tiene_pdf: boolean; tiene_xml: boolean; motivo_anulacion: string | null; enviado_en: string | null; emitido_en: string | null; anulado_en: string | null;
+  creado_por: string | null; actualizado_por: string | null; version: number; creado_en: string; actualizado_en: string; validaciones?: Regla[];
+};
+export type ComprobanteFila = Omit<Comprobante, "items" | "cuotas"> & { n_items: number };
+export type ListaCpe = { comprobantes: ComprobanteFila[]; resumen: { mes: string; emitido_mes: string; emitidos_mes: number; por_estado: Record<EstadoCpe, number> } };
+export type Padron = { encontrado: boolean; configurado: boolean; fuente: "sunat" | "reniec" | "historial" | null; nombre: string | null; direccion: string | null; estado: string | null; condicion: string | null; aviso?: string | null; consultado_en?: string | null };
+export type PropuestaCpe = {
+  cotizacion: { id: number; numero: string; total: string; estado: string | null }; tipo: TipoCpe; cliente_doc: string | null; cliente_nombre: string | null;
+  cliente_direccion: string | null; proyecto_id: number | null; items: ItemCpe[]; totales: TotalesCpe; objetivo: string; diferencia: string;
+};
