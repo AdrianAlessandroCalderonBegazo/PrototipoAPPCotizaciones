@@ -4,9 +4,8 @@ import 'package:flutter/foundation.dart';
 /// mágicos" en cada pantalla que necesita cambiar de pestaña.
 class TabsApp {
   TabsApp._();
-  static const cotizacion = 0;
-  static const inicio = 1;
-  static const almacen = 2;
+  static const inicio = 0;
+  static const almacen = 1;
 }
 
 /// Controla qué pestaña está activa en MainTabsScreen. Al vivir en un

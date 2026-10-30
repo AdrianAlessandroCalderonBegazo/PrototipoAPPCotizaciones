@@ -11,10 +11,8 @@ import '../widgets/encabezado_curvo.dart';
 import 'checklists_anteriores_screen.dart';
 import 'config_lista_screen.dart';
 import 'config_maletas_screen.dart';
-import 'config_productos_screen.dart';
 import 'config_screen.dart';
 import 'herramientas_screen.dart';
-import 'historial_cotizaciones_screen.dart';
 import 'requerimientos_screen.dart';
 import '../models/checklist_categoria.dart';
 
@@ -78,30 +76,6 @@ class ConfiguracionScreen extends StatelessWidget {
                       },
                     ),
                   ],
-                  const GrupoConfig('COTIZACIÓN'),
-                  OpcionConfig(
-                    icono: Icons.inventory_2_outlined,
-                    color: BrandColors.cian,
-                    titulo: 'Productos de cotización',
-                    subtitulo:
-                        'Agregar productos y cambiar su precio, costo, categoría, foto y demás datos',
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ConfigProductosScreen())),
-                  ),
-                  OpcionConfig(
-                    icono: Icons.receipt_long_outlined,
-                    color: BrandColors.cian,
-                    titulo: 'Historial de cotizaciones',
-                    subtitulo:
-                        'Todas las cotizaciones: ver, compartir o eliminar',
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                const HistorialCotizacionesScreen())),
-                  ),
                   const GrupoConfig('ALMACÉN'),
                   OpcionConfig(
                     icono: Icons.work_outline_rounded,

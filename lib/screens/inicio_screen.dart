@@ -7,7 +7,6 @@ import '../theme/app_text_styles.dart';
 import '../theme/brand_colors.dart';
 import '../widgets/almacen_widgets.dart';
 import '../widgets/animated_pressable.dart';
-import '../widgets/brand_icon.dart';
 import '../widgets/fade_slide_in.dart';
 import 'configuracion_screen.dart';
 import 'herramientas_detalle_screen.dart';
@@ -17,7 +16,7 @@ import 'requerimientos_screen.dart';
 
 /// Pestaña "Inicio": tablero con lo que requiere atención — requerimientos
 /// urgentes o pendientes de aprobación, aprobados que falta alistar, listos
-/// para entrega, salidas de herramientas por confirmar y las que no han vuelto — más los accesos a Almacén y Cotización.
+/// para entrega, salidas de herramientas por confirmar y las que no han vuelto — más los accesos a Almacén y a las salidas de herramientas (la cotización pasó al ERP).
 /// No hay sistema de usuarios en la app, así que el saludo es genérico.
 class InicioScreen extends StatelessWidget {
   const InicioScreen({super.key});
@@ -149,11 +148,11 @@ class InicioScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _TarjetaAcceso(
-                        titulo: 'COTIZACIÓN',
-                        subtitulo: 'Productos, voz e historial',
-                        icono: const BrandIcon('documents.svg', color: Colors.white, size: 26),
+                        titulo: 'HERRAMIENTAS',
+                        subtitulo: 'Salidas, checklists y devoluciones',
+                        icono: const Icon(Icons.construction_rounded, color: Colors.white, size: 26),
                         colores: const [BrandColors.menta, BrandColors.cian],
-                        onTap: () => navegacion.irA(TabsApp.cotizacion),
+                        onTap: () => Navigator.of(context).push(rutaHerramientas()),
                       ),
                     ),
                   ],

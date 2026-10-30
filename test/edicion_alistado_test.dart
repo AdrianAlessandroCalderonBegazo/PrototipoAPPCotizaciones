@@ -5,13 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:cotizador_icr/models/checklist_categoria.dart';
 import 'package:cotizador_icr/models/checklist_herramientas.dart';
-import 'package:cotizador_icr/models/cotizacion_guardada.dart';
 import 'package:cotizador_icr/models/requerimiento.dart';
 import 'package:cotizador_icr/screens/alistar_requerimiento_screen.dart';
 import 'package:cotizador_icr/screens/editar_almacen_screen.dart';
-import 'package:cotizador_icr/screens/editar_cotizacion_screen.dart';
 import 'package:cotizador_icr/services/db_helper.dart';
-import 'package:cotizador_icr/services/pdf_service.dart';
 import 'package:cotizador_icr/state/almacen_state.dart';
 import 'package:cotizador_icr/utils/seguridad.dart';
 
@@ -300,54 +297,5 @@ void main() {
       return DbHelper.instance.getItemsCatalogoChecklist(TipoChecklist.materiales);
     });
     expect(lista!.any((i) => i.nombre == 'Cinta aislante' && i.precio == 4.5), isTrue);
-  });
-
-  testWidgets('editar cotización: agregar un producto nuevo y regenerar el PDF', (tester) async {
-    tester.view.physicalSize = const Size(800, 3000);
-    tester.view.devicePixelRatio = 2;
-    final pdf = '${dir.path}/cotizacion_S00007.pdf';
-    final c = CotizacionGuardada(
-      id: 1, numero: 'S00007', cliente: 'Cliente SAC', fecha: DateTime(2026, 10, 10), total: 200, archivoPdf: pdf,
-      items: [ItemCotizacionGuardado(nombre: 'Panel 100W', cantidad: 2, precioUnitario: 100)],
-    );
-    CotizacionGuardada? editada;
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: TextButton(
-            onPressed: () async => editada = await Navigator.push<CotizacionGuardada>(
-              context,
-              MaterialPageRoute(builder: (_) => EditarCotizacionScreen(cotizacion: c)),
-            ),
-            child: const Text('abrir'),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('abrir'));
-    await esperar(tester);
-
-    await tester.enterText(find.widgetWithText(TextField, 'Cliente'), 'Cliente SAC Perú');
-    await tester.tap(find.text('Agregar producto'));
-    await esperar(tester);
-    await tester.tap(find.text('Producto nuevo'));
-    await esperar(tester);
-    await tester.enterText(find.widgetWithText(TextField, 'Nombre *'), 'cable especial');
-    await tester.enterText(find.widgetWithText(TextField, 'Precio S/ *'), '50');
-    await tester.tap(find.text('AGREGAR'));
-    await esperar(tester);
-    expect(find.text('S/ 250.00'), findsWidgets); // 200 + 50 en el total
-
-    await tester.tap(find.text('GUARDAR'));
-    await esperar(tester);
-    expect(editada, isNotNull);
-    expect(editada!.total, 250);
-    expect(editada!.cliente, 'Cliente SAC Perú');
-    expect(editada!.items.map((i) => i.nombre), ['Panel 100W', 'Cable especial']);
-
-    final ruta = await tester.runAsync(() => PdfService.regenerarCotizacion(editada!));
-    expect(ruta, pdf);
-    expect(File(pdf).existsSync(), isTrue);
-    expect(File(pdf).lengthSync(), greaterThan(1000));
   });
 }

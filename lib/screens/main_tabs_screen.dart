@@ -2,16 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/notificaciones_service.dart';
 import '../state/almacen_state.dart';
-import '../state/cotizacion_state.dart';
 import '../state/navegacion_state.dart';
 import '../widgets/brand_icon.dart';
 import 'almacen_screen.dart';
 import 'inicio_screen.dart';
-import 'productos_screen.dart';
 import 'requerimiento_detalle_screen.dart';
 
-/// Barra de navegación de abajo con las tres pestañas: Cotización a la
-/// izquierda, Inicio al centro y Almacén a la derecha. Usa IndexedStack para
+/// Barra de navegación de abajo con dos pestañas: Inicio y Almacén (la
+/// cotización pasó al ERP). Usa IndexedStack para
 /// que cada pestaña conserve su estado (lo marcado, lo buscado) al cambiar
 /// de una a otra. El índice activo vive en NavegacionState para que una
 /// pantalla empujada en profundidad pueda pedir "volver al inicio".
@@ -24,7 +22,6 @@ class MainTabsScreen extends StatefulWidget {
 
 class _MainTabsScreenState extends State<MainTabsScreen> {
   static const _pantallas = [
-    ProductosScreen(),
     InicioScreen(),
     AlmacenScreen(),
   ];
@@ -54,7 +51,6 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final totalItems = context.watch<CotizacionState>().totalItems;
     final porAprobar = context.watch<AlmacenState>().pendientesAprobacion.length;
     final indice = context.watch<NavegacionState>().indice;
     final colorInactivo = Theme.of(context).colorScheme.onSurfaceVariant;
@@ -65,15 +61,6 @@ class _MainTabsScreenState extends State<MainTabsScreen> {
         selectedIndex: indice,
         onDestinationSelected: (i) => context.read<NavegacionState>().irA(i),
         destinations: [
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: totalItems > 0,
-              label: Text('$totalItems'),
-              child: BrandIcon('documents.svg', color: colorInactivo),
-            ),
-            selectedIcon: const BrandIcon('documents.svg', color: Colors.white),
-            label: 'Cotización',
-          ),
           NavigationDestination(
             icon: BrandIcon('home_add.svg', color: colorInactivo),
             selectedIcon: const BrandIcon('home_add.svg', color: Colors.white),
