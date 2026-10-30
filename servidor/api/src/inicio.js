@@ -16,13 +16,14 @@ const sumarDias = (f, n) => {
 };
 
 async function permisosDe(u) {
-  const [proyectos, contabilidad, cotizacion, logistica, almacen, cajaChicaN, configuracion] = await Promise.all(
-    ['proyectos', 'contabilidad', 'cotizacion', 'logistica', 'almacen', 'caja_chica', 'configuracion'].map((m) => tieneNivel(u, m)),
+  const [proyectos, contabilidad, cotizacion, logistica, almacen, cajaChicaN, configuracion, facturacion] = await Promise.all(
+    ['proyectos', 'contabilidad', 'cotizacion', 'logistica', 'almacen', 'caja_chica', 'configuracion', 'facturacion'].map((m) => tieneNivel(u, m)),
   );
+  const facturacionCompleto = await tieneNivel(u, 'facturacion', 'completo');
   const proyectosCompleto = await tieneNivel(u, 'proyectos', 'completo');
   const cotizacionCompleto = await tieneNivel(u, 'cotizacion', 'completo');
   const contabilidadCompleto = await tieneNivel(u, 'contabilidad', 'completo');
-  return { proyectos, contabilidad, cotizacion, logistica: logistica || almacen, caja_chica: cajaChicaN || contabilidad, configuracion, proyectosCompleto, cotizacionCompleto, contabilidadCompleto };
+  return { proyectos, contabilidad, cotizacion, logistica: logistica || almacen, caja_chica: cajaChicaN || contabilidad, configuracion, facturacion, proyectosCompleto, cotizacionCompleto, contabilidadCompleto, facturacionCompleto };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -94,6 +95,21 @@ export async function calcularAlertas(u, datos = {}) {
     if (rows[0].pendientes) out.push({ clave: `req_pendientes:${rows[0].pendientes}`, nivel: 'media', icono: 'pending_actions', titulo: `${rows[0].pendientes} requerimiento${rows[0].pendientes === 1 ? '' : 's'} por aprobar.`, origen: 'Logística', ruta: '/almacen', cta: 'Ver almacén' });
   }
 
+  if (p.facturacion) {
+    // Abiertos en SUNAT hace más de un día y sin registrar el número: o se emitió y falta marcarlo, o quedó a medias.
+    const { rows } = await consulta(
+      `SELECT id, tipo, cliente_nombre FROM comprobantes WHERE estado = 'enviado' AND enviado_en < (now() AT TIME ZONE 'America/Lima') - interval '1 day' ORDER BY enviado_en LIMIT 5`,
+    );
+    for (const c of rows) out.push({ clave: `cpe_enviado:${c.id}`, nivel: 'media', icono: 'receipt_long', titulo: `La ${c.tipo} para ${c.cliente_nombre ?? 'cliente sin nombre'} se abrió en SUNAT pero no se marcó como emitida.`, origen: 'Facturación', ruta: `/facturacion/${c.id}`, cta: 'Revisar' });
+    if (p.cotizacion) {
+      const { rows: ac } = await consulta(
+        `SELECT q.id, q.numero, q.cliente FROM cotizaciones q WHERE q.estado = 'aceptada' AND q.respondida_en > (now() AT TIME ZONE 'America/Lima') - interval '60 days'
+            AND NOT EXISTS (SELECT 1 FROM comprobantes c WHERE c.cotizacion_id = q.id AND c.estado <> 'anulado') ORDER BY q.respondida_en LIMIT 5`,
+      );
+      for (const q of ac) out.push({ clave: `cot_sin_facturar:${q.id}`, nivel: 'info', icono: 'request_quote', titulo: `La cotización ${q.numero} (${q.cliente}) fue aceptada y aún no tiene comprobante.`, origen: 'Facturación', ruta: `/facturacion/nuevo?cotizacion=${q.id}`, cta: 'Facturar' });
+    }
+  }
+
   const orden = { alta: 0, media: 1, info: 2 };
   return out.sort((a, b) => orden[a.nivel] - orden[b.nivel]);
 }
@@ -154,6 +170,14 @@ export async function inicio(u) {
     );
     out.cotizaciones = { ultimas: rows, del_mes: n[0].mes, monto_mes: n[0].monto, aceptadas_mes: n[0].aceptadas };
   }
+  if (p.facturacion) {
+    const { rows } = await consulta(
+      `SELECT count(*) FILTER (WHERE estado = 'emitido')::int AS emitidos, COALESCE(SUM(total) FILTER (WHERE estado = 'emitido'), 0)::text AS monto
+         FROM comprobantes WHERE moneda = 'PEN' AND fecha_emision >= date_trunc('month', now() AT TIME ZONE 'America/Lima')::date`,
+    );
+    const { rows: p2 } = await consulta(`SELECT count(*) FILTER (WHERE estado = 'borrador')::int AS borradores, count(*) FILTER (WHERE estado = 'enviado')::int AS enviados FROM comprobantes`);
+    out.facturacion = { emitidos_mes: rows[0].emitidos, monto_mes: monto(rows[0].monto), ...p2[0] };
+  }
   if (p.logistica) {
     const { rows } = await consulta(
       `SELECT count(*) FILTER (WHERE estado = 'pendiente')::int AS por_aprobar, count(*) FILTER (WHERE estado IN ('aprobado','listo'))::int AS por_entregar,
@@ -208,6 +232,15 @@ export async function buscar(u, qIn) {
       [like],
     );
     if (rows.length) grupos.push({ grupo: 'Movimientos de la cuenta', items: rows.map((r) => ({ titulo: r.concepto, detalle: [r.fecha.split('-').reverse().join('/'), `${r.tipo === 'ingreso' ? '+' : '−'} ${monto(r.monto, r.moneda)}`, r.documento].filter(Boolean).join(' · '), icono: 'account_balance', ruta: `/contabilidad?q=${encodeURIComponent(r.concepto)}` })) });
+  }
+  if (p.facturacion) {
+    const { rows } = await consulta(
+      `SELECT id, tipo, estado, serie, correlativo, cliente_nombre, cliente_doc, total::text AS total FROM comprobantes
+        WHERE ${SIN_TILDES("coalesce(cliente_nombre,'')")} LIKE $1 OR coalesce(cliente_doc,'') LIKE $1 OR lower(coalesce(serie || '-' || correlativo, '')) LIKE $1
+           OR lower(coalesce(serie || '-' || lpad(correlativo::text, 8, '0'), '')) LIKE $1 ORDER BY id DESC LIMIT 5`,
+      [like],
+    );
+    if (rows.length) grupos.push({ grupo: 'Comprobantes', items: rows.map((r) => ({ titulo: `${r.serie ? `${r.serie}-${String(r.correlativo).padStart(8, '0')}` : `${r.tipo === 'factura' ? 'Factura' : 'Boleta'} (${r.estado})`} · ${r.cliente_nombre ?? 'Cliente sin nombre'}`, detalle: [r.tipo, r.estado, r.cliente_doc, monto(r.total)].filter(Boolean).join(' · '), icono: 'receipt_long', ruta: `/facturacion/${r.id}` })) });
   }
   if (p.logistica) {
     const { rows } = await consulta(`SELECT id, numero, obra, estado FROM requerimientos WHERE lower(numero) LIKE $1 OR ${SIN_TILDES('obra')} LIKE $1 OR ${SIN_TILDES('solicitante')} LIKE $1 ORDER BY fecha_creacion DESC LIMIT 5`, [like]);

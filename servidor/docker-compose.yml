@@ -41,6 +41,9 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:-}
       OLLAMA_MODELO: ${OLLAMA_MODELO:-qwen3:4b}
       VRM_TOKEN: ${VRM_TOKEN:-}
+      CONSULTA_DOC_TOKEN: ${CONSULTA_DOC_TOKEN:-}
+      CONSULTA_RUC_URL: ${CONSULTA_RUC_URL:-}
+      CONSULTA_DNI_URL: ${CONSULTA_DNI_URL:-}
       TZ: America/Lima
     volumes:
       - uploads:/app/uploads

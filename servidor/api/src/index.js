@@ -11,6 +11,8 @@ export function crearApp() {
   app.use(express.json({ limit: '5mb' }));
 
   app.use('/api', crearRutas());
+  // La carpeta «privado» (PDF y XML de SUNAT) no se sirve: se descarga por /api con sesión y permiso.
+  app.use('/uploads/privado', (_req, res) => res.status(404).end());
   app.use('/uploads', express.static(carpetaSubidas, { maxAge: '7d', immutable: true }));
 
   // La vista general (portal) la puede servir la misma API.

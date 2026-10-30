@@ -10,7 +10,7 @@ import { falla } from './errores.js';
 import { sqlGastos } from './proyectos.js';
 
 export const CATEGORIAS = {
-  ingreso: ['Cobro a cliente', 'Adelanto de cliente', 'Préstamo / aporte', 'Devolución', 'Otros ingresos'],
+  ingreso: ['Cobro a cliente', 'Adelanto de cliente', 'Depósito de caja diaria (efectivo)', 'Préstamo / aporte', 'Devolución', 'Otros ingresos'],
   egreso: ['Proveedores / equipos', 'Materiales', 'Planilla', 'Impuestos', 'Servicios', 'Alquiler', 'Fletes', 'Comisiones bancarias', 'Gasto de proyecto', 'Envío a caja chica', 'Otros egresos'],
 };
 export const CIUDADES = { AQP: 'Arequipa', MOQ: 'Moquegua' };

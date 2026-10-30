@@ -141,6 +141,7 @@ const INTEGRACIONES = [
   { clave: 'finanzas', nombre: 'PWA Finanzas', descripcion: 'Caja chica: movimientos, cierres y gastos de proyecto.' },
   { clave: 'ollama', nombre: 'Ollama (IA local)', descripcion: 'Modelo de IA en el VPS para el Cotizador IA y el Asistente.' },
   { clave: 'vrm', nombre: 'Victron VRM', descripcion: 'Datos de los sistemas Victron para Activos y control.' },
+  { clave: 'padron', nombre: 'Consulta RUC / DNI', descripcion: 'Trae la razón social y dirección al escribir un RUC o DNI en Facturación (servicio externo con token, opcional).' },
   { clave: 'sunat', nombre: 'Extensión SUNAT', descripcion: 'Extensión de Chrome que rellena el portal SOL. Se detecta en el navegador.' },
 ];
 
@@ -172,6 +173,12 @@ export async function probarIntegracion(clave, env = process.env) {
       if (!env.VRM_TOKEN) return { estado: 'no_configurado', detalle: 'Falta VRM_TOKEN (se configura en la fase de Activos y control).', probado_en: ahora };
       const r = await conTiempo('https://vrmapi.victronenergy.com/v2/users/me', { headers: { 'X-Authorization': `Token ${env.VRM_TOKEN}` } }, 8000);
       return r.ok ? { estado: 'conectado', detalle: 'El token de VRM es válido.', probado_en: ahora } : { estado: 'error', detalle: `VRM respondió ${r.status}.`, probado_en: ahora };
+    }
+    if (clave === 'padron') {
+      if (!env.CONSULTA_DOC_TOKEN) return { estado: 'no_configurado', detalle: 'Falta CONSULTA_DOC_TOKEN. Sin él, Facturación usa los datos ya registrados en el ERP y el nombre se escribe a mano.', probado_en: ahora };
+      const url = (env.CONSULTA_RUC_URL || 'https://api.decolecta.com/v1/sunat/ruc?numero={numero}').replace('{numero}', '20605309489');
+      const r = await conTiempo(url, { headers: { Authorization: `Bearer ${env.CONSULTA_DOC_TOKEN}`, Accept: 'application/json' } }, 8000);
+      return r.ok ? { estado: 'conectado', detalle: 'El servicio de consulta responde.', probado_en: ahora } : { estado: 'error', detalle: `El servicio de consulta respondió ${r.status}.`, probado_en: ahora };
     }
     if (clave === 'sunat') return { estado: 'en_navegador', detalle: 'La extensión se detecta en el navegador de cada persona.', probado_en: ahora };
     throw falla(404, 'No existe esa integración.');
