@@ -8,6 +8,7 @@ import { Contabilidad } from "./paginas/contabilidad/Contabilidad";
 import { AsistenteIA } from "./paginas/ia/AsistenteIA";
 import { CotizadorIA } from "./paginas/ia/CotizadorIA";
 import { ComprobanteVer, Facturacion } from "./paginas/facturacion/Facturacion";
+import { Comparador } from "./paginas/comparador/Comparador";
 import { FlujoComprobante } from "./paginas/facturacion/Flujo";
 import { Cotizacion } from "./paginas/cotizacion/Cotizacion";
 import { CotizacionEditor } from "./paginas/cotizacion/CotizacionEditor";
@@ -20,7 +21,7 @@ import { Login } from "./paginas/Login";
 import { Pendiente, SinAcceso } from "./paginas/Pendiente";
 import { ProveedorSesion, useSesion } from "./sesion";
 
-const CONSTRUIDOS: Partial<Record<EntradaMenu["clave"], () => JSX.Element | null>> = { inicio: Inicio, almacen: Almacen, proyectos: Proyectos, contabilidad: Contabilidad, cotizacion: Cotizacion, facturacion: Facturacion, cotizador_ia: CotizadorIA, asistente_ia: AsistenteIA };
+const CONSTRUIDOS: Partial<Record<EntradaMenu["clave"], () => JSX.Element | null>> = { inicio: Inicio, almacen: Almacen, proyectos: Proyectos, contabilidad: Contabilidad, cotizacion: Cotizacion, facturacion: Facturacion, cotizador_ia: CotizadorIA, asistente_ia: AsistenteIA, comparador: Comparador };
 
 function Rutas() {
   const { usuario, cargando } = useSesion();

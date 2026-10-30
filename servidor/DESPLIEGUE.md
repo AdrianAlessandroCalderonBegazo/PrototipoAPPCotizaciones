@@ -247,6 +247,15 @@ respuesta tarda de unos segundos a ~1 minuto (la primera del día más, porque c
 Usa la misma IA del VPS (no se instala nada nuevo). Se publica subiendo el servidor (trae el Caddyfile con `/api/ia` en `finanzas.`) y la web
 de Finanzas: `./scripts/actualizar_finanzas.sh /root/finanzas_web.zip` y `docker compose restart caddy`.
 
+## 7h. Comparador de proveedores (Fase 8)
+
+Se publica subiendo el servidor y el ERP como siempre (la migración `009_comparador.sql` se aplica sola al arrancar la API). Luego, en el ERP:
+1. Comparador › **Proveedores** › «Nuevo proveedor» (Tienda Solar, Electronic Siblings, Dartel…).
+2. Para Tienda Solar y Dartel: «+ Agregar página», pega la dirección de su tienda (por ejemplo `https://www.tienda.pe`), elige moneda y si
+   los precios incluyen IGV, guarda y pulsa **Leer ahora**. Si sale «Error», el registro dice por qué (dirección mal escrita, la tienda no permite
+   leerla, no muestra precios…). No hace falta abrir puertos ni instalar nada.
+3. Para listas en archivo: **Cargar lista**, elige el proveedor, la fecha, si incluye IGV y el archivo (Excel, CSV o PDF).
+
 ## 8. Respaldos (importante)
 
 ```bash

@@ -67,7 +67,10 @@ function cliente(origen) {
       const falta = Math.max(PAUSA(), robots.pausa) - (Date.now() - ultimo);
       if (ultimo && falta > 0) await espera(falta);
       ultimo = Date.now();
-      const r = await fetch(u.href, { headers: { 'User-Agent': UA, Accept: json ? 'application/json' : 'text/html,application/xml' }, signal: AbortSignal.timeout(20_000), redirect: 'follow' });
+      const r = await fetch(u.href, { headers: { 'User-Agent': UA, Accept: json ? 'application/json' : 'text/html,application/xml' }, signal: AbortSignal.timeout(20_000), redirect: 'follow' })
+        .catch((e) => {
+          throw new Error(e?.name === 'TimeoutError' ? `${u.host} no respondió a tiempo (20 s).` : `No se pudo conectar con ${u.host}: revisa la dirección o si la tienda está en línea.`);
+        });
       if (!r.ok) throw Object.assign(new Error(`${u.pathname} respondió ${r.status}`), { estado: r.status });
       return json ? r.json() : r.text();
     },

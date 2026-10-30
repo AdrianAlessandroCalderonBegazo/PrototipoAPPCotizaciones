@@ -124,7 +124,7 @@ export async function listarProveedores() {
             (SELECT max(c.creado_en)::text FROM proveedor_cargas c WHERE c.proveedor_id = p.id) AS ultima_carga,
             (SELECT max(c.fecha_lista)::text FROM proveedor_cargas c WHERE c.proveedor_id = p.id) AS ultima_fecha_lista,
             COALESCE((SELECT json_agg(json_build_object('id', f.id, 'tipo', f.tipo, 'url', f.url, 'adaptador', f.adaptador, 'frecuencia_dias', f.frecuencia_dias, 'activa', f.activa,
-                     'ultima_ejecucion', f.ultima_ejecucion, 'ultimo_estado', f.ultimo_estado, 'ultimo_mensaje', f.ultimo_mensaje, 'ultimos_leidos', f.ultimos_leidos) ORDER BY f.id)
+                     'config', CASE WHEN f.tipo = 'web' THEN f.config END, 'ultima_ejecucion', f.ultima_ejecucion, 'ultimo_estado', f.ultimo_estado, 'ultimo_mensaje', f.ultimo_mensaje, 'ultimos_leidos', f.ultimos_leidos) ORDER BY f.id)
                        FROM proveedor_fuentes f WHERE f.proveedor_id = p.id), '[]'::json) AS fuentes
        FROM proveedores p ORDER BY p.activo DESC, p.nombre`,
   );
@@ -504,8 +504,10 @@ export async function buscar(q = {}) {
     const max = leerPrecio(q.pmax);
     if (max) res = res.filter((r) => r.total !== null && aCentimos(r.total) <= aCentimos(max.valor));
   }
-  // Orden: costo total (los que no se pueden pasar a soles van al final)
-  res.sort((a, b) => (a.total === null) - (b.total === null) || (a.total !== null && b.total !== null ? aCentimos(a.total) - aCentimos(b.total) : 0));
+  // Orden: primero el mismo producto (exactas), luego alternativas; dentro de cada grupo por costo total (sin soles al final)
+  const grupo = { exacta: 0, alternativa: 1, distinta: 2 };
+  res.sort((a, b) => grupo[a.coincidencia] - grupo[b.coincidencia] || (a.total === null) - (b.total === null)
+    || (a.total !== null && b.total !== null ? Number(aCentimos(a.total) - aCentimos(b.total)) : 0));
   const exactasVigentes = res.filter((r) => r.coincidencia === 'exacta' && r.vigente && r.total !== null);
   const mejor = exactasVigentes[0] ?? null;
   const siguiente = exactasVigentes[1] ?? null;

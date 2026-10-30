@@ -172,3 +172,20 @@ export type MensajeIa = {
   por_voz: boolean; autor_nombre: string | null; modelo: string | null; duracion_ms: number | null; creado_en: string;
 };
 export type ContextoIa = { reglas: string | null; notas: string | null; usar_catalogo: boolean; usar_precios: boolean; usar_reglas: boolean; usar_notas: boolean; catalogo: { total: number; indexados: number; actualizado_en: string | null }; tipo_cambio: { valor: string | null; fecha: string | null }; igv_pct: number };
+
+// ---- Fase 8 ----
+export type FuenteProv = { id: number; tipo: "archivo" | "web"; url: string | null; adaptador: string; frecuencia_dias: number; activa: boolean; config: { moneda?: "PEN" | "USD"; incluye_igv?: boolean } | null; ultima_ejecucion: string | null; ultimo_estado: "ok" | "error" | "parcial" | null; ultimo_mensaje: string | null; ultimos_leidos: number | null };
+export type Proveedor = {
+  id: number; nombre: string; ruc: string | null; contacto: string | null; telefono: string | null; correo: string | null; web: string | null; moneda: "PEN" | "USD" | null;
+  costo_envio: string | null; notas: string | null; activo: boolean; productos: number; ultima_carga: string | null; ultima_fecha_lista: string | null; fuentes: FuenteProv[];
+};
+export type ResultadoProv = {
+  id: number; proveedor_id: number; proveedor: string; codigo: string | null; descripcion: string; marca: string | null; modelo: string | null; categoria: string | null; unidad: string | null;
+  caracteristicas: string | null; disponibilidad: string | null; url: string | null; precio: string; moneda: "PEN" | "USD"; incluye_igv: boolean; origen: "archivo" | "web"; origen_detalle: string | null;
+  fecha_lista: string; obtenido_en: string; tc_usado: string | null; costo_envio: string | null; coincidencia: "exacta" | "alternativa" | "distinta"; decidida: boolean; vigente: boolean;
+  con_igv: string; soles: string | null; total: string | null; extra_conocido?: boolean; puntaje: number;
+};
+export type BusquedaProv = { referencia: { id: number; descripcion: string; proveedor: string } | null; tipo_cambio: string | null; vigencia_dias: number; interpretado: string[]; mejor: { id: number; ahorro: string | null } | null; resultados: ResultadoProv[]; proveedores: number };
+export type DetalleProv = { producto: ResultadoProv; mismos: ResultadoProv[]; historial: { producto_id: number; proveedor: string; precio: string; moneda: "PEN" | "USD"; incluye_igv: boolean; origen: string; origen_detalle: string | null; fecha_lista: string; obtenido_en: string; tc_usado: string | null }[]; serie: Record<string, Record<string, string>>; tipo_cambio: string | null };
+export type FilaImport = { fila: number; codigo: string | null; descripcion: string | null; marca: string | null; modelo: string | null; categoria: string | null; precio?: string; moneda?: string; estado: "nuevo" | "cambio" | "igual" | "error" | "duplicado"; mensaje?: string; aviso?: string | null; precio_anterior?: string | null };
+export type RespuestaImport = { confirmado: boolean; carga_id?: number; resumen: { filas: number; nuevos: number; cambiaron: number; sin_cambios: number; errores: number; duplicados: number; sin_dato: Record<string, number> }; filas: FilaImport[]; duplicados: { descripcion: string; filas: number[]; precios: string[] }[] };

@@ -67,8 +67,8 @@ aprobación antes de empezar.**
 | 5 | **Facturación SUNAT**: formulario (boleta/factura, DNI/RUC validados, IGV en el servidor), estados, extensión de Chrome. | ✅ |
 | 6 | **IA**: Ollama + embeddings, streaming, health check; Cotizador IA y Asistente IA con herramientas de solo lectura. | ✅ |
 | 7 | **IA en Finanzas 1**: consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | ✅ |
-| 8 | **Comparador de proveedores** (siguiente): proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | |
-| 9 | **Activos y control** (Victron VRM con caché) y Almacén ampliado. | |
+| 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | ✅ |
+| 9 | **Activos y control** (siguiente): Victron VRM con caché y Almacén ampliado. | |
 | 10 | **Cierre**: pruebas finales, revisión de seguridad, respaldos y documentación. | |
 
 ## 4b. Cómo quedó la Fase 2
@@ -188,6 +188,28 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
 - **Sin duplicados al reintentar:** cada fila y gasto lleva un id creado en el teléfono y el servidor lo guarda con «insertar o actualizar»;
   enviar a caja chica reintentado no se duplica (pruebas en `finanzas/api/src/api.test.ts` y `fin.sync.test.ts`). Finanzas 1 es una app en línea:
   sin internet no acepta cambios nuevos (decisión ya tomada), así que no hace falta una cola sin conexión.
+
+## 4h. Cómo quedó la Fase 8 (Comparador de proveedores)
+
+- Menú Comercial › **Comparador de proveedores**, 4 pestañas: **Buscador**, **Proveedores**, **Cargar lista**, **Historial de precios**.
+  Permiso `comparador`: Ventas completo, Contabilidad lectura, Técnico ninguno (editable en Configuración).
+- **Proveedores**: datos (RUC validado, contacto, moneda habitual, costo de envío: vacío = «Sin dato», 0 = incluido) y sus **páginas web**.
+- **Listas** (Excel .xlsx, CSV o PDF con texto): el archivo se lee **en el navegador** (`erp/web/src/paginas/comparador/lector.ts`; el PDF con
+  pdfjs-dist, columnas por la fila de títulos). Pasos: proveedor, fecha, moneda y **si incluye IGV (obligatorio)** → columnas (se recuerdan por
+  proveedor; los títulos de sección como «CARGADORES» pasan a categoría) → revisión (nuevos, cambiaron, sin cambios, repetidos, errores, «Sin dato»)
+  → confirmar. Probado con la lista real de Electronic Siblings (PDF, 183 filas sin errores) y el Excel de ejemplo.
+- **Historial «solo agregar»**: `proveedor_precios` tiene un disparador que impide cambiar o borrar precios; cada precio guarda origen
+  (archivo · fila o dirección web), fecha de la lista, cuándo se obtuvo y el **tipo de cambio usado**.
+- **Páginas web** (`servidor/api/src/comparador_web.js`): tiendas WooCommerce, Shopify o páginas con datos de producto (JSON-LD), detección
+  automática; respeta robots.txt, espera entre páginas (1,5 s), máximo 400 páginas por lectura, solo direcciones públicas. Se leen solas cada N días
+  (revisión cada 30 min) o con «Leer ahora»; cada lectura queda en un registro con su error si falla. Tienda Solar y Dartel: falta poner su dirección.
+- **Buscador**: compara en **soles con IGV** (US$ × tipo de cambio de Configuración), costo total = precio + envío conocido («+» si es «Sin dato»).
+  Primero el mismo producto («exacta», por modelo/código normalizados) y luego alternativas; la **mejor opción** es la exacta vigente más barata.
+  Una persona puede marcar «es el mismo» / «no es el mismo» y se respeta siempre (`proveedor_equivalencias`). Precio desactualizado = más viejo
+  que la vigencia de precios de Configuración.
+- **Historial de precios**: gráfico mensual por proveedor (colores fijos validados para daltonismo, también en modo oscuro) y tabla con el origen.
+- El **Asistente IA** puede consultar estos precios (herramienta `precios_proveedores`, solo lectura).
+- Rutas: `servidor/api/src/rutas_f8.js`; lógica: `comparador.js`; migración `009_comparador.sql`; pruebas `test/f8.test.js` y `erp/web/src/comparador.test.ts`.
 
 ## 5. Migración de datos
 
