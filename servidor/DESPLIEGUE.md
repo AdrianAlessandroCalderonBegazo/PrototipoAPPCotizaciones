@@ -4,7 +4,7 @@ Qué queda funcionando al terminar:
 
 | Dirección | Qué es |
 |---|---|
-| `https://erp.TUDOMINIO` | **ICR ERP**: la app central (Inicio, Almacén, Configuración: usuarios, matriz de permisos, empresa, parámetros, integraciones y auditoría; el resto de módulos se agrega por fases). |
+| `https://erp.TUDOMINIO` | **ICR ERP**: la app central (Inicio, Proyectos, Almacén, Activos y control, Cotización, Cotizador IA, Comparador, Contabilidad, Facturación SUNAT, Asistente IA y Configuración). Manual por rol: `erp/MANUAL.md`. |
 | `https://cotizador.TUDOMINIO` | **Logística** (antes Cotizador; PWA instalable en el celular). Varias personas, una sola base de datos. |
 | `https://app.TUDOMINIO` | Vista general: cotizaciones, requerimientos y salidas de herramientas de todos, en tablas simples. También administra usuarios. |
 | `https://api.TUDOMINIO` | La API sola (para el APK u otras apps que se hagan después). |
@@ -13,6 +13,55 @@ Qué queda funcionando al terminar:
 
 Todo corre en el mismo VPS con Docker: **PostgreSQL** (la base, una sola para todo), la **API** del cotizador, la **API de Finanzas** y **Caddy** (que pone el HTTPS solo).
 La base de datos no se expone a internet: solo la API habla con ella.
+
+## 0. Guía rápida: subir la versión final completa (Fases 1 a 10)
+
+Para un VPS que ya tenía una versión anterior funcionando. Si es un VPS nuevo, sigue primero las secciones 1 a 5 y vuelve aquí.
+Esta secuencia se ensayó completa con los mismos contenedores (base desde cero, las 10 migraciones, Caddy, respaldo y restauración).
+
+**Archivos** (súbelos a `/root/` con `scp archivo root@IP:/root/`):
+
+| Zip | Qué es | Script que lo publica |
+|---|---|---|
+| `servidor_icr.zip` | API, base de datos (migraciones), Caddyfile, scripts y API de Finanzas | `unzip` + `docker compose up -d --build` |
+| `erp-web.zip` | ICR ERP | `./scripts/actualizar_erp.sh` |
+| `finanzas_web.zip` | Finanzas 1 | `./scripts/actualizar_finanzas.sh` |
+| `finanzas2_web.zip` | Finanzas 2 (prueba) | `./scripts/actualizar_finanzas2.sh` |
+| `cotizador-web.zip` | Logística (GitHub › Actions › **Build web**) | `./scripts/actualizar_web.sh` |
+
+```bash
+# 1) Respaldo de lo que hay ahora (si algo sale mal, se vuelve a esto)
+cd /opt/icr/servidor && ./scripts/respaldo.sh
+
+# 2) Servidor nuevo (no toca .env, respaldos ni las carpetas web)
+cd /opt/icr && unzip -o /root/servidor_icr.zip -d /opt/icr
+cd /opt/icr/servidor && chmod +x scripts/*.sh
+docker compose up -d --build
+docker compose ps                                   # api, db, finanzas-api, finanzas2-api, caddy y ollama: "Up"/"healthy"
+docker compose logs api | grep -E "Migración|escuchando"   # aplica las que falten (hasta 010_almacen_activos.sql)
+
+# 3) Las páginas web
+./scripts/actualizar_erp.sh /root/erp-web.zip
+./scripts/actualizar_finanzas.sh /root/finanzas_web.zip
+./scripts/actualizar_finanzas2.sh /root/finanzas2_web.zip
+./scripts/actualizar_web.sh /root/cotizador-web.zip
+docker compose restart caddy                        # toma el Caddyfile nuevo (los bloques de Relay siguen al final)
+
+# 4) IA (solo la primera vez; descarga ~3.7 GB)
+./scripts/instalar_ia.sh && docker compose restart api
+
+# 5) Probar que el respaldo se puede restaurar (no toca los datos reales)
+./scripts/probar_respaldo.sh
+```
+
+**Revisar después** (5 minutos): abre `https://erp.TUDOMINIO` con `admin`:
+- Inicio no debe mostrar avisos de **Seguridad** (si los muestra, cambia esas claves).
+- Configuración › Integraciones › «Probar» en cada una; Configuración › Inteligencia artificial: «En línea».
+- Abre `cotizador.`, `finanzas.`, `finanza.` y `app.`: entran con el mismo usuario.
+- Comprueba que Relay sigue respondiendo (`atleta.` y `coach.adriancalderonbegazo.site`).
+
+**Volver atrás** si algo falla: cada web guarda la versión anterior en `CARPETA.anterior` (por ejemplo `erp-web.anterior`; se copia de vuelta
+con `cp -a erp-web.anterior/. erp-web/`), y la base se restaura con `./scripts/restaurar.sh respaldos/cotizador_FECHA.sql.gz` (el del paso 1).
 
 ---
 
@@ -274,7 +323,13 @@ cd /opt/icr/servidor
 
 Cada respaldo tiene tres archivos: la **base** (`cotizador_*.sql.gz`, con todo: cotizaciones, almacén y finanzas), las **fotos de la app** (`fotos_*.tar.gz`) y las **fotos de recibos de Finanzas** (`fotos_finanzas_*.tar.gz`).
 Las fotos no están dentro de la base, por eso van aparte. Si algo falla, el script termina con error y lo dice.
-Para restaurar fotos: `./scripts/restaurar_fotos.sh respaldos/fotos_finanzas_FECHA.tar.gz finanzas` (o `api` para las de la app).
+Para restaurar fotos: `./scripts/restaurar_fotos.sh respaldos/fotos_finanzas_FECHA.tar.gz finanzas` (o `api` para las de la app, `finanzas2` para las de Finanzas 2).
+
+**Probar un respaldo sin tocar nada** (hazlo una vez al mes): `./scripts/probar_respaldo.sh` restaura el más reciente en una base aparte,
+compara las filas de las tablas principales con la base actual, revisa las fotos y borra la base de prueba. Debe terminar en «RESPALDO OK».
+
+**Restaurar de verdad** (solo si se perdieron datos): `./scripts/restaurar.sh respaldos/cotizador_FECHA.sql.gz` (o `finanzas2_FECHA.sql.gz`).
+Pide escribir SI, guarda antes una copia de lo actual (`respaldos/antes_de_restaurar_…`), detiene las APIs que usan esa base y las vuelve a arrancar.
 
 Prográmalo cada noche:
 
@@ -286,7 +341,7 @@ crontab -e
 
 Guarda 14 días en el mismo VPS. **No basta**: copia también a otro proveedor (Backblaze B2, Google Drive...):
 instala `rclone`, corre `rclone config` una vez y define `RCLONE_DESTINO=nombre:carpeta` en el cron.
-Una vez al mes **prueba restaurar** en otro lado (`./scripts/restaurar.sh archivo.sql.gz`).
+Una vez al mes corre `./scripts/probar_respaldo.sh` (arriba).
 
 ## 9. Actualizar el servidor
 

@@ -19,7 +19,7 @@ const MAX_BINARIO = 11 * 1024 * 1024;
 
 /** Inicio de sesión contra la API principal (la que maneja los usuarios): devuelve el token y los datos de la persona. */
 export type LoginPrincipal = {
-  entrar(usuario: string, clave: string): Promise<{ token: string; usuario: { usuario: string; nombre: string; rol: string; niveles?: Record<string, string> } }>;
+  entrar(usuario: string, clave: string, ip?: string): Promise<{ token: string; usuario: { usuario: string; nombre: string; rol: string; niveles?: Record<string, string> } }>;
   salir(token: string): Promise<void>;
 };
 
@@ -122,7 +122,9 @@ export function crearServidor(opts: { auth: Auth; svc: Servicio; fin?: Fin; modo
         const usuario = String(cuerpo.usuario ?? cuerpo.email ?? "").trim();
         const clave = String(cuerpo.clave ?? cuerpo.password ?? "");
         if (!usuario || !clave) throw new ApiError(400, "DATOS_INVALIDOS", "Ingresa tu usuario y tu clave.");
-        const r = await loginPrincipal.entrar(usuario, clave);
+        // La IP de quien entra (la pone Caddy): así la API principal limita los intentos fallidos por persona y no bloquea a todos.
+        const ip = String(req.headers["x-forwarded-for"] ?? "").split(",").pop()?.trim() || req.socket.remoteAddress || undefined;
+        const r = await loginPrincipal.entrar(usuario, clave, ip);
         const quien = { rol: r.usuario.rol, nivelCaja: r.usuario.niveles?.caja_chica as Usuario["nivelCaja"] };
         if (!permisos.acceso(quien)) {
           await loginPrincipal.salir(r.token).catch(() => {});

@@ -4,10 +4,11 @@ import type { LoginPrincipal } from "./server";
 
 export function loginHttp(base: string, fetchFn: typeof fetch = fetch): LoginPrincipal {
   return {
-    async entrar(usuario, clave) {
+    async entrar(usuario, clave, ip) {
       let res: Response;
       try {
-        res = await fetchFn(`${base}/api/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usuario, clave }) });
+        const headers: Record<string, string> = { "Content-Type": "application/json", ...(ip ? { "X-Forwarded-For": ip } : {}) };
+        res = await fetchFn(`${base}/api/login`, { method: "POST", headers, body: JSON.stringify({ usuario, clave }) });
       } catch {
         throw new ApiError(503, "SERVIDOR_NO_DISPONIBLE", "No se pudo comunicar con el servidor de usuarios. Intenta de nuevo.");
       }

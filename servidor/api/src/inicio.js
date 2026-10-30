@@ -8,6 +8,7 @@ import { aCentimos } from './dinero.js';
 import { tieneNivel } from './permisos.js';
 import { listarProyectos } from './proyectos.js';
 import { garantiasPorVencer } from './activos.js';
+import { clavesDeFabrica } from './auth.js';
 import { articulosBajos } from './almacen.js';
 
 const hoyLima = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
@@ -39,6 +40,12 @@ export async function calcularAlertas(u, datos = {}) {
   const param = await leerParametros();
   const hoy = hoyLima();
   const out = [];
+
+  if (u.rol === 'admin') {
+    const f = await clavesDeFabrica();
+    if (f.usuarios.length) out.push({ clave: `clave_admin:${f.usuarios.join(',')}`, nivel: 'alta', icono: 'lock_open', titulo: `${f.usuarios.join(', ')} todavía usa una clave de ejemplo: cámbiala.`, origen: 'Seguridad', ruta: '/configuracion/usuarios', cta: 'Cambiar' });
+    if (f.edicion) out.push({ clave: 'clave_edicion:1234', nivel: 'media', icono: 'key', titulo: 'La clave para editar registros (Logística) sigue siendo 1234: cámbiala en la vista general (app.), sección Usuarios, botón «Cambiar clave de edición».', origen: 'Seguridad', ruta: null, cta: null });
+  }
 
   if (p.proyectos) {
     const lista = datos.proyectos ?? (await listarProyectos({})).proyectos;

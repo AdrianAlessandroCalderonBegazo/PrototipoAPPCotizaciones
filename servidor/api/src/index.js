@@ -6,7 +6,9 @@ import { carpetaSubidas, crearRutas } from './rutas.js';
 
 export function crearApp() {
   const app = express();
-  app.set('trust proxy', true);
+  // Solo se confía en los saltos internos (Caddy y la API de Finanzas en la red de Docker): la IP real de cada persona
+  // sirve para limitar los intentos fallidos de ingreso sin que alguien la pueda falsificar desde internet.
+  app.set('trust proxy', 'loopback, uniquelocal');
   app.disable('x-powered-by');
   app.use(express.json({ limit: '5mb' }));
 

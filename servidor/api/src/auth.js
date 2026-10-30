@@ -120,6 +120,7 @@ export async function cambiarClaveEdicion(nueva) {
     [hash],
   );
   permisosEdicion.clear();
+  olvidarClavesDeFabrica();
 }
 
 /** ¿Esta petición trae un permiso de edición vigente de este usuario? */
@@ -175,11 +176,34 @@ export async function actualizarUsuario(id, { nombre, clave, rol, activo }, yoId
   );
   if (rows.length === 0) throw falla(404, 'No existe ese usuario.');
   if (activo === false || clave !== undefined) await consulta('DELETE FROM sesiones WHERE usuario_id = $1', [id]);
+  olvidarClavesDeFabrica();
   return rows[0];
 }
 
-export async function cambiarMiClave(usuario, actual, nueva) {
+/** Cambia la clave propia y cierra las demás sesiones (por si alguien más la conocía); la sesión actual sigue abierta. */
+export async function cambiarMiClave(usuario, actual, nueva, tokenActual = null) {
   if (!(await bcrypt.compare(String(actual ?? ''), usuario.clave_hash))) throw falla(403, 'La clave actual no es correcta.');
   if (String(nueva ?? '').length < 6) throw falla(400, 'La clave nueva debe tener al menos 6 caracteres.');
   await consulta('UPDATE usuarios SET clave_hash = $2 WHERE id = $1', [usuario.id, await bcrypt.hash(String(nueva), 10)]);
+  await consulta('DELETE FROM sesiones WHERE usuario_id = $1 AND token IS DISTINCT FROM $2', [usuario.id, tokenActual]);
+  olvidarClavesDeFabrica();
 }
+
+// ---------------------------------------------------------------------------
+// Claves de fábrica (Fase 10): el Inicio del administrador avisa si siguen sin cambiarse.
+// ---------------------------------------------------------------------------
+const DE_FABRICA = ['cambia-esta-clave', 'admin', 'admin123', '123456', 'clave-admin-123'];
+let clavesCache = { en: 0, datos: null };
+
+/** { edicion: true si la clave de edición sigue siendo 1234, usuarios: [nombres de administradores con una clave de ejemplo] }. */
+export async function clavesDeFabrica() {
+  if (clavesCache.datos && Date.now() - clavesCache.en < 10 * 60 * 1000) return clavesCache.datos;
+  const { rows: ce } = await consulta("SELECT valor FROM configuracion WHERE clave = 'clave_edicion'");
+  const edicion = !!ce[0] && (await bcrypt.compare('1234', ce[0].valor));
+  const { rows } = await consulta("SELECT usuario, clave_hash FROM usuarios WHERE activo AND rol = 'admin'");
+  const usuarios = [];
+  for (const u of rows) for (const c of DE_FABRICA) if (await bcrypt.compare(c, u.clave_hash)) { usuarios.push(u.usuario); break; }
+  clavesCache = { en: Date.now(), datos: { edicion, usuarios } };
+  return clavesCache.datos;
+}
+export const olvidarClavesDeFabrica = () => void (clavesCache = { en: 0, datos: null });

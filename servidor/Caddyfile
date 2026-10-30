@@ -8,6 +8,9 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+		# Ninguna otra página puede mostrar nuestras apps dentro de un recuadro (evita engaños tipo «clickjacking»)
+		Content-Security-Policy "frame-ancestors 'self'"
+		X-Frame-Options SAMEORIGIN
 		-Server
 	}
 }

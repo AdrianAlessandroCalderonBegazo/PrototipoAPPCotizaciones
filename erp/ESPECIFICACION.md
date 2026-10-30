@@ -69,7 +69,7 @@ aprobación antes de empezar.**
 | 7 | **IA en Finanzas 1**: consultas sobre gastos (solo lectura, respetando permisos). El OCR actual se mantiene. | ✅ |
 | 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | ✅ |
 | 9 | **Activos y control** (sistemas instalados, equipos y garantías, portal Victron VRM embebido) y **Almacén** con inventario y kardex. | ✅ |
-| 10 | **Cierre** (siguiente): pruebas finales, revisión de seguridad, respaldos y documentación. | |
+| 10 | **Cierre**: pruebas finales, revisión de seguridad, respaldos y documentación. | ✅ |
 
 ## 4b. Cómo quedó la Fase 2
 
@@ -231,6 +231,24 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
 - Permisos: el **Técnico** pasa a «completo» en Almacén y Activos (registra movimientos y equipos; antes «lectura» y «completo» hacían lo mismo
   aquí). Ventas y Contabilidad: lectura. Editable en Configuración.
 - Rutas: `servidor/api/src/rutas_f9.js`; lógica: `almacen.js`, `activos.js`; migración `010_almacen_activos.sql`; pruebas `test/f9.test.js`.
+
+## 4j. Cómo quedó la Fase 10 (cierre)
+
+- **Pruebas finales**: API 113, ERP 24, API de Finanzas 76, Finanzas 1 y 2 (todas pasan). **Ensayo del despliegue** con los mismos contenedores
+  (Docker Compose): base desde cero con las 10 migraciones, los 5 servicios sanos, Caddy validado y sirviendo cada subdominio, respaldo,
+  `probar_respaldo.sh` y `restaurar.sh` de punta a punta.
+- **Seguridad** (revisión y arreglos):
+  - Límite de intentos de ingreso **por persona**: la API confía solo en los saltos internos (`trust proxy` = loopback y redes privadas) y
+    Finanzas reenvía la IP real; antes, 10 claves malas en Finanzas bloqueaban a todos los usuarios de Finanzas por 15 minutos.
+  - Cambiar la clave propia **cierra las demás sesiones** (al cambiarla el administrador o desactivar a alguien, ya se cerraban todas).
+  - Aviso en Inicio del administrador si un administrador usa una **clave de ejemplo** o si la **clave de edición** sigue en 1234.
+  - Cabeceras contra *clickjacking* en todos los subdominios (`frame-ancestors 'self'`, `X-Frame-Options`).
+  - `react-router-dom` 6.30.6 (corrige avisos de redirección abierta). Lo que queda en `npm audit`: `exceljs → uuid` (moderado, la función
+    afectada no se usa) y herramientas de compilación de Expo (no van en la web publicada).
+  - Ya estaban: claves con bcrypt, sesiones de 30 días que se pueden cerrar, permisos validados en el servidor, base y Ollama sin puertos públicos,
+    archivos privados de SUNAT solo con sesión, secretos solo en `.env`, auditoría de cambios.
+- **Respaldos**: `probar_respaldo.sh` (nuevo), `restaurar.sh` (detiene las 3 APIs, copia previa, también Finanzas 2), `restaurar_fotos.sh` (Finanzas 2).
+- **Manual por rol**: `erp/MANUAL.md`. Guía rápida de despliegue: `servidor/DESPLIEGUE.md` § 0.
 
 ## 5. Migración de datos
 

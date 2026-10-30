@@ -72,7 +72,7 @@ export function crearRutas() {
   });
   r.get('/yo', async (req, res) => res.json(await conPermisos(req.usuario)));
   r.post('/yo/clave', async (req, res) => {
-    await cambiarMiClave(req.usuario, req.body?.actual, req.body?.nueva);
+    await cambiarMiClave(req.usuario, req.body?.actual, req.body?.nueva, req.token);
     res.json({ ok: true });
   });
 
