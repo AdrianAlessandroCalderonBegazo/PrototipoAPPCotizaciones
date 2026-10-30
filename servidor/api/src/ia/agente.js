@@ -25,7 +25,7 @@ export async function listarConversaciones(modulo, u, { q, autor } = {}) {
         AND ($3::text IS NULL OR translate(lower(c.titulo), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower($3), 'áéíóúüñ', 'aeiouun') || '%')
         AND ($4::text IS NULL OR c.autor_nombre = $4)
       ORDER BY c.actualizado_en DESC LIMIT 300`,
-    [modulo, modulo === 'asistente' ? u.id : null, q ? String(q).slice(0, 80) : null, autor ? String(autor).slice(0, 120) : null],
+    [modulo, modulo !== 'cotizador' ? u.id : null, q ? String(q).slice(0, 80) : null, autor ? String(autor).slice(0, 120) : null],
   );
   return rows;
 }
@@ -33,8 +33,8 @@ export async function listarConversaciones(modulo, u, { q, autor } = {}) {
 async function conversacion(id, modulo, u) {
   const { rows } = await consulta(`SELECT ${COLS} FROM ia_conversaciones c WHERE c.id = $1 AND c.modulo = $2 AND c.eliminado_en IS NULL`, [id, modulo]);
   const c = rows[0];
-  // Las del Asistente son privadas: cada respuesta depende de los permisos de quien preguntó.
-  if (!c || (modulo === 'asistente' && c.autor_id !== u.id)) throw falla(404, 'No existe esa conversación.');
+  // Las del Asistente y las de Finanzas son privadas: cada respuesta depende de los permisos de quien preguntó.
+  if (!c || (modulo !== 'cotizador' && c.autor_id !== u.id)) throw falla(404, 'No existe esa conversación.');
   return c;
 }
 
@@ -55,7 +55,7 @@ export async function eliminarConversaciones(ids, modulo, u) {
     `UPDATE ia_conversaciones SET eliminado_en = now() AT TIME ZONE 'America/Lima', eliminado_por = $3
       WHERE id = ANY($1::int[]) AND modulo = $2 AND eliminado_en IS NULL AND ($4::int IS NULL OR autor_id = $4)
       RETURNING id, titulo, autor_nombre`,
-    [lista, modulo, u.nombre, modulo === 'asistente' ? u.id : null],
+    [lista, modulo, u.nombre, modulo !== 'cotizador' ? u.id : null],
   );
   return rows;
 }
@@ -115,6 +115,22 @@ async function sistemaAsistente(nombres) {
   ].join('\n');
 }
 
+function sistemaFinanzas(nombres) {
+  const hoy = hoyLima();
+  const dia = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][new Date(`${hoy}T12:00:00Z`).getUTCDay()];
+  return [
+    `Eres el asistente de la app Finanzas de la empresa (caja diaria y caja chica de Arequipa = AQP y Moquegua = MOQ). Hoy es ${dia} ${hoy}.`,
+    'Respondes en español, en 1 a 4 frases cortas: lo leen en el celular.',
+    'REGLAS QUE NUNCA ROMPES:',
+    '- Toda cifra sale de una herramienta. Nunca inventes ni sumes: los totales ya vienen hechos (con S/), cópialos tal cual.',
+    '- Solo puedes LEER. No registras, corriges ni borras gastos: si te lo piden, explica que se hace en Caja diaria o Caja chica.',
+    '- «esta semana» = periodo semana; «este mes» = mes; «ayer», «hoy», «el mes pasado» = mes_anterior. Si dicen una ciudad, usa ciudad.',
+    '- «Cta. cte.» de la caja diaria es Yape. «Recibo» o «comprobante» de caja chica = la foto adjunta.',
+    '- Las tablas y gráficos se muestran solos debajo de tu respuesta: no dibujes tablas.',
+    `Herramientas disponibles: ${nombres.join(', ') || 'ninguna'}.`,
+  ].join('\n');
+}
+
 // ---------------------------------------------------------------------------------------------
 // Preguntar (streaming)
 // ---------------------------------------------------------------------------------------------
@@ -145,7 +161,7 @@ export async function preguntar({ modulo, conversacionId, texto: textoIn, porVoz
   const lista = await herramientasDe(modulo, u);
   const inicio = Date.now();
   const mensajes = [
-    { role: 'system', content: modulo === 'cotizador' ? await sistemaCotizador([texto, ...previos.filter((m) => m.rol === 'usuario').slice(0, 2).map((m) => m.texto)].join(' ')) : await sistemaAsistente(lista.map((h) => h.nombre)) },
+    { role: 'system', content: modulo === 'cotizador' ? await sistemaCotizador([texto, ...previos.filter((m) => m.rol === 'usuario').slice(0, 2).map((m) => m.texto)].join(' ')) : modulo === 'finanzas' ? sistemaFinanzas(lista.map((h) => h.nombre)) : await sistemaAsistente(lista.map((h) => h.nombre)) },
     ...previos.reverse().map((m) => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.texto })),
     { role: 'user', content: texto },
   ];

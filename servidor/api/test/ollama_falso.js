@@ -47,6 +47,23 @@ export function iniciarOllamaFalso(puerto = 0, { modelos = ['qwen3:4b', 'bge-m3:
         const p = r.productos?.[0];
         llamar('proponer_cotizacion', { titulo: 'Propuesta de prueba', items: [...(p ? [{ codigo: p.codigo, cantidad: 2 }] : []), { codigo: 'NO-EXISTE-9', cantidad: 1 }, { descripcion: 'Instalación y puesta en marcha', cantidad: 1 }] });
       } else await decir('Propuse dos equipos del catálogo y la instalación; el precio de la instalación lo pone una persona.');
+    } else if (/app Finanzas/.test(sistema)) {
+      if (/borra|registra/i.test(usuario)) await decir('Solo puedo leer: los gastos se registran o corrigen en Caja diaria o Caja chica.');
+      else if (ultimo.role === 'user') {
+        const periodo = /semana/i.test(usuario) ? 'semana' : /hoy/i.test(usuario) ? 'hoy' : /mes pasado/i.test(usuario) ? 'mes_anterior' : 'mes';
+        const ciudad = /moquegua/i.test(usuario) ? 'MOQ' : /arequipa/i.test(usuario) ? 'AQP' : undefined;
+        if (/saldo/i.test(usuario)) llamar('saldos_caja', {});
+        else if (/proyecto/i.test(usuario)) llamar('gastos_proyecto_caja', { proyecto: usuario.replace(/^.*proyecto\s+/i, '').replace(/[?¿.]/g, '').trim() });
+        else if (/diaria|yape/i.test(usuario)) llamar('caja_diaria', { periodo, ciudad });
+        else llamar('gastos_caja_chica', { periodo, ciudad, sin_recibo: /recibo|comprobante/i.test(usuario) || undefined, categoria: /movilidad/i.test(usuario) ? 'movilidad' : undefined });
+      } else if (ultimo.role === 'tool') {
+        const d = JSON.parse(ultimo.content);
+        await decir(d.error ? `No pude consultar eso: ${d.error}`
+          : d.total_gastado ? `${d.periodo[0].toUpperCase()}${d.periodo.slice(1)} se gastó **${d.total_gastado}** en ${d.cantidad} gastos (${d.sin_recibo} sin foto del recibo).`
+          : d.saldos ? `Saldos: ${d.saldos.map((x) => `${x.ciudad} caja chica ${x.caja_chica}`).join('; ')}.`
+          : d.gastado_desde_cajas ? `En ${d.proyecto} se gastó ${d.gastado_desde_cajas} desde las cajas.`
+          : d.ingresos_efectivo ? `${d.periodo}: entraron ${d.ingresos_efectivo} en efectivo y por Yape ${d.yape_ingresos}.` : 'Aquí tienes los datos.');
+      } else await decir('Listo.');
     } else {
       if (/borra/i.test(usuario)) await decir('No puedo borrar ni cambiar datos: solo leo. Hazlo en el módulo correspondiente.');
       else if (ultimo.role === 'user') {

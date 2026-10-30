@@ -287,9 +287,185 @@ const requerimientos = {
   },
 };
 
+// ---------------------------------------------------------------------------------------------
+// IA de la app de Finanzas (Fase 7): caja diaria (efectivo y Yape) y caja chica, de Arequipa (AQP) y Moquegua (MOQ)
+// ---------------------------------------------------------------------------------------------
+
+const CIUDAD = { AQP: 'Arequipa', MOQ: 'Moquegua' };
+const ciudadDe = (v) => {
+  const t = normalizar(v ?? '').trim();
+  if (!t) return null;
+  if (t.startsWith('aq') || t.startsWith('areq')) return 'AQP';
+  if (t.startsWith('mo')) return 'MOQ';
+  return null;
+};
+const isoMas = (iso, n) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+/** Período pedido → { desde, hasta, texto }. Por defecto, el mes actual. */
+export function rangoDe(a = {}, hoy = hoyLima()) {
+  const f = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? v : null);
+  let desde;
+  let hasta = hoy;
+  if (f(a.desde) || f(a.hasta)) {
+    desde = f(a.desde) ?? f(a.hasta);
+    hasta = f(a.hasta) ?? hoy;
+  } else {
+    const dia = (new Date(`${hoy}T12:00:00Z`).getUTCDay() + 6) % 7; // 0 = lunes
+    switch (a.periodo) {
+      case 'hoy': desde = hoy; break;
+      case 'ayer': desde = hasta = isoMas(hoy, -1); break;
+      case 'semana': desde = isoMas(hoy, -dia); break;
+      case 'semana_anterior': desde = isoMas(hoy, -dia - 7); hasta = isoMas(hoy, -dia - 1); break;
+      case 'mes_anterior': { const ini = `${hoy.slice(0, 7)}-01`; hasta = isoMas(ini, -1); desde = `${hasta.slice(0, 7)}-01`; break; }
+      default: desde = `${hoy.slice(0, 7)}-01`;
+    }
+  }
+  if (desde > hasta) [desde, hasta] = [hasta, desde];
+  return { desde, hasta, texto: desde === hasta ? `el ${fechaPe(desde)}` : `del ${fechaPe(desde)} al ${fechaPe(hasta)}` };
+}
+const PERIODO = { type: 'string', enum: ['hoy', 'ayer', 'semana', 'semana_anterior', 'mes', 'mes_anterior'], description: 'Período (por defecto «mes», el mes actual). «semana» = desde el lunes.' };
+const FECHAS = { desde: { type: 'string', description: 'AAAA-MM-DD (si se pide un rango exacto)' }, hasta: { type: 'string', description: 'AAAA-MM-DD' } };
+const CIUDAD_P = { type: 'string', enum: ['AQP', 'MOQ'], description: 'Ciudad: AQP = Arequipa, MOQ = Moquegua. Vacío = ambas.' };
+const contar = (lista, k) => {
+  const r = {};
+  for (const x of lista) r[x[k] ?? 'Sin categoría'] = sumar([r[x[k] ?? 'Sin categoría'], x.monto]);
+  return Object.entries(r).sort((a, b) => aCentimos(b[1]) - aCentimos(a[1]));
+};
+
+const gastos_caja_chica = {
+  nombre: 'gastos_caja_chica', fuente: 'Caja chica', modulo: ['caja_chica', 'contabilidad'],
+  descripcion: 'Gastos (egresos) de la caja chica en un período: total ya sumado, por categoría y ciudad, cuántos no tienen foto del recibo y la lista. Filtros: ciudad, categoría, persona, texto, solo sin recibo.',
+  parametros: { type: 'object', properties: { periodo: PERIODO, ...FECHAS, ciudad: CIUDAD_P, categoria: { type: 'string', description: 'Ej. movilidad, alimentación, materiales' }, persona: { type: 'string' }, texto: { type: 'string' }, sin_recibo: { type: 'boolean', description: 'Solo los que no tienen foto del recibo' } } },
+  async ejecutar(a) {
+    const r = rangoDe(a);
+    const ciudad = ciudadDe(a.ciudad);
+    const { rows } = await consulta(
+      `SELECT m.ciudad, m.fecha::text AS fecha, m.descripcion, m.persona, COALESCE(m.subcategoria, m.categoria) AS categoria, m.categoria AS grupo, m.monto::text AS monto,
+              m.proyecto_nombre, EXISTS (SELECT 1 FROM caja_adjunto x WHERE x.movimiento_id = m.id) AS con_recibo
+         FROM caja_chica_mov m
+        WHERE m.tipo = 'EGRESO' AND m.deleted_at IS NULL AND m.fecha BETWEEN $1::date AND $2::date AND ($3::text IS NULL OR m.ciudad = $3)
+        ORDER BY m.fecha DESC, m.created_at DESC`,
+      [r.desde, r.hasta, ciudad],
+    );
+    const t = (v) => normalizar(v ?? '').trim();
+    const lista = rows.filter((m) => (!a.categoria || t(`${m.categoria} ${m.grupo}`).includes(t(a.categoria))) && (!a.persona || t(m.persona).includes(t(a.persona)))
+      && (!a.texto || t(`${m.descripcion} ${m.persona} ${m.categoria} ${m.proyecto_nombre ?? ''}`).includes(t(a.texto))) && (!a.sin_recibo || !m.con_recibo));
+    const total = sumar(lista.map((m) => m.monto));
+    const porCat = contar(lista, 'categoria');
+    const sinRecibo = lista.filter((m) => !m.con_recibo);
+    return {
+      modelo: { periodo: r.texto, ciudad: ciudad ? CIUDAD[ciudad] : 'Arequipa y Moquegua', total_gastado: soles(total), cantidad: lista.length, por_categoria: Object.fromEntries(porCat.slice(0, 10).map(([c, v]) => [c, soles(v)])),
+        por_ciudad: Object.fromEntries(contar(lista, 'ciudad').map(([c, v]) => [CIUDAD[c] ?? c, soles(v)])), sin_recibo: sinRecibo.length, total_sin_recibo: soles(sumar(sinRecibo.map((m) => m.monto))),
+        gastos: lista.slice(0, 12).map((m) => ({ fecha: m.fecha, descripcion: m.descripcion, persona: m.persona || null, categoria: m.categoria, ciudad: CIUDAD[m.ciudad], monto: soles(m.monto), recibo: m.con_recibo })) },
+      bloques: [
+        { tipo: 'kpis', items: [{ l: `Gastado ${r.texto}`, v: soles(total), c: 'peligro' }, { l: 'Gastos', v: String(lista.length) }, { l: 'Sin foto del recibo', v: String(sinRecibo.length) }] },
+        ...(porCat.length ? [barras('Por categoría', porCat.slice(0, 8))] : []),
+        ...(lista.length ? [tabla('Gastos de caja chica', [['Fecha'], ['Descripción'], ['Ciudad'], ['Monto', 'right'], ['Recibo']], lista.slice(0, 20).map((m) => [fechaPe(m.fecha), m.descripcion, CIUDAD[m.ciudad], soles(m.monto), m.con_recibo ? 'Sí' : 'No']))] : []),
+      ],
+    };
+  },
+};
+
+const caja_diaria = {
+  nombre: 'caja_diaria', fuente: 'Caja diaria', modulo: ['caja_chica', 'contabilidad'],
+  descripcion: 'Caja diaria en un período: ingresos y salidas en efectivo y por transferencia, movimientos de Yape (cta. cte.), gastos por categoría, salidas sin comprobante y los saldos al final.',
+  parametros: { type: 'object', properties: { periodo: PERIODO, ...FECHAS, ciudad: CIUDAD_P, texto: { type: 'string' } } },
+  async ejecutar(a) {
+    const r = rangoDe(a);
+    const ciudad = ciudadDe(a.ciudad);
+    const { rows } = await consulta(
+      `SELECT h.ciudad, h.fecha::text AS fecha, f.descripcion, f.responsable, f.comprobante, f.interno, COALESCE(f.subcategoria, f.categoria) AS categoria,
+              f.caja_ingreso_efectivo::text AS ie, f.caja_ingreso_transf::text AS it, f.caja_salida_efectivo::text AS se, f.caja_salida_transf::text AS st,
+              f.cta_cte_ingreso::text AS yi, f.cta_cte_salida::text AS ys, EXISTS (SELECT 1 FROM caja_adjunto x WHERE x.fila_id = f.id) AS con_foto
+         FROM caja_fila f JOIN caja_hoja h ON h.id = f.hoja_id
+        WHERE f.deleted_at IS NULL AND h.fecha BETWEEN $1::date AND $2::date AND ($3::text IS NULL OR h.ciudad = $3)
+        ORDER BY h.fecha DESC, f.orden`,
+      [r.desde, r.hasta, ciudad],
+    );
+    const t = (v) => normalizar(v ?? '').trim();
+    const filas = rows.filter((f) => !a.texto || t(`${f.descripcion} ${f.responsable} ${f.categoria ?? ''}`).includes(t(a.texto)));
+    const s = (k) => sumar(filas.map((f) => f[k]));
+    const gastos = filas.filter((f) => !f.interno).map((f) => ({ ...f, monto: sumar([f.se, f.st, f.ys]) })).filter((f) => aCentimos(f.monto) > 0);
+    const sinComp = gastos.filter((f) => f.comprobante === 'NINGUNO' && !f.con_foto);
+    const { rows: sal } = await consulta(
+      `SELECT DISTINCT ON (ciudad) ciudad, fecha::text AS fecha, saldo_final_caja::text AS efectivo, saldo_final_cta_cte::text AS yape
+         FROM v_caja_hoja_resumen WHERE fecha <= $1::date AND ($2::text IS NULL OR ciudad = $2) ORDER BY ciudad, fecha DESC`,
+      [r.hasta, ciudad],
+    );
+    const porCat = contar(gastos, 'categoria');
+    return {
+      modelo: { periodo: r.texto, ciudad: ciudad ? CIUDAD[ciudad] : 'Arequipa y Moquegua', ingresos_efectivo: soles(s('ie')), ingresos_transferencia: soles(s('it')), salidas_efectivo: soles(s('se')), salidas_transferencia: soles(s('st')),
+        yape_ingresos: soles(s('yi')), yape_salidas: soles(s('ys')), gastos_reales: soles(sumar(gastos.map((g) => g.monto))), gastos_por_categoria: Object.fromEntries(porCat.slice(0, 10).map(([c, v]) => [c, soles(v)])),
+        salidas_sin_comprobante: sinComp.length, saldos_al_cierre: sal.map((x) => ({ ciudad: CIUDAD[x.ciudad], dia: x.fecha, efectivo: soles(x.efectivo), yape: soles(x.yape) })) },
+      bloques: [
+        { tipo: 'kpis', items: [{ l: 'Ingresos (efectivo + transf.)', v: soles(sumar([s('ie'), s('it')])), c: 'primario' }, { l: 'Salidas (efectivo + transf.)', v: soles(sumar([s('se'), s('st')])), c: 'peligro' }, { l: 'Yape: entró / salió', v: `${soles(s('yi'))} / ${soles(s('ys'))}` }, { l: 'Sin comprobante', v: String(sinComp.length) }] },
+        ...(porCat.length ? [barras('Gastos por categoría', porCat.slice(0, 8))] : []),
+        ...(sal.length ? [tabla('Saldos al cierre', [['Ciudad'], ['Día'], ['Efectivo', 'right'], ['Yape', 'right']], sal.map((x) => [CIUDAD[x.ciudad], fechaPe(x.fecha), soles(x.efectivo), soles(x.yape)]))] : []),
+      ],
+    };
+  },
+};
+
+const saldos_caja = {
+  nombre: 'saldos_caja', fuente: 'Caja diaria', modulo: ['caja_chica', 'contabilidad'], fuentesExtra: ['Caja chica'],
+  descripcion: 'Saldos actuales: caja chica por ciudad, y efectivo y Yape de la caja diaria según el último día registrado.',
+  parametros: { type: 'object', properties: {} },
+  async ejecutar() {
+    const { rows: ch } = await consulta('SELECT ciudad, saldo::text AS saldo FROM v_caja_chica_saldo ORDER BY ciudad');
+    const { rows: di } = await consulta(`SELECT DISTINCT ON (ciudad) ciudad, fecha::text AS fecha, saldo_final_caja::text AS efectivo, saldo_final_cta_cte::text AS yape FROM v_caja_hoja_resumen ORDER BY ciudad, fecha DESC`);
+    const filas = Object.keys(CIUDAD).map((c) => {
+      const d = di.find((x) => x.ciudad === c);
+      return [CIUDAD[c], soles(ch.find((x) => x.ciudad === c)?.saldo ?? null), d ? soles(d.efectivo) : 'Sin dato', d ? soles(d.yape) : 'Sin dato', d ? fechaPe(d.fecha) : 'Sin dato'];
+    });
+    return {
+      modelo: { saldos: filas.map(([ciudad, chica, efectivo, yape, dia]) => ({ ciudad, caja_chica: chica, caja_diaria_efectivo: efectivo, yape, ultimo_dia_caja_diaria: dia })) },
+      bloques: [
+        { tipo: 'kpis', items: [{ l: 'Caja chica (total)', v: soles(sumar(ch.map((x) => x.saldo))) }, { l: 'Efectivo caja diaria', v: soles(sumar(di.map((x) => x.efectivo))) }, { l: 'Yape', v: soles(sumar(di.map((x) => x.yape))) }] },
+        tabla('Saldos por ciudad', [['Ciudad'], ['Caja chica', 'right'], ['Efectivo', 'right'], ['Yape', 'right'], ['Último día']], filas),
+      ],
+    };
+  },
+};
+
+const gastos_proyecto_caja = {
+  nombre: 'gastos_proyecto_caja', fuente: 'Caja chica', modulo: ['caja_chica', 'contabilidad'], fuentesExtra: ['Caja diaria'],
+  descripcion: 'Cuánto se gastó en UN proyecto (por código PRY-001 o nombre) desde la caja chica y la caja diaria. Si la persona puede ver Proyectos, también da el presupuesto y el total del proyecto.',
+  parametros: { type: 'object', properties: { proyecto: { type: 'string', description: 'Código o nombre del proyecto' } }, required: ['proyecto'] },
+  async ejecutar(a, { u }) {
+    const q = String(a.proyecto ?? '').trim();
+    const { rows: ps } = await consulta(`SELECT id, codigo, nombre FROM proyectos WHERE lower(codigo) = lower($1) OR translate(lower(nombre), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower($1), 'áéíóúüñ', 'aeiouun') || '%' ORDER BY id DESC LIMIT 1`, [q]);
+    const p = ps[0];
+    if (!p) return { modelo: { error: `No hay un proyecto que coincida con «${q}».` }, bloques: [] };
+    const { rows } = await consulta(
+      `SELECT 'Caja chica' AS origen, m.fecha::text AS fecha, m.descripcion, m.ciudad, m.monto::text AS monto FROM caja_chica_mov m WHERE m.proyecto_id = $1 AND m.tipo = 'EGRESO' AND m.deleted_at IS NULL
+       UNION ALL
+       SELECT 'Caja diaria', h.fecha::text, f.descripcion, h.ciudad, (f.caja_salida_efectivo + f.caja_salida_transf + f.cta_cte_salida)::text FROM caja_fila f JOIN caja_hoja h ON h.id = f.hoja_id
+        WHERE f.proyecto_id = $1 AND f.deleted_at IS NULL AND NOT f.interno AND (f.caja_salida_efectivo + f.caja_salida_transf + f.cta_cte_salida) > 0
+       ORDER BY 2 DESC`,
+      [p.id],
+    );
+    const total = sumar(rows.map((g) => g.monto));
+    const modelo = { proyecto: `${p.codigo} · ${p.nombre}`, gastado_desde_cajas: soles(total), gastos: rows.length, por_origen: Object.fromEntries(contar(rows, 'origen').map(([o, v]) => [o, soles(v)])) };
+    const kpis = [{ l: 'Desde las cajas', v: soles(total), c: 'peligro' }, { l: 'Gastos', v: String(rows.length) }];
+    if (await tieneNivel(u, 'proyectos', 'lectura')) {
+      const d = (await detalleProyecto(p.id)).proyecto;
+      Object.assign(modelo, { presupuesto: soles(d.presupuesto), gastado_total_proyecto: soles(d.gastado), porcentaje_usado: d.porcentaje });
+      kpis.push({ l: 'Presupuesto', v: soles(d.presupuesto) }, { l: '% usado (todo el proyecto)', v: d.porcentaje === null ? 'Sin dato' : `${d.porcentaje}%` });
+    }
+    return {
+      modelo,
+      bloques: [{ tipo: 'kpis', items: kpis }, ...(rows.length ? [tabla(`Gastos de ${p.codigo} desde las cajas`, [['Fecha'], ['Descripción'], ['Origen'], ['Monto', 'right']], rows.slice(0, 20).map((g) => [fechaPe(g.fecha), g.descripcion, `${g.origen} · ${CIUDAD[g.ciudad] ?? g.ciudad}`, soles(g.monto)]))] : [])],
+    };
+  },
+};
+
 export const HERRAMIENTAS = {
   cotizador: [buscar_productos, ver_kits, proponer_cotizacion],
   asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_chica, requerimientos, buscar_productos],
+  finanzas: [gastos_caja_chica, caja_diaria, saldos_caja, gastos_proyecto_caja],
 };
 
 /** Formato de Ollama para la lista de herramientas. */

@@ -10,7 +10,9 @@ import { salud } from './ia/ollama.js';
 import { leerParametros } from './configuracion.js';
 import { nivel, tieneNivel } from './permisos.js';
 
-const MODULO = { cotizador: 'cotizador_ia', asistente: 'asistente_ia' };
+// Permiso que exige cada IA. La de Finanzas la usa todo el que entra a la caja (basta «lectura»): solo lee.
+const MODULO = { cotizador: 'cotizador_ia', asistente: 'asistente_ia', finanzas: 'caja_chica' };
+const NIVEL_PREGUNTAR = { cotizador: 'completo', asistente: 'completo', finanzas: 'lectura' };
 const id = (v) => {
   const n = Number(v);
   if (!Number.isInteger(n) || n <= 0) throw falla(400, 'El id no es válido.');
@@ -28,7 +30,7 @@ export function crearRutasF6() {
   const r = Router();
 
   r.get('/ia/estado', async (req, res) => {
-    const ve = (await tieneNivel(req.usuario, 'cotizador_ia')) || (await tieneNivel(req.usuario, 'asistente_ia')) || (await tieneNivel(req.usuario, 'configuracion'));
+    const ve = (await tieneNivel(req.usuario, 'cotizador_ia')) || (await tieneNivel(req.usuario, 'asistente_ia')) || (await tieneNivel(req.usuario, 'caja_chica')) || (await tieneNivel(req.usuario, 'configuracion'));
     if (!ve) throw falla(403, 'Tu rol no usa la IA.');
     res.json({ ...(await salud()), indice: await estadoIndice() });
   });
@@ -67,7 +69,7 @@ export function crearRutasF6() {
     res.json(await obtenerConversacion(id(req.params.id), m, req.usuario));
   });
   r.post('/ia/:modulo/conversaciones/eliminar', async (req, res) => {
-    const m = await exigir(req, req.params.modulo === 'asistente' ? 'lectura' : 'completo', 'eliminar consultas');
+    const m = await exigir(req, req.params.modulo === 'cotizador' ? 'completo' : 'lectura', 'eliminar consultas');
     const borradas = await eliminarConversaciones(req.body?.ids, m, req.usuario);
     for (const b of borradas) await auditar(req, { accion: 'eliminar', entidad: `ia_${m}`, entidadId: b.id, antes: b });
     res.json({ eliminadas: borradas.length });
@@ -75,7 +77,7 @@ export function crearRutasF6() {
 
   // Respuesta en streaming (text/event-stream): el texto llega mientras el modelo lo escribe.
   r.post('/ia/:modulo/preguntar', async (req, res) => {
-    const m = await exigir(req, 'completo', 'hacer consultas a la IA');
+    const m = await exigir(req, NIVEL_PREGUNTAR[req.params.modulo] ?? 'completo', 'hacer consultas a la IA');
     if (!String(req.body?.texto ?? '').trim()) throw falla(400, 'Escribe tu consulta.');
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
     const ctl = new AbortController();
