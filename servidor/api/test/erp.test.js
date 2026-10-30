@@ -141,16 +141,17 @@ describe('matriz de permisos', () => {
 });
 
 describe('configuración', () => {
-  it('datos de la empresa: lo que no se sabe queda vacío; el RUC se valida con su dígito verificador', async () => {
-    const vacia = (await llamar('GET', '/api/empresa', { token: sesiones.tito })).datos;
-    assert.equal(vacia.razon_social, null);
+  it('datos de la empresa: precargados con lo que ya usaba Logística; lo que no se sabe queda vacío; el RUC se valida', async () => {
+    const inicial = (await llamar('GET', '/api/empresa', { token: sesiones.tito })).datos;
+    assert.equal(inicial.razon_social, 'INVERSIONES ICR S.R.L.');
+    assert.equal(inicial.telefono, null);
     assert.equal((await llamar('PUT', '/api/empresa', { token: sesiones.vera, cuerpo: { razon_social: 'X' } })).estado, 403);
     assert.equal((await llamar('PUT', '/api/empresa', { token: sesiones.admin, cuerpo: { ruc: '20605309488' } })).estado, 400);
     const ok = await llamar('PUT', '/api/empresa', { token: sesiones.admin, cuerpo: { razon_social: 'INVERSIONES ICR S.R.L.', ruc: '20605309489', ciudad: 'Arequipa', telefono: '' } });
     assert.equal(ok.estado, 200);
     assert.equal(ok.datos.ruc, '20605309489');
     assert.equal(ok.datos.telefono, null);
-    assert.equal(ok.datos.direccion, null);
+    assert.equal(ok.datos.direccion, 'Calle Pizarro 325 C');
     const aud = (await llamar('GET', '/api/auditoria?entidad=empresa', { token: sesiones.admin })).datos;
     assert.equal(aud[0].despues.razon_social, 'INVERSIONES ICR S.R.L.');
   });
