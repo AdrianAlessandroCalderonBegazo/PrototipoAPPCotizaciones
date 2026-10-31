@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Diagnóstico rápido cuando una dirección no abre (por ejemplo «ERR_SSL_PROTOCOL_ERROR» o «la conexión no es segura»):
-#   ./scripts/diagnostico.sh            (revisa erp, cotizador, finanzas, finanza, app y api)
+#   ./scripts/diagnostico.sh            (revisa erp, cotizador, finanzas, app y api)
 # Revisa: a qué IP apunta cada subdominio (IPv4 e IPv6), si Caddy está encendido, si ya tiene certificado y sus últimos errores.
 # No cambia nada.
 set -uo pipefail
@@ -14,7 +14,7 @@ echo "== Caddy =="
 docker compose ps caddy
 echo
 echo "== Subdominios =="
-for h in erp cotizador finanzas finanza app api; do
+for h in erp cotizador finanzas app api; do
   n="$h.$DOMINIO"
   a="$(getent ahostsv4 "$n" | awk 'NR==1{print $1}')"
   aaaa="$(command -v dig >/dev/null && dig +short AAAA "$n" | tail -1)"
