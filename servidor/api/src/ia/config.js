@@ -46,7 +46,7 @@ export async function guardarConfigIa(b) {
   return { antes, despues: nueva };
 }
 
-const CONTEXTO = { reglas: null, notas: null, usar_catalogo: true, usar_precios: true, usar_reglas: true, usar_notas: true };
+const CONTEXTO = { reglas: null, notas: null, usar_catalogo: true, usar_precios: true, usar_reglas: true, usar_notas: true, guiada: { paneles: [], inversores: [], baterias: [] } };
 export const leerContexto = () => leer('ia_contexto', CONTEXTO);
 
 export async function guardarContexto(b) {
@@ -54,6 +54,11 @@ export async function guardarContexto(b) {
   const nuevo = { ...antes };
   for (const k of ['reglas', 'notas']) if (b?.[k] !== undefined) nuevo[k] = b[k] === null ? null : String(b[k]).trim().slice(0, 4000) || null;
   for (const k of ['usar_catalogo', 'usar_precios', 'usar_reglas', 'usar_notas']) if (b?.[k] !== undefined) nuevo[k] = b[k] === true;
+  // Cotización guiada: hasta 5 productos preferidos de cada tipo (ids del catálogo, en orden de preferencia).
+  if (b?.guiada !== undefined) {
+    const lista = (v) => [...new Set((Array.isArray(v) ? v : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 5);
+    nuevo.guiada = { paneles: lista(b.guiada?.paneles), inversores: lista(b.guiada?.inversores), baterias: lista(b.guiada?.baterias) };
+  }
   await escribir('ia_contexto', nuevo);
   return { antes, despues: nuevo };
 }

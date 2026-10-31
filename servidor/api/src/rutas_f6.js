@@ -3,7 +3,8 @@
 import { Router } from 'express';
 import { auditar } from './auditoria.js';
 import { falla } from './errores.js';
-import { eliminarConversaciones, listarConversaciones, obtenerConversacion, preguntar, propuesta } from './ia/agente.js';
+import { cotizarGuiada, eliminarConversaciones, listarConversaciones, obtenerConversacion, preguntar, propuesta } from './ia/agente.js';
+import { opcionesGuiada } from './ia/guiada.js';
 import { guardarConfigIa, guardarContexto, leerConfigIa, leerContexto } from './ia/config.js';
 import { estadoIndice, reindexar } from './ia/indice.js';
 import { salud } from './ia/ollama.js';
@@ -57,6 +58,9 @@ export function crearRutasF6() {
     await auditar(req, { accion: 'editar', entidad: 'ia_contexto', antes, despues });
     res.json(despues);
   });
+  // ---- cotización guiada (sin IA) ----
+  r.get('/ia/cotizador/guiada/opciones', nivel('cotizador_ia', 'lectura'), async (_req, res) => res.json(await opcionesGuiada()));
+  r.post('/ia/cotizador/guiada', nivel('cotizador_ia', 'completo', 'hacer cotizaciones guiadas'), async (req, res) => res.status(201).json(await cotizarGuiada(req.body, req.usuario)));
   r.get('/ia/cotizador/propuesta/:mensaje', nivel('cotizacion', 'completo', 'abrir propuestas en Cotización'), async (req, res) => res.json(await propuesta(id(req.params.mensaje))));
 
   // ---- conversaciones ----

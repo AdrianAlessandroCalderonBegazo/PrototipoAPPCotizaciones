@@ -26,6 +26,9 @@ async function productos() {
   }
   return productosCache;
 }
+/** Catálogo completo en memoria (se refresca cada minuto). Lo usa la cotización guiada. */
+export const catalogoProductos = () => productos();
+export const productoPorId = async (id) => (await productos()).find((p) => p.id === Number(id)) ?? null;
 export const olvidarProductos = () => {
   productosCache = null;
   vectores = null;

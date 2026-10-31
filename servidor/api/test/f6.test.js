@@ -183,6 +183,58 @@ describe('Cotizador IA', () => {
   });
 });
 
+describe('Cotización guiada (sin IA)', () => {
+  let ids;
+  before(async () => {
+    const nuevo = async (cuerpo) => (await llamar('POST', '/api/catalogo', { token: sesiones.admin, cuerpo: { moneda: 'PEN', ...cuerpo } })).datos.id;
+    ids = {
+      panel: await nuevo({ codigo: 'TST-P550', nombre: 'PANEL SOLAR 550W PRUEBA', categoria: 'PANELES', precio: '500' }),
+      inv: await nuevo({ codigo: 'TST-I10', nombre: 'INVERSOR HIBRIDO 10KW PRUEBA', categoria: 'INVERSORES HIBRIDOS', precio: '6000' }),
+      red: await nuevo({ codigo: 'TST-R10', nombre: 'INVERSOR DE RED 10KW PRUEBA', categoria: 'INVERSORES DE RED', precio: '4000' }),
+      bat: await nuevo({ codigo: 'TST-B5', nombre: '48V 100AH BATERIA DE LITIO 5.12KWH PRUEBA', categoria: 'BATERIAS', precio: '3000' }),
+    };
+    const g = await llamar('PUT', '/api/ia/contexto', { token: sesiones.vera, cuerpo: { guiada: { paneles: [ids.panel], inversores: [ids.inv, ids.red], baterias: [ids.bat] } } });
+    assert.deepEqual(g.datos.guiada.paneles, [ids.panel]);
+  });
+
+  it('híbrido por consumo: paneles por 5.5 h de sol, inversor que alcanza y baterías para medio día; precios del catálogo', async () => {
+    const r = await llamar('POST', '/api/ia/cotizador/guiada', { token: sesiones.vera, cuerpo: { tipo: 'hibrido', consumo_kwh_mes: 900, potencia_kw: 10 } });
+    assert.equal(r.estado, 201, JSON.stringify(r.datos));
+    const t = r.datos.mensaje.datos.tarjeta;
+    // 900 / 30 / 5.5 = 5.45 kWp → 10 × 550 W; inversor híbrido de 10 kW; 900/30/2 = 15 kWh → 3 × 5.12 kWh
+    assert.deepEqual(t.items.slice(0, 3).map((i) => [i.codigo, i.cantidad, i.importe]), [['TST-P550', '10.00', '5000.00'], ['TST-I10', '1.00', '6000.00'], ['TST-B5', '3.00', '9000.00']]);
+    assert.equal(t.totales.total, '20000.00');
+    assert.equal(t.faltan_precios, 3); // estructura, cableado e instalación: «Sin dato»
+    assert.equal(r.datos.mensaje.datos.guiada, true);
+    assert.equal(r.datos.mensaje.modelo, null);
+    // se puede abrir en Cotización como cualquier propuesta
+    assert.equal((await llamar('GET', `/api/ia/cotizador/propuesta/${r.datos.mensaje.id}`, { token: sesiones.vera })).estado, 200);
+  });
+
+  it('On-Grid usa un inversor de red y no lleva baterías; las horas de respaldo cambian las baterías', async () => {
+    const og = await llamar('POST', '/api/ia/cotizador/guiada', { token: sesiones.vera, cuerpo: { tipo: 'ongrid', potencia_kw: 10 } });
+    assert.deepEqual(og.datos.mensaje.datos.tarjeta.items.slice(0, 2).map((i) => [i.codigo, i.cantidad]), [['TST-P550', '19.00'], ['TST-R10', '1.00']]);
+    assert.ok(!og.datos.mensaje.datos.tarjeta.items.some((i) => i.codigo === 'TST-B5'));
+    const h = await llamar('POST', '/api/ia/cotizador/guiada', { token: sesiones.vera, cuerpo: { tipo: 'hibrido', consumo_kwh_mes: 900, horas_respaldo: 4 } });
+    assert.equal(h.datos.mensaje.datos.tarjeta.items.find((i) => i.codigo === 'TST-B5').cantidad, '1.00'); // 30/24×4 = 5 kWh → 1 × 5.12
+    assert.equal((await llamar('POST', '/api/ia/cotizador/guiada', { token: sesiones.vera, cuerpo: { tipo: 'hibrido' } })).estado, 400);
+    assert.equal((await llamar('POST', '/api/ia/cotizador/guiada', { token: sesiones.fina, cuerpo: { tipo: 'ongrid', potencia_kw: 5 } })).estado, 403);
+  });
+
+  it('un pedido escrito claro se calcula sin llamar a la IA; las opciones listan lo que la guiada puede usar', async () => {
+    const antes = ollama.pedidos.filter((x) => x.ruta === '/api/chat').length;
+    const r = await preguntar(sesiones.vera, 'cotizador', { texto: 'Cotiza un sistema híbrido de 10 kW con baterías de litio para una bodega con consumo de 900 kWh/mes' });
+    assert.equal(ollama.pedidos.filter((x) => x.ruta === '/api/chat').length, antes);
+    assert.equal(r.fin.mensaje.datos.guiada, true);
+    assert.match(r.fin.mensaje.texto, /10 paneles de 550 W/);
+    const o = (await llamar('GET', '/api/ia/cotizador/guiada/opciones', { token: sesiones.vera })).datos;
+    assert.equal(o.hsp, 5.5);
+    assert.equal(o.paneles.find((p) => p.id === ids.panel).valor, 550);
+    assert.equal(o.inversores.find((p) => p.id === ids.inv).uso, 'hibrido');
+    assert.equal(o.baterias.find((p) => p.id === ids.bat).valor, 5.12);
+  });
+});
+
 describe('Asistente IA', () => {
   it('responde con datos del servidor (kpis y fuentes) y la conversación es privada', async () => {
     const r = await preguntar(sesiones.fina, 'asistente', { texto: '¿Cómo van las finanzas este mes?' });

@@ -130,7 +130,7 @@ export function resumir(herramienta, m) {
     case 'gastos_proyecto_caja':
       return `En **${m.proyecto}** se gastó ${m.gastado_desde_cajas ?? 'Sin dato'} desde las cajas.`;
     case 'resumen_finanzas':
-      return `En **${mesTexto(m.mes)}** entraron ${m.ingresos} y salieron ${m.egresos}: flujo neto **${m.flujo_neto}**${m.variacion_egresos !== null && m.variacion_egresos !== undefined ? ` (egresos ${m.variacion_egresos} vs. el mes anterior)` : ''}.${m.saldo_actual && m.saldo_actual !== 'Sin dato' ? ` Saldo actual de ${m.cuenta ?? 'la cuenta principal'}: ${m.saldo_actual}.` : ''}`;
+      return `En **${mesTexto(m.mes)}** entraron ${m.ingresos} y salieron ${m.egresos}: flujo neto **${m.flujo_neto}**${m.variacion_egresos && m.variacion_egresos !== 'Sin dato' ? ` (egresos ${m.variacion_egresos} vs. el mes anterior)` : ''}.${m.saldo_actual && m.saldo_actual !== 'Sin dato' ? ` Saldo actual de ${m.cuenta ?? 'la cuenta principal'}: ${m.saldo_actual}.` : ''}`;
     case 'proyectos': {
       const c = m.conteo_por_estado ?? {};
       const alerta = (m.proyectos ?? []).filter((p) => p.estado === 'activo' && p.porcentaje !== null && p.porcentaje >= 80).sort((a, b) => b.porcentaje - a.porcentaje);

@@ -250,6 +250,19 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
 - **Respaldos**: `probar_respaldo.sh` (nuevo), `restaurar.sh` (detiene las 3 APIs, copia previa, también Finanzas 2), `restaurar_fotos.sh` (Finanzas 2).
 - **Manual por rol**: `erp/MANUAL.md`. Guía rápida de despliegue: `servidor/DESPLIEGUE.md` § 0.
 
+## 4k. IA más rápida (después de la Fase 10)
+
+- **El borrador del modelo ya no se muestra ni se guarda** (qwen3 a veces «piensa en voz alta» en inglés antes de usar herramientas). `/no_think` en las
+  instrucciones; el modelo queda cargado 24 h.
+- **Respuestas directas sin IA** (`servidor/api/src/ia/rapidas.js`): las consultas frecuentes del Asistente IA y de «Preguntar» (Finanzas) — y las escritas
+  parecido («¿cuánto se gastó ayer en Arequipa?», «stock de cable solar», «precio del MultiPlus-II») — se responden con la misma herramienta de solo lectura
+  y una frase armada por el servidor, en menos de 1 s y aunque la IA esté apagada. Etiqueta «Respuesta directa · sin IA». Lo que no se reconoce va a la IA.
+- **Cotización guiada** (`servidor/api/src/ia/guiada.js`, decisiones del dueño): tipo (On-Grid, híbrido, aislado) + consumo (kWh/mes) o potencia (kW),
+  y opcionalmente baterías (kWh) u horas de respaldo. Paneles = consumo ÷ 30 ÷ **5.5 h de sol** (sin factor de pérdidas) o la potencia; inversor = el más
+  chico que alcance; baterías = lo pedido, o 1 día (aislado) / medio día (híbrido) de consumo, con la combinación más económica. **Preferidos**: hasta 5 paneles,
+  inversores y baterías en Cotizador IA › Contexto (si no hay, el de menor precio que cumpla). Estructura, cableado e instalación quedan «Sin dato».
+  Se usa desde un formulario, desde un pedido escrito claro (sin IA) o como herramienta de la IA (`cotizacion_guiada`).
+
 ## 5. Migración de datos
 
 - **Usuarios y roles**: hecho en la Fase 1 (`002_erp_base.sql`), sin perder usuarios ni sesiones.

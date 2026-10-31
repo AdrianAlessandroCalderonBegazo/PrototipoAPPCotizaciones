@@ -63,6 +63,10 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
   pone SUNAT (se registra al marcar emitido). Ítems con valor unitario **sin** IGV. Lo que depende del portal SOL está solo en `extension/selectores.js`.
 - **IA (Ollama, `servidor/api/src/ia/`)**: **la IA solo lee**; lo que propone lo guarda una persona. Herramientas de solo lectura con los permisos de quien
   pregunta; los totales, tablas y gráficos los calcula el servidor, nunca el modelo; la IA no inventa precios («Sin dato»). Ollama no se expone a internet.
+  **Respuestas directas sin IA** (`ia/rapidas.js`): las preguntas frecuentes (y escritas parecido) se responden con una consulta fija, al instante y aunque
+  Ollama esté apagado; si la pregunta trae algo no reconocido, va a la IA. **Cotización guiada** (`ia/guiada.js`): tipo + consumo o potencia →
+  paneles (5.5 h de sol pico, sin pérdidas), inversor y baterías del catálogo; hasta 5 preferidos de cada uno en Cotizador IA › Contexto
+  (`ia_contexto.guiada`); la potencia se lee del nombre del producto («550W», «10KW», «5.12KWH»). El borrador del modelo (razonamiento) no se muestra.
   La app de Finanzas pregunta en la pestaña «Preguntar» (`finanzas/app/src/screens/Preguntar.tsx` → `/api/ia/finanzas`, basta
   `caja_chica` en lectura). Pruebas con `test/ollama_falso.js` (también sirve para probar la pantalla: `node test/ollama_falso.js 11434` + `OLLAMA_URL=http://127.0.0.1:11434`).
 - **Comparador** (`servidor/api/src/comparador.js`, `comparador_web.js`): el historial de precios es **solo agregar** (disparador en

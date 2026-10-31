@@ -7,6 +7,7 @@ import { leerContexto } from './config.js';
 import { ejecutarHerramienta, herramientasDe, paraOllama } from './herramientas.js';
 import { buscarProductos } from './indice.js';
 import { chatear } from './ollama.js';
+import { calcularGuiada, parsearPedido, TIPOS } from './guiada.js';
 import { reconocer, resumir } from './rapidas.js';
 
 const hoyLima = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
@@ -104,7 +105,8 @@ async function sistemaCotizador(texto) {
     'Respondes en español, en pocas frases y claro. No expliques lo que vas a hacer ni tu razonamiento: usa las herramientas y da solo el resultado.',
     'REGLAS QUE NUNCA ROMPES:',
     '- No inventas productos ni precios. Solo usas productos que te devuelve buscar_productos (o kits de ver_kits).',
-    '- Para cotizar: busca los equipos con buscar_productos y al final llama a proponer_cotizacion con los CÓDIGOS y cantidades. El sistema pone los precios y calcula los totales.',
+    '- Para un sistema completo (On-Grid, híbrido o aislado) usa cotizacion_guiada con el tipo y el consumo o la potencia: el sistema elige paneles, inversor y baterías y calcula todo. No busques producto por producto.',
+    '- Para equipos sueltos: busca con buscar_productos y llama a proponer_cotizacion con los CÓDIGOS y cantidades. El sistema pone los precios y calcula los totales.',
     '- Instalación, mano de obra o lo que no esté en el catálogo: agrégalo con solo «descripcion» (quedará «Sin dato» para que una persona ponga el precio).',
     '- Si falta un dato (consumo, horas de respaldo, tipo de sistema), propone con supuestos razonables y dilo en una frase.',
     '- Tú no guardas nada: una persona revisa la propuesta y la abre en Cotización.',
@@ -199,6 +201,21 @@ export async function preguntar({ modulo, conversacionId, texto: textoIn, porVoz
   const lista = await herramientasDe(modulo, u);
   const inicio = Date.now();
 
+  // Cotizador: un pedido claro al empezar («híbrido de 10 kW para 900 kWh/mes») se calcula con la cotización guiada, sin IA.
+  if (modulo === 'cotizador' && !conversacionId) {
+    const pedido = parsearPedido(texto);
+    if (pedido) {
+      try {
+        enviar({ tipo: 'herramienta', nombre: 'cotizacion_guiada', fuente: 'Catálogo' });
+        const g = await calcularGuiada(pedido);
+        enviar({ tipo: 'texto', t: g.texto });
+        return await guardarRespuesta(conv, g.texto, { tarjeta: g.tarjeta, bloques: [], fuentes: ['Catálogo'], herramientas: ['cotizacion_guiada'], rapida: true, guiada: true, calculo: g.calculo }, null, inicio, enviar);
+      } catch (e) {
+        console.error('Cotización guiada falló, se pasa a la IA:', e?.message);
+      }
+    }
+  }
+
   // Respuesta directa (sin IA): preguntas frecuentes o escritas parecido → consulta fija, en menos de un segundo.
   const rapida = reconocer(modulo, texto);
   if (rapida && lista.some((h) => h.nombre === rapida.herramienta)) {
@@ -285,4 +302,18 @@ export async function preguntar({ modulo, conversacionId, texto: textoIn, porVoz
     enviar({ tipo: 'error', mensaje, motivo });
   }
   return conv.id;
+}
+
+/** Cotización guiada desde el formulario: crea la consulta (visible en el historial compartido) con la propuesta calculada. */
+export async function cotizarGuiada(b, u) {
+  const inicio = Date.now();
+  const g = await calcularGuiada(b);
+  const c = g.calculo;
+  const pedido = [`Cotización guiada: ${TIPOS[c.tipo]}`, c.consumo_kwh_mes ? `${c.consumo_kwh_mes} kWh/mes` : null, c.potencia_kw ? `${c.potencia_kw} kW` : null,
+    c.bateria_kwh ? `baterías ${c.bateria_kwh} kWh` : c.horas_respaldo ? `${c.horas_respaldo} h de respaldo` : null, b?.cliente ? String(b.cliente).slice(0, 120) : null].filter(Boolean).join(' · ');
+  const { rows } = await consulta('INSERT INTO ia_conversaciones (modulo, titulo, autor_id, autor_nombre) VALUES ($1, $2, $3, $4) RETURNING id, titulo', ['cotizador', pedido.slice(0, 120), u.id, u.nombre]);
+  await consulta("INSERT INTO ia_mensajes (conversacion_id, rol, texto, autor_nombre) VALUES ($1, 'usuario', $2, $3)", [rows[0].id, pedido, u.nombre]);
+  let fin = null;
+  await guardarRespuesta(rows[0], g.texto, { tarjeta: g.tarjeta, bloques: [], fuentes: ['Catálogo'], herramientas: ['cotizacion_guiada'], rapida: true, guiada: true, calculo: c }, null, inicio, (e) => { fin = e.mensaje; });
+  return { conversacion_id: rows[0].id, mensaje: fin };
 }

@@ -7,12 +7,13 @@ import { calcular } from '../cotizar.js';
 import { consulta } from '../db.js';
 import { aCentimos, deCentimos, monto } from '../dinero.js';
 import { listarArticulos } from '../almacen.js';
+import { calcularGuiada } from './guiada.js';
 import { buscar as buscarEnProveedores } from '../comparador.js';
 import { listarComprobantes } from '../facturacion.js';
 import { detalleKit, listarKits } from '../kits.js';
 import { tieneNivel } from '../permisos.js';
 import { detalleProyecto, listarProyectos } from '../proyectos.js';
-import { buscarProductos, normalizar, productoExacto } from './indice.js';
+import { buscarProductos, normalizar, productoExacto, productoPorId } from './indice.js';
 
 const hoyLima = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 const mesActual = () => hoyLima().slice(0, 7);
@@ -73,6 +74,9 @@ const ver_kits = {
   },
 };
 
+/** Arma la tarjeta de una propuesta (precios del catálogo, totales del servidor). La usa también la cotización guiada. */
+export const armarPropuesta = (titulo, items, tc) => proponer_cotizacion.ejecutar({ titulo, items }, { tc });
+
 const proponer_cotizacion = {
   nombre: 'proponer_cotizacion', fuente: 'Generado por IA', modulo: 'cotizacion', final: true,
   descripcion: 'Propone la cotización final. Usa los CÓDIGOS de buscar_productos (o kit_id de ver_kits). NO pongas precios: el sistema los toma del catálogo. Para mano de obra u otros servicios sin código, usa solo «descripcion».',
@@ -100,7 +104,8 @@ const proponer_cotizacion = {
       let cant = Number(it?.cantidad);
       if (!(cant > 0) || cant > 100000) cant = 1;
       const cantidad = (Math.round(cant * 100) / 100).toFixed(2);
-      const p = (it?.codigo && (await productoExacto(String(it.codigo).replace(/^ID(\d+)$/, '$1')))) || (it?.descripcion && (await productoExacto(String(it.descripcion)))) || null;
+      const p = (Number.isInteger(Number(it?.producto_id)) && Number(it.producto_id) > 0 && (await productoPorId(it.producto_id)))
+        || (it?.codigo && (await productoExacto(String(it.codigo).replace(/^ID(\d+)$/, '$1')))) || (it?.descripcion && (await productoExacto(String(it.descripcion)))) || null;
       if (p) lineas.push({ producto_id: p.id, codigo: p.codigo, descripcion: p.nombre, unidad: p.unidad, cantidad, precio_unitario: precioEnSoles(p, tc), origen: 'Catálogo', moneda_original: p.moneda, ...(p.moneda === 'USD' && !tc ? { nota: 'En US$ y no hay tipo de cambio en Configuración' } : {}) });
       else {
         const desc = String(it?.descripcion || it?.codigo || '').trim().slice(0, 255);
@@ -497,8 +502,33 @@ const stock_almacen = {
   },
 };
 
+const cotizacion_guiada = {
+  nombre: 'cotizacion_guiada', fuente: 'Catálogo', modulo: 'cotizacion', final: true,
+  descripcion: 'Arma la cotización de un sistema solar completo con reglas fijas (5.5 h de sol): paneles, inversor y, si es híbrido o aislado, baterías del catálogo, con precios y totales.',
+  parametros: {
+    type: 'object',
+    properties: {
+      tipo: { type: 'string', enum: ['ongrid', 'hibrido', 'aislado'] },
+      consumo_kwh_mes: { type: 'number', description: 'Consumo mensual en kWh, si se sabe' },
+      potencia_kw: { type: 'number', description: 'Potencia del sistema en kW, si se sabe' },
+      bateria_kwh: { type: 'number', description: 'Capacidad de baterías en kWh, si la piden' },
+      horas_respaldo: { type: 'number', description: 'Horas de respaldo, si las piden' },
+      marca: { type: 'string', description: 'Marca preferida, si la piden' },
+    },
+    required: ['tipo'],
+  },
+  async ejecutar(a) {
+    try {
+      const g = await calcularGuiada(a);
+      return { tarjeta: g.tarjeta, modelo: { ok: true, resumen: g.texto, aviso: 'Explica la propuesta en 1 o 2 frases. No repitas la lista ni inventes precios: la tarjeta ya los muestra.' }, bloques: [] };
+    } catch (e) {
+      return { modelo: { error: e.message }, bloques: [] };
+    }
+  },
+};
+
 export const HERRAMIENTAS = {
-  cotizador: [buscar_productos, ver_kits, proponer_cotizacion],
+  cotizador: [cotizacion_guiada, buscar_productos, ver_kits, proponer_cotizacion],
   asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_chica, requerimientos, buscar_productos, precios_proveedores, stock_almacen],
   finanzas: [gastos_caja_chica, caja_diaria, saldos_caja, gastos_proyecto_caja],
 };

@@ -171,7 +171,10 @@ export type MensajeIa = {
   id: number; rol: "usuario" | "ia" | "error"; texto: string; datos: { tarjeta?: TarjetaIa | null; bloques?: BloqueIa[]; fuentes?: string[]; herramientas?: string[]; rapida?: boolean; guiada?: boolean } | null;
   por_voz: boolean; autor_nombre: string | null; modelo: string | null; duracion_ms: number | null; creado_en: string;
 };
-export type ContextoIa = { reglas: string | null; notas: string | null; usar_catalogo: boolean; usar_precios: boolean; usar_reglas: boolean; usar_notas: boolean; catalogo: { total: number; indexados: number; actualizado_en: string | null }; tipo_cambio: { valor: string | null; fecha: string | null }; igv_pct: number };
+export type ContextoIa = { reglas: string | null; notas: string | null; usar_catalogo: boolean; usar_precios: boolean; usar_reglas: boolean; usar_notas: boolean; catalogo: { total: number; indexados: number; actualizado_en: string | null }; tipo_cambio: { valor: string | null; fecha: string | null }; igv_pct: number;
+  guiada?: { paneles: number[]; inversores: number[]; baterias: number[] } };
+export type ProductoGuiada = { id: number; codigo: string | null; nombre: string; precio: string | null; moneda: "PEN" | "USD"; valor: number; unidad: string; uso?: "red" | "hibrido" | "aislado" };
+export type OpcionesGuiada = { hsp: number; preferidos: { paneles: number[]; inversores: number[]; baterias: number[] }; paneles: ProductoGuiada[]; inversores: ProductoGuiada[]; baterias: ProductoGuiada[] };
 
 // ---- Fase 8 ----
 export type FuenteProv = { id: number; tipo: "archivo" | "web"; url: string | null; adaptador: string; frecuencia_dias: number; activa: boolean; config: { moneda?: "PEN" | "USD"; incluye_igv?: boolean } | null; ultima_ejecucion: string | null; ultimo_estado: "ok" | "error" | "parcial" | null; ultimo_mensaje: string | null; ultimos_leidos: number | null };

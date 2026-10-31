@@ -21,6 +21,8 @@ Todas usan **el mismo usuario y clave**. Lo que cada persona ve depende de su **
 - **La campana** avisa lo que necesita atención: presupuestos al límite, stock bajo, garantías por vencer, comprobantes sin terminar, etc.
 - **«Sin dato»** significa que esa información no se registró: el sistema nunca la inventa.
 - **Modo oscuro:** el botón de la luna, arriba.
+- **Asistente IA y «Preguntar»:** las consultas frecuentes se responden al instante («Respuesta directa · sin IA»); las preguntas más abiertas las
+  responde la IA y pueden tardar unos segundos.
 - Nada de dinero, estados ni movimientos se borra: se **anula** con un motivo y queda en el historial (y en la auditoría).
 
 ## Administrador
@@ -49,6 +51,11 @@ Ve y hace todo. Además:
 
 **Hacer una cotización:** Cotización › Nueva → cliente → agrega productos o kits → revisa descuentos (los precios ya incluyen IGV) → Guardar →
 PDF o WhatsApp. Cuando el cliente responde, marca *Aceptada* o *Rechazada*.
+
+**Cotización guiada (al instante, sin IA):** Cotizador IA › «Cotización guiada» → tipo (On-Grid, híbrido o aislado), consumo del recibo
+(kWh al mes) o potencia (kW) y, si lleva baterías, los kWh o las horas de respaldo → Calcular. Elige paneles, inversor y baterías del catálogo
+(primero los **preferidos** de Cotizador IA › Contexto) con 5.5 h de sol. También funciona si lo escribes claro en el chat («híbrido de 10 kW para
+900 kWh/mes»). Luego «Abrir en Cotización» y completa estructura e instalación.
 
 **Comparar precios:** Comparador › Buscador → escribe el modelo (ej. «MultiPlus-II 48/3000»). Arriba sale la **mejor opción** (mismo producto,
 precio vigente, en soles con IGV y envío). Haz clic en una fila para ver de qué lista o página salió el precio.

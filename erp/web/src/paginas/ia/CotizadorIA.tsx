@@ -12,18 +12,19 @@ import { puede } from "../../modulos";
 import { useSesion } from "../../sesion";
 import type { ContextoIa, ConvIa, MensajeIa, TarjetaIa } from "../../tipos";
 import { AvisoSinIa, BurbujaError, BurbujaUsuario, ChipEstado, EntradaChat, Fuentes, Historial, InsigniaIa, Pensando, TextoIa, useChat, useEstadoIa } from "./comun";
+import { FormGuiada, PreferidosGuiada } from "./Guiada";
 
 const msg = (x: unknown) => (x instanceof Error ? x.message : undefined);
 const EJEMPLOS = ["Cotiza un sistema híbrido de 10 kW con baterías de litio para una bodega con consumo de 900 kWh/mes", "Sistema On-Grid de 25 kWp para un comercio, la opción más económica", "Kit de 5 kW Victron para un hostal con respaldo de 4 horas"];
 
-function Tarjeta({ t, mensajeId, abrir }: { t: TarjetaIa; mensajeId: number; abrir: boolean }) {
+function Tarjeta({ t, mensajeId, abrir, directa = false }: { t: TarjetaIa; mensajeId: number; abrir: boolean; directa?: boolean }) {
   const navegar = useNavigate();
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-surface">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
         <Icono n="request_quote" className="text-primary-ink" />
-        <div className="min-w-0 flex-1"><div className="text-[11.5px] font-bold uppercase tracking-wide text-text-3">Cotización propuesta</div><div className="truncate font-bold">{t.titulo}</div></div>
-        <InsigniaIa />
+        <div className="min-w-0 flex-1"><div className="text-[11.5px] font-bold uppercase tracking-wide text-text-3">{directa ? "Cotización guiada" : "Cotización propuesta"}</div><div className="truncate font-bold">{t.titulo}</div></div>
+        <InsigniaIa directa={directa} />
       </div>
       <div className="divide-y divide-border">
         {t.items.map((i, n) => (
@@ -42,6 +43,7 @@ function Tarjeta({ t, mensajeId, abrir }: { t: TarjetaIa; mensajeId: number; abr
             <div className="mt-1 flex justify-between text-[15px]"><b>Total{t.faltan_precios ? " (ítems con precio)" : ""}</b><b className="num text-primary-ink">{dinero(t.totales.total)}</b></div>
           </>
         ) : <div className="text-text-2">Sin ítems con precio del catálogo.</div>}
+        {t.notas?.length ? <div className="mt-2 text-[12px] text-text-3">{t.notas.join(" · ")}</div> : null}
         {t.faltan_precios ? <div className="mt-2 flex gap-1.5 text-[12.5px] text-warning"><Icono n="info" t={16} />{t.faltan_precios} ítem{t.faltan_precios === 1 ? "" : "s"} sin precio: una persona lo completa en Cotización (la IA no inventa precios).</div> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
@@ -67,9 +69,9 @@ function Mensajes({ mensajes, vivo, lento, abrir }: { mensajes: MensajeIa[]; viv
           : m.rol === "error" ? <BurbujaError key={m.id} texto={`No se pudo generar la respuesta: ${m.texto}`} />
             : (
               <div key={m.id} className="flex max-w-[92%] flex-col gap-2">
-                <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: "var(--ai-soft)", color: "var(--ai)" }}><Icono n="auto_awesome" t={16} /></span><InsigniaIa /><span className="text-[11px] text-text-3">{m.modelo}{m.duracion_ms ? ` · ${(m.duracion_ms / 1000).toFixed(1)} s` : ""}</span></div>
+                <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: "var(--ai-soft)", color: "var(--ai)" }}><Icono n="auto_awesome" t={16} /></span><InsigniaIa directa={!!m.datos?.rapida} /><span className="text-[11px] text-text-3">{m.modelo ?? ""}{m.duracion_ms ? ` · ${(m.duracion_ms / 1000).toFixed(1)} s` : ""}</span></div>
                 {m.texto ? <div className="rounded-2xl rounded-tl-md border border-border bg-surface px-4 py-2.5"><TextoIa t={m.texto} /></div> : null}
-                {m.datos?.tarjeta ? <Tarjeta t={m.datos.tarjeta} mensajeId={m.id} abrir={abrir} /> : null}
+                {m.datos?.tarjeta ? <Tarjeta t={m.datos.tarjeta} mensajeId={m.id} abrir={abrir} directa={!!m.datos?.guiada} /> : null}
                 {m.datos?.fuentes?.length ? <Fuentes fuentes={m.datos.fuentes} /> : null}
               </div>
             ),
@@ -228,6 +230,12 @@ export function CotizadorIA() {
   useEffect(() => void cargarLista(), []);
   const chat = useChat("cotizador", () => void cargarLista());
   const sinIa = ia.estado && !ia.estado.disponible;
+  const [guiada, setGuiada] = useState(false);
+  const abrirGuiada = (id: number) => {
+    setGuiada(false);
+    void chat.cargar(id);
+    void cargarLista();
+  };
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -239,10 +247,11 @@ export function CotizadorIA() {
           <button key={k} onClick={() => setParams(k === "chat" ? {} : { tab: k })} className={`btn h-10 px-4 ${tab === k ? "bg-primary-soft text-primary-ink" : "font-semibold text-text-2 hover:bg-surface-2"}`}><Icono n={i} t={18} />{l}</button>
         ))}
       </div>
-      {tab === "consultas" ? <ConsultasGuardadas lista={lista} editar={editar} recargar={() => void cargarLista()} /> : tab === "contexto" ? <GestionarContexto /> : (
+      {tab === "consultas" ? <ConsultasGuardadas lista={lista} editar={editar} recargar={() => void cargarLista()} /> : tab === "contexto" ? <div className="flex flex-col gap-4"><PreferidosGuiada editar={editar} /><GestionarContexto /></div> : (
         <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_280px]">
           <aside className="tarjeta flex max-h-[calc(100vh-220px)] flex-col gap-3 p-3">
             <button className="btn-primario" onClick={chat.nueva}><Icono n="add" t={18} />Nueva consulta</button>
+            {editar ? <button className="btn-secundario" onClick={() => setGuiada(true)}><Icono n="bolt" t={18} />Cotización guiada</button> : null}
             <div className="px-1 text-[11.5px] font-bold uppercase tracking-wide text-text-3">Historial compartido</div>
             <Historial lista={lista} activa={chat.conv?.id ?? null} onElegir={(id) => void chat.cargar(id)} autores />
           </aside>
@@ -254,20 +263,29 @@ export function CotizadorIA() {
             <div className="flex-1 overflow-y-auto px-5 py-4">
               {sinIa ? <div className="mb-4"><AvisoSinIa estado={ia.estado!} revisando={ia.revisando} revisar={() => void ia.revisar()} /></div> : null}
               {!chat.conv && !chat.vivo ? (
-                <div className="flex flex-col gap-2">
-                  <div className="text-[13px] font-semibold text-text-2">Ejemplos:</div>
-                  {EJEMPLOS.map((e) => <button key={e} disabled={!editar || !!sinIa} onClick={() => void chat.enviar(e)} className="rounded-xl border border-border px-3 py-2 text-left text-[13px] hover:border-primary-line disabled:opacity-50">{e}</button>)}
+                <div className="flex flex-col gap-4">
+                  {editar ? (
+                    <div className="rounded-2xl border border-border p-4">
+                      <div className="mb-3 flex items-center gap-2"><Icono n="bolt" className="text-success" /><div className="font-bold">Cotización guiada</div><span className="text-[12px] text-text-3">· al instante, sin IA</span></div>
+                      <FormGuiada onListo={abrirGuiada} />
+                    </div>
+                  ) : null}
+                  <div className="flex flex-col gap-2">
+                    <div className="text-[13px] font-semibold text-text-2">O pídelo en palabras (si el pedido es claro también se calcula al instante; lo demás lo responde la IA):</div>
+                    {EJEMPLOS.map((e) => <button key={e} disabled={!editar} onClick={() => void chat.enviar(e)} className="rounded-xl border border-border px-3 py-2 text-left text-[13px] hover:border-primary-line disabled:opacity-50">{e}</button>)}
+                  </div>
                 </div>
               ) : <Mensajes mensajes={chat.conv?.mensajes ?? []} vivo={chat.vivo} lento={chat.lento} abrir={abrir} />}
             </div>
             <div className="border-t border-border p-3">
-              {editar ? <EntradaChat deshabilitado={!!sinIa} ocupado={!!chat.vivo} placeholder="Ej. Cotiza un On-Grid de 20 kWp con Huawei para un colegio…" onEnviar={(t, v) => void chat.enviar(t, v)} /> : <div className="text-center text-[12.5px] text-text-3">Tu rol puede ver el historial, pero no hacer consultas.</div>}
+              {editar ? <EntradaChat deshabilitado={false} ocupado={!!chat.vivo} placeholder="Ej. Cotiza un On-Grid de 20 kWp con Huawei para un colegio…" onEnviar={(t, v) => void chat.enviar(t, v)} /> : <div className="text-center text-[12.5px] text-text-3">Tu rol puede ver el historial, pero no hacer consultas.</div>}
               <div className="mt-2 text-center text-[11.5px] text-text-3">La IA usa solo productos y precios del catálogo. Revisa la propuesta antes de enviarla al cliente.</div>
             </div>
           </section>
           <aside className="tarjeta hidden max-h-[calc(100vh-230px)] overflow-y-auto p-4 xl:block"><PanelContexto editar={editar} /></aside>
         </div>
       )}
+      {guiada ? <Modal titulo="Cotización guiada" icono="bolt" ancho={620} onCerrar={() => setGuiada(false)}><FormGuiada onListo={abrirGuiada} compacto /></Modal> : null}
     </div>
   );
 }
