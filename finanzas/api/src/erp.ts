@@ -8,9 +8,9 @@
  * (OBRA_PROYECTO, VENTA, EQUIPOS_OBRA, SUELDO, …). `channel` también: usamos "web", que sabemos que el ERP
  * acepta; si el ERP tiene un canal propio para esto, se cambia en `CHANNEL`.
  */
-import { montosParaErp } from "../../app/src/lib/caja/calc";
-import type { Fila, MovChica } from "../../app/src/lib/caja/types";
-import { CIUDAD_LABEL, type Ciudad } from "../../app/src/lib/caja/types";
+import { montosParaErp } from "./caja/calc";
+import type { Fila, MovChica } from "./caja/types";
+import { CIUDAD_LABEL, type Ciudad } from "./caja/types";
 import type { Usuario } from "./auth";
 
 const CHANNEL = "web";

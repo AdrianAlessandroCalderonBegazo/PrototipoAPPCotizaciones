@@ -8,15 +8,16 @@ import { iaJson, piezasDeTexto, preguntar, type Bloque, type Conversacion, type 
 /** Preguntas de un toque (las más usadas). */
 const FRECUENTES = [
   "¿Cuánto se gastó esta semana?",
-  "¿Qué gastos de caja chica no tienen recibo este mes?",
-  "¿Cuál es el saldo de las cajas?",
-  "¿Cuánto se gastó en movilidad este mes en Moquegua?",
-  "¿Cómo va la caja diaria y el Yape este mes?",
+  "¿Qué gastos no tienen foto del recibo este mes?",
+  "¿Cuál es el saldo de la caja?",
+  "¿Cuánto se gastó en movilidad este mes?",
+  "¿Cuánto se pagó por Yape esta semana?",
+  "Resumen de ventas y fondos de este mes",
 ];
 
 type Vivo = { pregunta: string; texto: string; consultando: string[] };
 
-/** Preguntar: consultas sobre la caja diaria y la caja chica. La IA solo lee; los totales los calcula el servidor. */
+/** Preguntar: consultas sobre la Caja ICR. La IA solo lee; los totales los calcula el servidor. */
 export function Preguntar({ topInset }: { topInset: number; bottomInset: number }) {
   const [estado, setEstado] = useState<EstadoIa | null>(null);
   const [conv, setConv] = useState<(Conversacion & { mensajes: MensajeIa[] }) | null>(null);
@@ -80,7 +81,7 @@ export function Preguntar({ topInset }: { topInset: number; bottomInset: number 
             <BotonClaro label="Nueva" onPress={() => (setConv(null), setVerLista(false))} />
           </View>
         </View>
-        <Text style={t(24, 800, C.white, { letterSpacing: -0.5, marginTop: 12 })}>Consulta tus cajas</Text>
+        <Text style={t(24, 800, C.white, { letterSpacing: -0.5, marginTop: 12 })}>Consulta la Caja ICR</Text>
         <Text style={t(12, 400, "rgba(255,255,255,.88)", { marginTop: 2 })}>La IA solo lee: no registra ni cambia nada. Verifica las cifras importantes.</Text>
       </TealGradient>
 

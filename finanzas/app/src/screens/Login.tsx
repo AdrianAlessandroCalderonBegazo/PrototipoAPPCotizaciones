@@ -40,7 +40,7 @@ export function Login({ onLoggedIn, topInset, bottomInset }: { onLoggedIn: () =>
               <View style={{ alignItems: "center", marginBottom: 36 }}>
                 <Image source={require("../../assets/icon.png")} style={{ width: 64, height: 64, borderRadius: 18, marginBottom: 16 }} accessibilityLabel="ICR" />
                 <Text style={t(22, 800, C.white)}>ICR Finanzas</Text>
-                <Text style={t(12.5, 400, "rgba(255,255,255,.85)", { marginTop: 4, textAlign: "center" })}>Caja diaria y caja chica</Text>
+                <Text style={t(12.5, 400, "rgba(255,255,255,.85)", { marginTop: 4, textAlign: "center" })}>Caja ICR</Text>
               </View>
 
               <View style={{ backgroundColor: C.card, borderRadius: 18, padding: 20, gap: 14 }}>

@@ -39,22 +39,3 @@ export function normalizarPermisos(p: Partial<Permisos> | null | undefined, rol:
 export function permisosDeRol(rol: string): Permisos {
   return (ROLES as Record<string, Permisos>)[(rol ?? "").toLowerCase()] ?? SIN_PERMISOS;
 }
-
-/** ¿Se puede registrar o corregir algo en ese día? (el servidor lo vuelve a comprobar) */
-export function puedeEditarDia(p: Permisos, fecha: string, hoy: string, cerrado: boolean): boolean {
-  if (!p.acceso || !p.escribir || cerrado) return false;
-  return fecha >= hoy || p.corregir_pasado;
-}
-
-/** Por qué un día está en solo lectura (para explicárselo a la persona). */
-export function motivoSoloLectura(p: Permisos, fecha: string, hoy: string, cerrado: boolean): string | null {
-  if (cerrado) return "Día cerrado: ya no se puede cambiar. Si hay un error, un administrador puede reabrirlo.";
-  if (!p.escribir) return "Tu rol solo puede ver la caja (solo lectura). Para registrar, pide acceso completo a un administrador.";
-  if (fecha < hoy && !p.corregir_pasado) return "Día anterior · solo lectura. Para corregirlo, pídeselo a Contabilidad.";
-  return null;
-}
-
-/** ¿Ese día (o uno posterior de la misma ciudad) ya está cerrado? Entonces tampoco se puede tocar. */
-export function diaCerrado(hojas: Record<string, { ciudad: string; fecha: string; cierre?: unknown }>, ciudad: string, fecha: string): boolean {
-  return Object.values(hojas).some((h) => h.ciudad === ciudad && h.fecha >= fecha && !!h.cierre);
-}

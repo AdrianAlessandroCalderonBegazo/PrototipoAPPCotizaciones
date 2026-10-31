@@ -1,5 +1,5 @@
 /**
- * «Preguntar»: consultas a la IA sobre la caja diaria y la caja chica. La responde la API principal (/api/ia/finanzas, misma sesión)
+ * «Preguntar»: consultas a la IA sobre la Caja ICR (efectivo y digital). La responde la API principal (/api/ia/finanzas, misma sesión)
  * y la respuesta llega mientras se escribe (text/event-stream). La IA solo lee: no registra ni cambia nada.
  */
 import { currentSession } from "./api";

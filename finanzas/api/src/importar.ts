@@ -16,8 +16,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Db } from "./db";
 import type { Storage } from "./storage";
-import { CATS, SUBCATS } from "../../app/src/lib/data";
-import { COMPROBANTES } from "../../app/src/lib/caja/types";
+import { CATS, SUBCATS } from "./caja/data";
+import { COMPROBANTES } from "./caja/types";
 
 type Mov = {
   movimiento_id: string; fecha: string; orden: number; tipo: string; descripcion: string; responsable: string; ciudad: string;

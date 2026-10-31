@@ -10,8 +10,8 @@ import { applyMigrations, pgliteDb } from "./db";
 import { crearServicio } from "./service";
 import { memoryStorage } from "./storage";
 import { sinEspejo } from "./erp";
-import { aperturaEstimada, saldoChica, saldosHoja } from "../../app/src/lib/caja/calc";
-import type { Hoja } from "../../app/src/lib/caja/types";
+import { aperturaEstimada, saldoChica, saldosHoja } from "./caja/calc";
+import type { Hoja } from "./caja/types";
 
 // Generador pseudoaleatorio con semilla: el mismo resultado en cada corrida.
 let semilla = 20261022;

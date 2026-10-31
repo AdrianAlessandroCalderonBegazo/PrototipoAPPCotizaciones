@@ -61,9 +61,6 @@ export async function pgliteDb(): Promise<Db> {
 
 const MIGRATIONS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db/migrations");
 
-/** Migraciones de ICR Finanzas 2 (su propia base). */
-export const MIGRACIONES_FIN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db/migrations-fin");
-
 /** Archivos de migración en orden (001, 002, …). Los `_down` son para deshacer y nunca se aplican solos. */
 const archivosDeMigracion = (dir = MIGRATIONS) =>
   fs.readdirSync(dir).filter((f) => /^\d+_.*\.sql$/.test(f) && !f.endsWith("_down.sql")).sort();
@@ -88,24 +85,4 @@ export async function migrar(db: Db, dir = MIGRATIONS): Promise<string[]> {
     nuevas.push(f);
   }
   return nuevas;
-}
-
-/**
- * Crea la base de datos de `connectionString` si todavía no existe (conectándose a la base «postgres» del mismo servidor).
- * Así una versión nueva puede tener su propia base, separada de las demás, sin pasos manuales.
- */
-export async function asegurarBase(connectionString: string): Promise<boolean> {
-  const url = new URL(connectionString);
-  const nombre = decodeURIComponent(url.pathname.replace(/^\//, ""));
-  if (!/^[a-z0-9_]+$/i.test(nombre)) throw new Error(`Nombre de base no válido: ${nombre}`);
-  url.pathname = "/postgres";
-  const admin = await pgDb(url.toString());
-  try {
-    const hay = await admin.query(`SELECT 1 AS x FROM pg_database WHERE datname = $1`, [nombre]);
-    if (hay.length) return false;
-    await admin.exec(`CREATE DATABASE "${nombre}"`);
-    return true;
-  } finally {
-    await admin.close();
-  }
 }

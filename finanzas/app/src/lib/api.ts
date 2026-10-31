@@ -3,7 +3,8 @@
  *
  * Cada persona entra con su propio usuario y clave; el token de SU sesión es el único que usa esta app y el servidor
  * decide, según su rol, qué puede hacer (el candado de código compartido ya no existe). La app trabaja siempre conectada:
- * no guarda datos propios en el dispositivo, solo la sesión. Rutas: /caja/* y /caja-chica/*.
+ * no guarda datos propios en el dispositivo, solo la sesión. Aquí: ingreso, permisos y proyectos (/api-caja); la Caja ICR
+ * se pide a la API principal (lib/icr/api.ts) con el mismo token.
  *
  * Formato de respuesta:  { status: "success", data }  |  { status: "error", error: { code, message } }
  */
@@ -128,4 +129,11 @@ export async function logout() {
 
 export function currentSession(): Session | null {
   return session;
+}
+
+/** La API principal (Caja ICR) dijo que la sesión ya no vale: se olvida y se vuelve a la pantalla de ingreso. */
+export async function sesionVencida() {
+  if (!session) return;
+  await saveSession(null);
+  onUnauthorized?.();
 }

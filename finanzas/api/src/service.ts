@@ -8,9 +8,9 @@ import { ApiError, type Usuario } from "./auth";
 import { crearPermisos, type Permisos } from "./permisos";
 import type { Storage } from "./storage";
 import { payloadDeMovChica, payloadsDeFila, type ErpMirror } from "./erp";
-import { r2, totalesHoja, validarFila } from "../../app/src/lib/caja/calc";
-import { CIUDADES, COMPROBANTES, TIPOS_FILA, type Ciudad, type Fila } from "../../app/src/lib/caja/types";
-import { CAT_PROYECTO, CATS, SUBCATS } from "../../app/src/lib/data";
+import { r2, totalesHoja, validarFila } from "./caja/calc";
+import { CIUDADES, COMPROBANTES, TIPOS_FILA, type Ciudad, type Fila } from "./caja/types";
+import { CAT_PROYECTO, CATS, SUBCATS } from "./caja/data";
 
 type Row = Record<string, any>;
 

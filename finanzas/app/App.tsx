@@ -1,4 +1,4 @@
-import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,15 +7,17 @@ import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, M
 import { C, t } from "./src/theme";
 import { loadSession, logout, refrescarPermisos, setUnauthorizedHandler, type Session } from "./src/lib/api";
 import { ROL_LABEL } from "./src/lib/caja/permisos";
-import { sync, store, useCaja, useEstadoSync, useSyncAutomatica } from "./src/lib/caja/runtime";
-import type { Ciudad } from "./src/lib/caja/types";
+import * as icr from "./src/lib/icr/api";
+import type { Mov, Resumen } from "./src/lib/icr/tipos";
 import { Login } from "./src/screens/Login";
-import { CajaDiariaFlujo } from "./src/screens/CajaDiariaFlujo";
-import { CajaChicaFlujo } from "./src/screens/CajaChicaFlujo";
-import { Historial } from "./src/screens/Historial";
-import { Reportes } from "./src/screens/Reportes";
+import { Inicio } from "./src/screens/icr/Inicio";
+import { MovForm, type ModoForm } from "./src/screens/icr/MovForm";
+import { Capturas } from "./src/screens/icr/Capturas";
+import { Detalle } from "./src/screens/icr/Detalle";
+import { Historial } from "./src/screens/icr/Historial";
+import { Reportes } from "./src/screens/icr/Reportes";
 import { Preguntar } from "./src/screens/Preguntar";
-import { MenuLateral, TabBar, type Pestana } from "./src/components/caja";
+import { MenuLateral, TabBar, type Pestana } from "./src/components/icr";
 import { ANCHO, useEscritorio } from "./src/lib/layout";
 import { Avisos } from "./src/components/Overlays";
 
@@ -35,29 +37,37 @@ export default function App() {
   );
 }
 
-/** Sesión, pestañas y avisos. Cada pestaña maneja sus propias pantallas. */
+type Vista = { t: "form"; modo: ModoForm; mov?: Mov } | { t: "digital" } | null;
+
+/** Sesión, pestañas, formularios y avisos. La app trabaja siempre conectada: los datos los guarda el servidor. */
 function Shell() {
   const insets = useSafeAreaInsets();
-  const caja = useCaja();
-  const estado = useEstadoSync();
   const escritorio = useEscritorio();
   const [listo, setListo] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
-  const [tab, setTab] = useState<Pestana>("diaria");
-  const [sinTabs, setSinTabs] = useState(false);
-  const [irA, setIrA] = useState<{ fecha: string; n: number } | undefined>();
+  const [tab, setTab] = useState<Pestana>("inicio");
+  const [vista, setVista] = useState<Vista>(null);
+  const [detalle, setDetalle] = useState<Mov | null>(null);
+  const [resumen, setResumen] = useState<Resumen | null>(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const [avisos, setAvisos] = useState<{ id: string; texto: string }[]>([]);
+  const avisar = (texto: string) => {
+    const id = String(Date.now() + Math.random());
+    setAvisos((a) => [...a.slice(-2), { id, texto }]);
+    setTimeout(() => setAvisos((a) => a.filter((x) => x.id !== id)), 6000);
+  };
 
   useEffect(() => {
     setUnauthorizedHandler(() => setSession(null));
-    void Promise.all([store.init(), loadSession()]).then(async ([, s]) => {
+    void loadSession().then(async (s) => {
       setSession(s);
       setListo(true);
       if (s) setSession((await refrescarPermisos()) ?? s); // por si cambiaron el rol desde la última vez
     });
     return () => setUnauthorizedHandler(null);
   }, []);
-  useSyncAutomatica(!!session);
-
   // el rol puede cambiar mientras la app está abierta: se vuelve a preguntar cada tanto
   useEffect(() => {
     if (!session) return;
@@ -65,43 +75,69 @@ function Shell() {
     return () => clearInterval(id);
   }, [!!session]);
 
+  const conSesion = !!session && session.permisos.acceso;
+  const cargar = useCallback(() => {
+    setCargando(true);
+    icr.resumen().then((r) => (setResumen(r), setError(null))).catch((e) => setError(e instanceof Error ? e.message : "No se pudo cargar la caja.")).finally(() => setCargando(false));
+  }, []);
+  useEffect(() => {
+    if (conSesion) cargar();
+  }, [conSesion, version, cargar]);
+  // la caja la usan varias personas a la vez (y el ERP envía fondos): se refresca sola cada minuto en la pantalla principal
+  useEffect(() => {
+    if (!conSesion || tab !== "inicio" || vista) return;
+    const id = setInterval(cargar, 60_000);
+    return () => clearInterval(id);
+  }, [conSesion, tab, vista, cargar]);
+
   if (!listo) return null;
   const inset = { topInset: insets.top, bottomInset: insets.bottom };
-  const ciudad: Ciudad = caja.ciudad;
-  const cambiarCiudad = (c: Ciudad) => store.setCiudad(c);
-  const verTabs = (oculto: boolean) => setSinTabs(oculto);
-
-  const salir = () => void logout().then(() => store.reiniciar()).then(() => setSession(null));
-  const conSesion = !!session && session.permisos.acceso;
+  const salir = () => void logout().then(() => (setSession(null), setResumen(null), setVista(null), setDetalle(null)));
+  const hecho = (mensaje: string) => {
+    setVista(null);
+    setDetalle(null);
+    setVersion((v) => v + 1);
+    avisar(mensaje);
+  };
+  const opciones = resumen ?? null;
 
   return (
     // Teléfono (y tableta): una columna. Computadora: menú lateral a la izquierda y el contenido en un panel centrado.
     <View style={{ flex: 1, width: "100%", flexDirection: escritorio && conSesion ? "row" : "column", maxWidth: escritorio ? undefined : 640, alignSelf: "center", backgroundColor: escritorio && conSesion ? C.stripeB : C.bg }}>
       {!session ? (
-        <Login onLoggedIn={() => void loadSession().then((s) => (setSession(s), sync.sincronizar()))} {...inset} />
+        <Login onLoggedIn={() => void loadSession().then((s) => setSession(s))} {...inset} />
       ) : !session.permisos.acceso ? (
         <SinAcceso session={session} onSalir={salir} {...inset} />
       ) : (
         <>
-          {escritorio ? <MenuLateral activa={tab} onPick={setTab} nombre={session.nombre} rol={ROL_LABEL[session.rolCodigo] ?? session.rolCodigo} onSalir={salir} /> : null}
+          {escritorio ? <MenuLateral activa={tab} onPick={(p) => (setTab(p), setVista(null))} nombre={session.nombre} rol={ROL_LABEL[session.rolCodigo] ?? session.rolCodigo} onSalir={salir} /> : null}
           <View style={{ flex: 1, alignItems: "center" }}>
-          <View style={{ flex: 1, width: "100%", ...(escritorio ? { maxWidth: ANCHO.panel + 40, backgroundColor: C.bg, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.line } : {}) }}>
-            <View style={{ flex: 1 }}>
-            <View style={{ flex: 1, display: tab === "diaria" ? "flex" : "none" }}>
-              <CajaDiariaFlujo caja={caja} estado={estado} ciudad={ciudad} setCiudad={cambiarCiudad} permisos={session.permisos} irA={irA} onOcultarTabs={verTabs} {...inset} />
+            <View style={{ flex: 1, width: "100%", ...(escritorio ? { maxWidth: ANCHO.panel + 40, backgroundColor: C.bg, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.line } : {}) }}>
+              <View style={{ flex: 1 }}>
+                {vista?.t === "form" && opciones ? (
+                  <MovForm modo={vista.modo} mov={vista.mov} opciones={opciones} onCerrar={() => setVista(null)} onListo={hecho} {...inset} />
+                ) : vista?.t === "digital" && opciones ? (
+                  <Capturas opciones={opciones} onCerrar={() => (setVista(null), setVersion((v) => v + 1))} onListo={hecho} {...inset} />
+                ) : (
+                  <>
+                    {tab === "inicio" ? (
+                      <Inicio datos={resumen} error={error} cargando={cargando} recargar={cargar} escribir={session.permisos.escribir} nombre={session.nombre}
+                        onAccion={(a) => setVista(a === "digital" ? { t: "digital" } : { t: "form", modo: a })} onVer={setDetalle} onSalir={escritorio ? undefined : salir} topInset={insets.top} />
+                    ) : null}
+                    {tab === "historial" ? <Historial version={version} onVer={setDetalle} topInset={insets.top} /> : null}
+                    {tab === "preguntar" ? <Preguntar {...inset} /> : null}
+                    {tab === "reportes" ? <Reportes version={version} nombre={session.nombre} topInset={insets.top} /> : null}
+                  </>
+                )}
+              </View>
+              {!escritorio && !vista ? <TabBar activa={tab} onPick={setTab} bottomInset={insets.bottom} /> : null}
+              {detalle && !vista ? (
+                <Detalle key={detalle.id} mov={detalle} escribir={session.permisos.escribir} esAdmin={session.rolCodigo === "admin"} onCerrar={() => setDetalle(null)}
+                  onEditar={(m) => (setDetalle(null), setVista({ t: "form", modo: m.tipo === "INGRESO" ? "venta" : "gasto", mov: m }))}
+                  onCambio={(msg) => (setVersion((v) => v + 1), avisar(msg))} bottomInset={insets.bottom} />
+              ) : null}
+              <Avisos avisos={avisos} onCerrar={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} topInset={insets.top} />
             </View>
-            <View style={{ flex: 1, display: tab === "chica" ? "flex" : "none" }}>
-              <CajaChicaFlujo caja={caja} estado={estado} ciudad={ciudad} setCiudad={cambiarCiudad} permisos={session.permisos} onOcultarTabs={verTabs} {...inset} />
-            </View>
-            {tab === "historial" ? (
-              <Historial caja={caja} estado={estado} ciudad={ciudad} setCiudad={cambiarCiudad} permisos={session.permisos} onAbrirDia={(c, fecha) => (store.setCiudad(c), setIrA({ fecha, n: Date.now() }), setTab("diaria"))} {...inset} />
-            ) : null}
-            {tab === "preguntar" ? <Preguntar {...inset} /> : null}
-            {tab === "reportes" ? <Reportes caja={caja} estado={estado} session={session} onSalio={() => setSession(null)} {...inset} /> : null}
-            </View>
-            {!escritorio && (!sinTabs || tab === "reportes" || tab === "historial" || tab === "preguntar") ? <TabBar activa={tab} onPick={setTab} bottomInset={insets.bottom} /> : null}
-            <Avisos avisos={caja.avisos} onCerrar={store.quitarAviso} topInset={insets.top} />
-          </View>
           </View>
         </>
       )}
@@ -115,7 +151,7 @@ function SinAcceso({ session, onSalir, topInset }: { session: Session; onSalir: 
     <View style={{ flex: 1, backgroundColor: C.bg, padding: 24, paddingTop: 64 + topInset, gap: 10 }}>
       <Text style={t(24, 800)}>Sin acceso a Finanzas</Text>
       <Text style={t(13, 400, C.muted, { lineHeight: 19 })}>
-        Tu cuenta ({session.nombre}) tiene el rol «{ROL_LABEL[session.rolCodigo] ?? session.rolCodigo}», que no puede usar Finanzas. Pídele a un administrador que te asigne el rol Finanzas o Encargado.
+        Tu cuenta ({session.nombre}) tiene el rol «{ROL_LABEL[session.rolCodigo] ?? session.rolCodigo}», que no puede usar Finanzas. Pídele a un administrador que le dé a tu rol acceso a «Finanzas (Caja ICR)» en la matriz de permisos del ERP.
       </Text>
       <Pressable onPress={onSalir} style={{ height: 54, borderRadius: 14, backgroundColor: C.teal, alignItems: "center", justifyContent: "center", marginTop: 14 }}>
         <Text style={t(14, 800, C.white)}>SALIR</Text>

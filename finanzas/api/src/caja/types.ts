@@ -3,7 +3,7 @@
  * (docs/API.md) y las tablas de db/migrations/001_caja.sql: los nombres de campo coinciden
  * a propósito para que lo que viaja por la red no necesite traducción.
  */
-import type { Categoria, Subcategoria } from "../data";
+import type { Categoria, Subcategoria } from "./data";
 
 export const CIUDADES = ["AQP", "MOQ"] as const;
 export type Ciudad = (typeof CIUDADES)[number];
