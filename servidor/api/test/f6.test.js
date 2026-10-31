@@ -128,6 +128,9 @@ describe('Cotizador IA', () => {
     assert.equal(r.estado, 200);
     assert.equal(r.error, undefined, JSON.stringify(r.error));
     assert.ok(!r.texto.includes('<think>') && !r.texto.includes('pienso'), r.texto);
+    // El borrador en inglés antes de buscar («Okay, let's tackle…») no se muestra ni se guarda
+    assert.ok(!/Okay|tackle|I should/.test(r.texto), r.texto);
+    assert.ok(!/Okay|tackle/.test(r.fin.mensaje.texto), r.fin.mensaje.texto);
     assert.deepEqual(r.eventos.filter((e) => e.tipo === 'herramienta').map((e) => e.nombre), ['buscar_productos', 'proponer_cotizacion']);
     const t = r.fin.mensaje.datos.tarjeta;
     assert.equal(t.items[0].codigo, 'FEL-10048');
@@ -170,6 +173,13 @@ describe('Cotizador IA', () => {
     assert.equal((await llamar('GET', '/api/ia/cotizador/conversaciones', { token: sesiones.vera })).datos.length, 0);
     const { rows } = await pool.query("SELECT count(*)::int AS n FROM audit_log WHERE entidad = 'ia_cotizador' AND accion = 'eliminar'");
     assert.equal(rows[0].n, 1);
+  });
+  it('si el modelo mezcla razonamiento en inglés con la respuesta, solo queda la respuesta en español', async () => {
+    const r = await preguntar(sesiones.vera, 'cotizador', { texto: 'INGLES inversor híbrido para una bodega' });
+    assert.equal(r.estado, 200);
+    const visto = r.eventos.reduce((t, e) => (e.tipo === 'borrar' ? '' : e.tipo === 'texto' ? t + e.t : t), '');
+    assert.equal(visto, 'Propuse dos equipos del catálogo y la instalación; el precio de la instalación lo pone una persona.');
+    assert.equal(r.fin.mensaje.texto, visto);
   });
 });
 

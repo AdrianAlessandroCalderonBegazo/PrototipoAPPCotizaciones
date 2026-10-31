@@ -72,6 +72,27 @@ export async function propuesta(mensajeId) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Borradores del modelo: lo que escribe antes de usar una herramienta («voy a buscar…») o su razonamiento en inglés
+// no es la respuesta. No se muestra ni se guarda.
+// ---------------------------------------------------------------------------------------------
+const INGLES = /\b(the|user|i|i'll|i'm|let's|let|need|should|wants|first|then|check|okay|so|maybe|wait|function|call|tool|catalog|answer|think)\b/gi;
+const ESPANOL = /\b(el|la|los|las|de|del|que|para|con|una|un|se|es|por|en|sistema|precio|total|cotizaci[oó]n)\b/gi;
+/** ¿Este párrafo es el razonamiento del modelo (en inglés o «voy a usar la herramienta…») y no una respuesta? */
+export function esRazonamiento(p) {
+  const t = String(p ?? '').trim();
+  if (!t) return false;
+  if (/^(okay|ok,|alright|let me|let's|first,|so,|hmm|wait|the user|i need|i should|i'll|i will)\b/i.test(t)) return true;
+  if (/\b(buscar_productos|proponer_cotizacion|ver_kits|tool|function call)\b/i.test(t) && /\b(I|I'll|should|need)\b/.test(t)) return true;
+  const en = (t.match(INGLES) ?? []).length;
+  const es = (t.match(ESPANOL) ?? []).length;
+  return en >= 6 && en > es * 1.5;
+}
+/** Quita los párrafos de razonamiento; deja solo la respuesta para la persona. */
+export function limpiarRespuesta(texto) {
+  return String(texto ?? '').split(/\n\s*\n/).filter((p) => !esRazonamiento(p)).join('\n\n').trim();
+}
+
+// ---------------------------------------------------------------------------------------------
 // Instrucciones para el modelo
 // ---------------------------------------------------------------------------------------------
 
@@ -79,7 +100,7 @@ async function sistemaCotizador(texto) {
   const [ctx, emp, par] = await Promise.all([leerContexto(), leerEmpresa(), leerParametros()]);
   const partes = [
     `Eres el Cotizador IA de ${emp.razon_social ?? 'la empresa'}, de Arequipa (Perú): vende e instala sistemas solares fotovoltaicos. Hoy es ${hoyLima()}.`,
-    'Respondes en español, en pocas frases y claro.',
+    'Respondes en español, en pocas frases y claro. No expliques lo que vas a hacer ni tu razonamiento: usa las herramientas y da solo el resultado.',
     'REGLAS QUE NUNCA ROMPES:',
     '- No inventas productos ni precios. Solo usas productos que te devuelve buscar_productos (o kits de ver_kits).',
     '- Para cotizar: busca los equipos con buscar_productos y al final llama a proponer_cotizacion con los CÓDIGOS y cantidades. El sistema pone los precios y calcula los totales.',
@@ -97,6 +118,7 @@ async function sistemaCotizador(texto) {
     const cands = await buscarProductos(texto, { limite: 15 });
     if (cands.length) partes.push(`PRODUCTOS DEL CATÁLOGO QUE PODRÍAN SERVIR (código | nombre | marca | precio con IGV):\n${cands.map((p) => `${p.codigo ?? `ID${p.id}`} | ${p.nombre} | ${p.marca ?? '-'} | ${p.precio ? `${p.moneda === 'USD' ? 'US$' : 'S/'} ${p.precio}` : 'Sin dato'}`).join('\n')}`);
   }
+  partes.push('/no_think');
   return partes.join('\n');
 }
 
@@ -105,13 +127,14 @@ async function sistemaAsistente(nombres) {
   const hoy = hoyLima();
   return [
     `Eres el Asistente IA del ERP de ${emp.razon_social ?? 'la empresa'} (Arequipa, Perú; sistemas solares). Hoy es ${hoy}; el mes actual es ${hoy.slice(0, 7)}.`,
-    'Respondes en español, en 2 a 5 frases, claro y sin rodeos.',
+    'Respondes en español, en 2 a 5 frases, claro y sin rodeos. No expliques lo que vas a hacer ni tu razonamiento: da solo el resultado.',
     'REGLAS QUE NUNCA ROMPES:',
     '- Toda cifra sale de una herramienta. Nunca inventes ni calcules sumas: los totales ya vienen hechos, cópialos tal cual (con S/).',
     '- Solo puedes LEER. No puedes crear, cambiar, anular ni borrar nada. Si te piden un cambio, explica que lo debe hacer una persona en el módulo que corresponde.',
     '- Si una herramienta dice que no hay permiso o no hay datos, dilo así («Sin dato»).',
     '- Las tablas y gráficos se muestran solos debajo de tu respuesta: no dibujes tablas, solo resume lo importante.',
     `Herramientas disponibles para esta persona: ${nombres.join(', ') || 'ninguna'}.`,
+    '/no_think',
   ].join('\n');
 }
 
@@ -120,7 +143,7 @@ function sistemaFinanzas(nombres) {
   const dia = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][new Date(`${hoy}T12:00:00Z`).getUTCDay()];
   return [
     `Eres el asistente de la app Finanzas de la empresa (caja diaria y caja chica de Arequipa = AQP y Moquegua = MOQ). Hoy es ${dia} ${hoy}.`,
-    'Respondes en español, en 1 a 4 frases cortas: lo leen en el celular.',
+    'Respondes en español, en 1 a 4 frases cortas: lo leen en el celular. No expliques tu razonamiento: da solo el resultado.',
     'REGLAS QUE NUNCA ROMPES:',
     '- Toda cifra sale de una herramienta. Nunca inventes ni sumes: los totales ya vienen hechos (con S/), cópialos tal cual.',
     '- Solo puedes LEER. No registras, corriges ni borras gastos: si te lo piden, explica que se hace en Caja diaria o Caja chica.',
@@ -128,6 +151,7 @@ function sistemaFinanzas(nombres) {
     '- «Cta. cte.» de la caja diaria es Yape. «Recibo» o «comprobante» de caja chica = la foto adjunta.',
     '- Las tablas y gráficos se muestran solos debajo de tu respuesta: no dibujes tablas.',
     `Herramientas disponibles: ${nombres.join(', ') || 'ninguna'}.`,
+    '/no_think',
   ].join('\n');
 }
 
@@ -137,6 +161,7 @@ function sistemaFinanzas(nombres) {
 
 /**
  * enviar(evento) recibe: { tipo: 'conversacion', id, titulo } · { tipo: 'herramienta', nombre, fuente } · { tipo: 'texto', t }
+ * · { tipo: 'borrar' } (descartar el texto mostrado: era un borrador)
  * · { tipo: 'fin', mensaje } · { tipo: 'error', mensaje, motivo }.
  */
 export async function preguntar({ modulo, conversacionId, texto: textoIn, porVoz = false, u, enviar, senal }) {
@@ -173,11 +198,38 @@ export async function preguntar({ modulo, conversacionId, texto: textoIn, porVoz
   let modelo = null;
   try {
     for (let vuelta = 0; vuelta < VUELTAS; vuelta++) {
-      const r = await chatear({ mensajes, herramientas: paraOllama(lista), senal, alTexto: (t) => enviar({ tipo: 'texto', t }) });
+      // El texto se muestra en vivo solo cuando ya no parece un borrador: los primeros caracteres se retienen y, si son
+      // razonamiento («Okay, let's…») o la vuelta termina usando herramientas, se descarta (evento «borrar»).
+      let retenido = '';
+      let enVivo = false;
+      let descartado = false;
+      const r = await chatear({
+        mensajes, herramientas: paraOllama(lista), senal,
+        alTexto: (t) => {
+          if (descartado) return;
+          if (enVivo) return enviar({ tipo: 'texto', t });
+          retenido += t;
+          if (retenido.length < 90 && !/\n\s*\n/.test(retenido)) return;
+          if (esRazonamiento(retenido.split(/\n\s*\n/)[0])) descartado = true;
+          else {
+            enVivo = true;
+            enviar({ tipo: 'texto', t: retenido });
+          }
+        },
+      });
       modelo = r.modelo;
-      if (r.texto) respuesta += (respuesta ? '\n\n' : '') + r.texto;
-      if (!r.llamadas.length) break;
-      mensajes.push({ role: 'assistant', content: r.texto, tool_calls: r.llamadas.map((c) => ({ function: { name: c.name, arguments: c.arguments } })) });
+      if (r.llamadas.length) {
+        if (enVivo) enviar({ tipo: 'borrar' }); // era un borrador antes de usar herramientas: no es la respuesta
+      } else {
+        const limpio = limpiarRespuesta(r.texto);
+        if (limpio !== r.texto.trim() || !enVivo) {
+          if (enVivo) enviar({ tipo: 'borrar' });
+          if (limpio) enviar({ tipo: 'texto', t: limpio });
+        }
+        if (limpio) respuesta = limpio;
+        break;
+      }
+      mensajes.push({ role: 'assistant', content: '', tool_calls: r.llamadas.map((c) => ({ function: { name: c.name, arguments: c.arguments } })) });
       for (const c of r.llamadas.slice(0, 4)) {
         const h = lista.find((x) => x.nombre === c.name);
         enviar({ tipo: 'herramienta', nombre: c.name, fuente: h?.fuente ?? null });

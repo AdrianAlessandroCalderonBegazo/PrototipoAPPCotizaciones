@@ -257,6 +257,7 @@ export function useChat(modulo: ModuloIa, alCambiarLista: () => void) {
         window.clearTimeout(reloj);
         setVivo((v) => (v ? { ...v, texto: v.texto + e.t } : v));
       }
+      if (e.tipo === "borrar") setVivo((v) => (v ? { ...v, texto: "" } : v)); // era un borrador del modelo
       if (e.tipo === "herramienta" && e.fuente) setVivo((v) => (v && !v.consultando.includes(e.fuente!) ? { ...v, consultando: [...v.consultando, e.fuente!] } : v));
     }, c.signal);
     window.clearTimeout(reloj);

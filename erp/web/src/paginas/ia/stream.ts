@@ -6,6 +6,7 @@ export type EventoIa =
   | { tipo: "conversacion"; id: number; titulo: string }
   | { tipo: "herramienta"; nombre: string; fuente: string | null }
   | { tipo: "texto"; t: string }
+  | { tipo: "borrar" }
   | { tipo: "fin"; mensaje: MensajeIa }
   | { tipo: "error"; mensaje: string; motivo: string };
 

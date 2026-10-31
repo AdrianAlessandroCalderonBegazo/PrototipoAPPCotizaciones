@@ -51,7 +51,7 @@ export async function salud() {
 /** Vectores de significado para una lista de textos. */
 export async function embeber(textos) {
   const cfg = await leerConfigIa();
-  const { r, reloj } = await pedir('/api/embed', { model: cfg.modelo_embeddings, input: textos, keep_alive: '30m' }, { ms: 120_000 });
+  const { r, reloj } = await pedir('/api/embed', { model: cfg.modelo_embeddings, input: textos, keep_alive: '24h' }, { ms: 120_000 });
   clearTimeout(reloj);
   const j = await r.json();
   return j.embeddings ?? [];
@@ -64,7 +64,7 @@ export async function embeber(textos) {
 export async function chatear({ mensajes, herramientas, alTexto, senal }) {
   const cfg = await leerConfigIa();
   const { r, reloj } = await pedir('/api/chat', {
-    model: cfg.modelo, messages: mensajes, tools: herramientas?.length ? herramientas : undefined, stream: true, think: false, keep_alive: '30m',
+    model: cfg.modelo, messages: mensajes, tools: herramientas?.length ? herramientas : undefined, stream: true, think: false, keep_alive: '24h',
     options: { temperature: 0.2, num_ctx: cfg.num_ctx },
   }, { senal });
   let texto = '';

@@ -40,13 +40,14 @@ export function iniciarOllamaFalso(puerto = 0, { modelos = ['qwen3:4b', 'bge-m3:
     const llamar = (name, args) => linea({ message: { role: 'assistant', content: '', tool_calls: [{ function: { name, arguments: args } }] }, done: false });
     if (/Cotizador IA/.test(sistema)) {
       if (ultimo.role === 'user') {
-        await decir('<think>pienso en voz baja</think>Busco en el catálogo. ');
+        // Como qwen3 de verdad: a veces «piensa en voz alta» en inglés antes de usar una herramienta.
+        await decir("<think>pienso en voz baja</think>Okay, let's tackle this user query. The user wants a hybrid solar system, so I should use the buscar_productos function to check the catalog first.\n\n");
         llamar('buscar_productos', { texto: usuario.slice(0, 60) });
       } else if (ultimo.role === 'tool' && ultimo.tool_name === 'buscar_productos') {
         const r = JSON.parse(ultimo.content);
         const p = r.productos?.[0];
         llamar('proponer_cotizacion', { titulo: 'Propuesta de prueba', items: [...(p ? [{ codigo: p.codigo, cantidad: 2 }] : []), { codigo: 'NO-EXISTE-9', cantidad: 1 }, { descripcion: 'Instalación y puesta en marcha', cantidad: 1 }] });
-      } else await decir('Propuse dos equipos del catálogo y la instalación; el precio de la instalación lo pone una persona.');
+      } else await decir(`${/INGLES/.test(usuario) ? 'Okay, now I have the products. The user wants a quote, so I should summarize the proposal for the user.\n\n' : ''}Propuse dos equipos del catálogo y la instalación; el precio de la instalación lo pone una persona.`);
     } else if (/app Finanzas/.test(sistema)) {
       if (/borra|registra/i.test(usuario)) await decir('Solo puedo leer: los gastos se registran o corrigen en Caja diaria o Caja chica.');
       else if (ultimo.role === 'user') {
