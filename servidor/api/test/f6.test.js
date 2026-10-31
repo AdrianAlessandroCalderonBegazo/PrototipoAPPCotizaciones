@@ -190,7 +190,12 @@ describe('Asistente IA', () => {
     const d = r.fin.mensaje.datos;
     assert.equal(d.herramientas[0], 'resumen_finanzas');
     assert.ok(d.bloques.some((b) => b.tipo === 'kpis' && b.items[0].v.startsWith('S/')));
-    assert.deepEqual(d.fuentes, ['Contabilidad', 'Generado por IA']);
+    assert.deepEqual(d.fuentes, ['Contabilidad']); // pregunta frecuente: respuesta directa, sin IA
+    assert.equal(d.rapida, true);
+    assert.match(r.fin.mensaje.texto, /flujo neto/);
+    // Una pregunta abierta sí la responde la IA
+    const ia = await preguntar(sesiones.fina, 'asistente', { texto: 'Analiza por qué cambiaron las finanzas y qué recomiendas' });
+    assert.deepEqual(ia.fin.mensaje.datos.fuentes, ['Contabilidad', 'Generado por IA']);
     const id = r.eventos.find((e) => e.tipo === 'conversacion').id;
     assert.equal((await llamar('GET', `/api/ia/asistente/conversaciones/${id}`, { token: sesiones.vera })).estado, 404);
     assert.equal((await llamar('GET', '/api/ia/asistente/conversaciones', { token: sesiones.vera })).datos.length, 0);

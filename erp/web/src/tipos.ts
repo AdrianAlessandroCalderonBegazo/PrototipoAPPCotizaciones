@@ -168,7 +168,7 @@ export type BloqueIa =
   | { tipo: "tabla"; titulo: string; columnas: { l: string; a: "left" | "right" }[]; filas: string[][]; destacar: number | null }
   | { tipo: "grafico"; titulo: string; barras: { l: string; v: number; texto: string }[] };
 export type MensajeIa = {
-  id: number; rol: "usuario" | "ia" | "error"; texto: string; datos: { tarjeta?: TarjetaIa | null; bloques?: BloqueIa[]; fuentes?: string[]; herramientas?: string[] } | null;
+  id: number; rol: "usuario" | "ia" | "error"; texto: string; datos: { tarjeta?: TarjetaIa | null; bloques?: BloqueIa[]; fuentes?: string[]; herramientas?: string[]; rapida?: boolean; guiada?: boolean } | null;
   por_voz: boolean; autor_nombre: string | null; modelo: string | null; duracion_ms: number | null; creado_en: string;
 };
 export type ContextoIa = { reglas: string | null; notas: string | null; usar_catalogo: boolean; usar_precios: boolean; usar_reglas: boolean; usar_notas: boolean; catalogo: { total: number; indexados: number; actualizado_en: string | null }; tipo_cambio: { valor: string | null; fecha: string | null }; igv_pct: number };

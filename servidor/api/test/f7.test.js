@@ -135,7 +135,8 @@ describe('IA de Finanzas', () => {
     assert.equal(k[1].v, '3');
     assert.equal(k[2].v, '2'); // solo el taxi tiene foto
     assert.match(r.texto, /S\/ 129\.50/);
-    assert.deepEqual(d.fuentes, ['Caja chica', 'Generado por IA']);
+    assert.deepEqual(d.fuentes, ['Caja chica']); // respuesta directa: no la generó la IA
+    assert.equal(d.rapida, true);
     const moq = await preguntar(sesiones.fina, { texto: '¿Cuánto se gastó en Moquegua este mes?' });
     assert.equal(moq.fin.mensaje.datos.bloques[0].items[0].v, 'S/ 30.00');
   });
@@ -150,6 +151,29 @@ describe('IA de Finanzas', () => {
     const kp = p.fin.mensaje.datos.bloques[0].items;
     assert.equal(kp[0].v, 'S/ 230.00'); // 30 caja chica + 200 caja diaria
     assert.equal(kp[2].v, 'S/ 50,000.00'); // contabilidad también ve Proyectos: se agrega el presupuesto
+  });
+  it('las preguntas frecuentes se responden sin IA (al instante, aunque la IA esté apagada); las demás van a la IA', async () => {
+    const chats = () => ollama.pedidos.filter((x) => x.ruta === '/api/chat').length;
+    const antes = chats();
+    const r = await preguntar(sesiones.fina, { texto: '¿Qué gastos de caja chica no tienen recibo este mes?' });
+    assert.equal(chats(), antes, 'no debe llamar al modelo');
+    assert.equal(r.fin.mensaje.datos.rapida, true);
+    assert.equal(r.fin.mensaje.modelo, null);
+    assert.match(r.fin.mensaje.texto, /2 no tienen foto del recibo/);
+    const url = process.env.OLLAMA_URL;
+    delete process.env.OLLAMA_URL; // IA apagada
+    try {
+      const s = await preguntar(sesiones.fina, { texto: 'saldo de las cajas' });
+      assert.ok(s.fin, JSON.stringify(s.error));
+      assert.match(s.fin.mensaje.texto, /Arequipa/);
+      const otra = await preguntar(sesiones.fina, { texto: '¿Por qué subieron tanto los gastos?' });
+      assert.ok(otra.error); // esa sí necesita la IA
+    } finally {
+      process.env.OLLAMA_URL = url;
+    }
+    const ia = await preguntar(sesiones.fina, { texto: 'Registra un gasto de 20 soles de taxi' });
+    assert.ok(chats() > antes, 'lo que no se reconoce va a la IA');
+    assert.notEqual(ia.fin.mensaje.datos.rapida, true);
   });
   it('la IA no registra nada y las conversaciones son privadas', async () => {
     const antes = (await pool.query('SELECT count(*)::int AS n FROM caja_chica_mov')).rows[0].n;

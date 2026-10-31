@@ -7,6 +7,7 @@ import { leerContexto } from './config.js';
 import { ejecutarHerramienta, herramientasDe, paraOllama } from './herramientas.js';
 import { buscarProductos } from './indice.js';
 import { chatear } from './ollama.js';
+import { reconocer, resumir } from './rapidas.js';
 
 const hoyLima = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
 const VUELTAS = 5; // máximo de idas y vueltas con herramientas por pregunta
@@ -159,6 +160,18 @@ function sistemaFinanzas(nombres) {
 // Preguntar (streaming)
 // ---------------------------------------------------------------------------------------------
 
+/** Guarda la respuesta (de la IA o directa) y avisa el fin al navegador. */
+async function guardarRespuesta(conv, respuesta, datos, modelo, inicio, enviar) {
+  const { rows } = await consulta(
+    `INSERT INTO ia_mensajes (conversacion_id, rol, texto, datos, modelo, duracion_ms) VALUES ($1, 'ia', $2, $3, $4, $5)
+     RETURNING id, rol, texto, datos, por_voz, autor_nombre, modelo, duracion_ms, creado_en::text AS creado_en`,
+    [conv.id, respuesta, JSON.stringify(datos), modelo, Date.now() - inicio],
+  );
+  await consulta("UPDATE ia_conversaciones SET actualizado_en = now() AT TIME ZONE 'America/Lima' WHERE id = $1", [conv.id]);
+  enviar({ tipo: 'fin', mensaje: rows[0] });
+  return conv.id;
+}
+
 /**
  * enviar(evento) recibe: { tipo: 'conversacion', id, titulo } · { tipo: 'herramienta', nombre, fuente } · { tipo: 'texto', t }
  * · { tipo: 'borrar' } (descartar el texto mostrado: era un borrador)
@@ -185,6 +198,22 @@ export async function preguntar({ modulo, conversacionId, texto: textoIn, porVoz
 
   const lista = await herramientasDe(modulo, u);
   const inicio = Date.now();
+
+  // Respuesta directa (sin IA): preguntas frecuentes o escritas parecido → consulta fija, en menos de un segundo.
+  const rapida = reconocer(modulo, texto);
+  if (rapida && lista.some((h) => h.nombre === rapida.herramienta)) {
+    try {
+      const h = lista.find((x) => x.nombre === rapida.herramienta);
+      enviar({ tipo: 'herramienta', nombre: h.nombre, fuente: h.fuente });
+      const res = await ejecutarHerramienta(lista, h.nombre, rapida.args, u);
+      const respuesta = resumir(h.nombre, res.modelo);
+      enviar({ tipo: 'texto', t: respuesta });
+      const datos = { tarjeta: null, bloques: (res.bloques ?? []).slice(-8), fuentes: [res.fuente, ...(res.fuentesExtra ?? [])].filter(Boolean), herramientas: [h.nombre], rapida: true };
+      return await guardarRespuesta(conv, respuesta, datos, null, inicio, enviar);
+    } catch (e) {
+      console.error('Respuesta directa falló, se pasa a la IA:', e?.message);
+    }
+  }
   const mensajes = [
     { role: 'system', content: modulo === 'cotizador' ? await sistemaCotizador([texto, ...previos.filter((m) => m.rol === 'usuario').slice(0, 2).map((m) => m.texto)].join(' ')) : modulo === 'finanzas' ? sistemaFinanzas(lista.map((h) => h.nombre)) : await sistemaAsistente(lista.map((h) => h.nombre)) },
     ...previos.reverse().map((m) => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.texto })),
@@ -247,13 +276,7 @@ export async function preguntar({ modulo, conversacionId, texto: textoIn, porVoz
     const datos = { tarjeta, bloques: bloques.slice(-8), fuentes: [...fuentes, 'Generado por IA'], herramientas: usadas };
     if (!respuesta && tarjeta) respuesta = 'Esta es la propuesta. Revísala y ábrela en Cotización para completarla y guardarla.';
     if (!respuesta && !bloques.length) respuesta = 'No obtuve una respuesta. Intenta escribir la consulta de otra forma.';
-    const { rows } = await consulta(
-      `INSERT INTO ia_mensajes (conversacion_id, rol, texto, datos, modelo, duracion_ms) VALUES ($1, 'ia', $2, $3, $4, $5)
-       RETURNING id, rol, texto, datos, por_voz, autor_nombre, modelo, duracion_ms, creado_en::text AS creado_en`,
-      [conv.id, respuesta, JSON.stringify(datos), modelo, Date.now() - inicio],
-    );
-    await consulta("UPDATE ia_conversaciones SET actualizado_en = now() AT TIME ZONE 'America/Lima' WHERE id = $1", [conv.id]);
-    enviar({ tipo: 'fin', mensaje: rows[0] });
+    await guardarRespuesta(conv, respuesta, datos, modelo, inicio, enviar);
   } catch (e) {
     const motivo = e?.sinIa ? 'no_instalada' : e?.sinConexion ? 'sin_conexion' : e?.tiempo ? 'tiempo' : e?.estado === 404 ? 'falta_modelo' : 'error';
     const mensaje = e?.estado === 404 ? 'El modelo de IA no está descargado en el servidor.' : e?.message ?? 'No se pudo generar la respuesta.';

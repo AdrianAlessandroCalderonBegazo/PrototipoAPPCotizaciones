@@ -10,7 +10,7 @@ export type Bloque =
   | { tipo: "kpis"; items: { l: string; v: string; c?: "primario" | "peligro" }[] }
   | { tipo: "tabla"; titulo: string; columnas: { l: string; a: "left" | "right" }[]; filas: string[][]; destacar: number | null }
   | { tipo: "grafico"; titulo: string; barras: { l: string; v: number; texto: string }[] };
-export type MensajeIa = { id: number; rol: "usuario" | "ia" | "error"; texto: string; datos: { bloques?: Bloque[]; fuentes?: string[] } | null; por_voz: boolean; creado_en: string; duracion_ms: number | null };
+export type MensajeIa = { id: number; rol: "usuario" | "ia" | "error"; texto: string; datos: { bloques?: Bloque[]; fuentes?: string[]; rapida?: boolean } | null; por_voz: boolean; creado_en: string; duracion_ms: number | null };
 export type Conversacion = { id: number; titulo: string; actualizado_en: string; n_mensajes: number };
 export type EstadoIa = { disponible: boolean; motivo: string | null; detalle: string; modelo: string };
 export type Evento =

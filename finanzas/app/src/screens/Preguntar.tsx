@@ -89,7 +89,7 @@ export function Preguntar({ topInset }: { topInset: number; bottomInset: number 
           {sinIa ? (
             <View style={[card(14), { padding: 14, gap: 8, backgroundColor: C.stripeA }]}>
               <Text style={t(13, 800)}>La IA no está disponible ahora.</Text>
-              <Text style={t(12, 400, C.muted)}>{estado?.motivo === "no_instalada" ? "Todavía no se instaló en el servidor." : estado?.detalle}</Text>
+              <Text style={t(12, 400, C.muted)}>{estado?.motivo === "no_instalada" ? "Todavía no se instaló en el servidor." : estado?.detalle} Las preguntas frecuentes igual se responden al instante (sin IA).</Text>
               <Pressable onPress={revisar}><Text style={t(12, 800, C.teal)}>COMPROBAR DE NUEVO</Text></Pressable>
             </View>
           ) : null}
@@ -108,9 +108,9 @@ export function Preguntar({ topInset }: { topInset: number; bottomInset: number 
 
           {!conv && !vivo && !verLista ? (
             <View style={{ gap: 8 }}>
-              <Text style={kicker(C.ink, 11)}>PREGUNTAS FRECUENTES</Text>
+              <Text style={kicker(C.ink, 11)}>PREGUNTAS FRECUENTES · AL INSTANTE</Text>
               {FRECUENTES.map((f) => (
-                <Pressable key={f} disabled={!!sinIa} onPress={() => void enviar(f)} style={({ pressed }) => [card(12), { paddingVertical: 12, paddingHorizontal: 14, backgroundColor: pressed ? C.tint : C.card, opacity: sinIa ? 0.5 : 1 }]}>
+                <Pressable key={f} disabled={!!vivo} onPress={() => void enviar(f)} style={({ pressed }) => [card(12), { paddingVertical: 12, paddingHorizontal: 14, backgroundColor: pressed ? C.tint : C.card }]}>
                   <Text style={t(13, 600, C.ink)}>{f}</Text>
                 </Pressable>
               ))}
@@ -143,9 +143,9 @@ export function Preguntar({ topInset }: { topInset: number; bottomInset: number 
           <TextInput
             value={texto}
             onChangeText={setTexto}
-            editable={!sinIa}
+            editable
             multiline
-            placeholder={sinIa ? "La IA no está disponible ahora." : "Ej. ¿Cuánto se gastó en movilidad esta semana?"}
+            placeholder="Ej. ¿Cuánto se gastó en movilidad esta semana?"
             placeholderTextColor={C.placeholder}
             onKeyPress={(e) => {
               const ev = e.nativeEvent as { key: string; shiftKey?: boolean };
@@ -156,9 +156,9 @@ export function Preguntar({ topInset }: { topInset: number; bottomInset: number 
             }}
             style={[t(14, 500), { flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: C.card }]}
           />
-          <Microfono deshabilitado={!!sinIa} base={texto} onTexto={(x) => (setTexto(x), setPorVoz(true))} />
-          <Pressable onPress={() => void enviar(texto, porVoz)} disabled={!texto.trim() || !!vivo || !!sinIa} accessibilityLabel="Enviar"
-            style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.teal, alignItems: "center", justifyContent: "center", opacity: !texto.trim() || vivo || sinIa ? 0.4 : 1 }}>
+          <Microfono deshabilitado={false} base={texto} onTexto={(x) => (setTexto(x), setPorVoz(true))} />
+          <Pressable onPress={() => void enviar(texto, porVoz)} disabled={!texto.trim() || !!vivo} accessibilityLabel="Enviar"
+            style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.teal, alignItems: "center", justifyContent: "center", opacity: !texto.trim() || vivo ? 0.4 : 1 }}>
             <Text style={t(20, 800, C.white)}>↑</Text>
           </Pressable>
         </View>
@@ -200,7 +200,11 @@ function Respuesta({ m }: { m: MensajeIa }) {
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: "#EFE9FF" }}><Text style={t(10.5, 800, "#6D4BD8")}>✦ GENERADO POR IA</Text></View>
+        {m.datos?.rapida ? (
+          <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: C.tint }}><Text style={t(10.5, 800, C.teal)}>⚡ RESPUESTA DIRECTA · SIN IA</Text></View>
+        ) : (
+          <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: "#EFE9FF" }}><Text style={t(10.5, 800, "#6D4BD8")}>✦ GENERADO POR IA</Text></View>
+        )}
         {m.duracion_ms ? <Text style={t(10.5, 400, C.muted)}>{(m.duracion_ms / 1000).toFixed(1)} s</Text> : null}
       </View>
       {m.texto ? <TextoIa texto={m.texto} /> : null}

@@ -9,12 +9,14 @@ import { useSesion } from "../../sesion";
 import type { BloqueIa, ConvIa, MensajeIa } from "../../tipos";
 import { AvisoSinIa, Bloques, BurbujaError, BurbujaUsuario, ChipEstado, EntradaChat, Fuentes, Historial, InsigniaIa, Pensando, TextoIa, useChat, useEstadoIa } from "./comun";
 
+// Se responden con una consulta fija, sin IA (servidor/api/src/ia/rapidas.js › FRECUENTES): al instante.
 const FRECUENTES: [string, string, string][] = [
-  ["account_balance", "Resumen de finanzas del mes", "Resumen de ingresos y egresos de la cuenta principal este mes comparado con el anterior"],
-  ["solar_power", "Cómo van los proyectos activos", "¿Cómo van los proyectos activos? ¿Alguno está cerca de su presupuesto?"],
-  ["verified", "Ventas facturadas del mes", "Resumen de las facturas y boletas emitidas este mes por cliente"],
-  ["savings", "Caja chica este mes", "¿Cuánto se gastó de caja chica este mes y cuántos gastos no tienen comprobante?"],
-  ["request_quote", "Cotizaciones enviadas", "¿Qué cotizaciones están enviadas y aún sin respuesta?"],
+  ["account_balance", "Resumen de finanzas del mes", "Resumen de ingresos y egresos de este mes"],
+  ["solar_power", "Cómo van los proyectos activos", "¿Cómo van los proyectos activos y su presupuesto?"],
+  ["verified", "Ventas facturadas del mes", "Facturas y boletas emitidas este mes"],
+  ["savings", "Caja chica este mes", "¿Cuánto se gastó de caja chica este mes?"],
+  ["request_quote", "Cotizaciones enviadas", "¿Qué cotizaciones están enviadas y sin respuesta?"],
+  ["inventory", "Stock bajo en almacén", "¿Qué artículos del almacén están con stock bajo?"],
 ];
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -47,7 +49,7 @@ function exportarPdf(titulo: string, mensajes: MensajeIa[], autor: string) {
 function Respuesta({ m, onPdf }: { m: MensajeIa; onPdf: () => void }) {
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: "var(--ai-soft)", color: "var(--ai)" }}><Icono n="psychology" t={17} /></span><InsigniaIa /><span className="text-[11px] text-text-3">{m.modelo}{m.duracion_ms ? ` · ${(m.duracion_ms / 1000).toFixed(1)} s` : ""}</span></div>
+      <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg" style={{ background: "var(--ai-soft)", color: "var(--ai)" }}><Icono n="psychology" t={17} /></span><InsigniaIa directa={!!m.datos?.rapida} /><span className="text-[11px] text-text-3">{m.modelo ?? ""}{m.duracion_ms ? ` · ${(m.duracion_ms / 1000).toFixed(1)} s` : ""}</span></div>
       {m.texto ? <div className="rounded-2xl rounded-tl-md border border-border bg-surface px-4 py-2.5"><TextoIa t={m.texto} /></div> : null}
       {m.datos?.bloques?.length ? <Bloques bloques={m.datos.bloques} /> : null}
       <div className="flex flex-wrap items-center gap-2">
@@ -87,10 +89,10 @@ export function AsistenteIA() {
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="tarjeta flex max-h-[calc(100vh-200px)] flex-col gap-3 p-3">
           <button className="btn-primario" onClick={chat.nueva}><Icono n="add" t={18} />Nueva conversación</button>
-          <div className="px-1 text-[11.5px] font-bold uppercase tracking-wide text-text-3">Consultas frecuentes</div>
+          <div className="px-1 text-[11.5px] font-bold uppercase tracking-wide text-text-3">Consultas frecuentes <span className="font-medium normal-case">· al instante</span></div>
           <div className="flex flex-col gap-1">
             {FRECUENTES.map(([i, l, q]) => (
-              <button key={l} disabled={!editar || !!sinIa || !!chat.vivo} onClick={() => { chat.nueva(); void chat.enviar(q); }} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-semibold text-text-2 hover:bg-surface-2 disabled:opacity-50">
+              <button key={l} disabled={!editar || !!chat.vivo} onClick={() => { chat.nueva(); void chat.enviar(q); }} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-semibold text-text-2 hover:bg-surface-2 disabled:opacity-50">
                 <Icono n={i} t={18} className="text-primary-ink" />{l}
               </button>
             ))}
@@ -113,7 +115,7 @@ export function AsistenteIA() {
               <div className="flex flex-col gap-5">
                 {mensajes.map((m, i) =>
                   m.rol === "usuario" ? <BurbujaUsuario key={m.id} texto={m.texto} porVoz={m.por_voz} cuando={fechaHora(m.creado_en)} />
-                    : m.rol === "error" ? <BurbujaError key={m.id} texto={m.texto} onReintentar={editar && !sinIa && !chat.vivo && ultimaPregunta(i) ? () => void chat.enviar(ultimaPregunta(i)!) : undefined} />
+                    : m.rol === "error" ? <BurbujaError key={m.id} texto={m.texto} onReintentar={editar && !chat.vivo && ultimaPregunta(i) ? () => void chat.enviar(ultimaPregunta(i)!) : undefined} />
                       : <Respuesta key={m.id} m={m} onPdf={() => exportarPdf(ultimaPregunta(i) ?? "Informe", [mensajes[i - 1], m].filter(Boolean), usuario?.nombre ?? "")} />,
                 )}
                 {chat.vivo ? (
@@ -130,7 +132,7 @@ export function AsistenteIA() {
             )}
           </div>
           <div className="border-t border-border p-3">
-            {editar ? <EntradaChat deshabilitado={!!sinIa} ocupado={!!chat.vivo} placeholder="Ej. ¿Cuánto gastamos en el proyecto Hostal Los Tambos este mes?" onEnviar={(t, v) => void chat.enviar(t, v)} /> : <div className="text-center text-[12.5px] text-text-3">Tu rol puede ver su historial, pero no hacer consultas.</div>}
+            {editar ? <EntradaChat deshabilitado={false} ocupado={!!chat.vivo} placeholder="Ej. ¿Cuánto gastamos en el proyecto Hostal Los Tambos este mes?" onEnviar={(t, v) => void chat.enviar(t, v)} /> : <div className="text-center text-[12.5px] text-text-3">Tu rol puede ver su historial, pero no hacer consultas.</div>}
             <div className="mt-2 text-center text-[11.5px] text-text-3">El asistente solo lee datos; no modifica registros. Verifica las cifras antes de compartir un informe.</div>
           </div>
         </section>

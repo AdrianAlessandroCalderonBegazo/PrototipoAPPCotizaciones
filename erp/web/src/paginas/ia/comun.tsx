@@ -50,13 +50,18 @@ export function AvisoSinIa({ estado, revisando, revisar }: { estado: EstadoIa; r
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-2 px-4 py-3 text-[13px]">
       <Icono n="power_off" className="text-text-3" />
-      <div className="min-w-0 flex-1"><b>Modelo no disponible.</b> {texto} Puedes revisar el historial; las consultas nuevas se habilitan cuando vuelva.</div>
+      <div className="min-w-0 flex-1"><b>Modelo no disponible.</b> {texto} Las consultas frecuentes igual se responden (respuesta directa, sin IA); las demás, cuando vuelva.</div>
       <button className="btn-secundario h-9" disabled={revisando} onClick={revisar}><Icono n="refresh" t={18} />{revisando ? "Comprobando…" : "Comprobar de nuevo"}</button>
     </div>
   );
 }
 
-export const InsigniaIa = () => (
+/** «Generado por IA» o, si se respondió con una consulta fija, «Respuesta directa · sin IA». */
+export const InsigniaIa = ({ directa = false }: { directa?: boolean }) => directa ? (
+  <span className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-surface-2 px-2 text-[11.5px] font-bold text-text-2">
+    <Icono n="bolt" t={14} className="text-success" />Respuesta directa · sin IA
+  </span>
+) : (
   <span className="inline-flex h-6 items-center gap-1 rounded-md border px-2 text-[11.5px] font-bold" style={{ background: "var(--ai-soft)", color: "var(--ai)", borderColor: "var(--ai-line)" }}>
     <Icono n="auto_awesome" t={14} />Generado por IA
   </span>
