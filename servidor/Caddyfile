@@ -88,6 +88,32 @@ finanzas.{$DOMINIO} {
 	}
 }
 
+# ERP ICR: la app web (React) + la API principal en /api y los archivos subidos en /uploads (mismo origen, sin CORS).
+# /api-caja va a la API de Finanzas (fotos de recibos de la caja anterior, en los proyectos antiguos; misma sesión).
+# Los archivos con huella en el nombre (/assets/*) se guardan en caché un año; index.html nunca.
+erp.{$DOMINIO} {
+	import seguridad
+	request_body {
+		max_size 12MB
+	}
+	handle /api-caja/* {
+		reverse_proxy finanzas-api:8787
+	}
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle /uploads/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/erp
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
 # ---------------------------------------------------------------------------------------------------------
 # Relay (aplicativo «on the side», otro proyecto que comparte este servidor). NO BORRAR ESTE BLOQUE:
 # cada despliegue de icr reemplaza el Caddyfile del VPS por este archivo, así que si Relay no está aquí se cae.

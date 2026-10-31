@@ -239,3 +239,13 @@ describe('Caja ICR', () => {
     assert.equal((await saldos()).digital, '1.00');
   });
 });
+
+describe('Caddyfile', () => {
+  it('tiene todas las direcciones (y Relay al final): si falta una, Caddy no pide su certificado', () => {
+    const c = readFileSync(fileURLToPath(new URL('../../Caddyfile', import.meta.url)), 'utf8');
+    const bloques = [...c.matchAll(/^([a-z]\S*)\s+\{\s*$/gm)].map((m) => m[1]);
+    for (const b of ['cotizador.{$DOMINIO}', 'app.{$DOMINIO}', 'api.{$DOMINIO}', 'finanzas.{$DOMINIO}', 'erp.{$DOMINIO}']) assert.ok(bloques.includes(b), `falta ${b}`);
+    assert.deepEqual(bloques.slice(-2), ['atleta.adriancalderonbegazo.site', 'coach.adriancalderonbegazo.site']);
+    assert.ok(!bloques.includes('finanza.{$DOMINIO}'));
+  });
+});
