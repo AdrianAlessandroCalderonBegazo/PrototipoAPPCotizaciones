@@ -9,7 +9,7 @@ import { aSoles, dinero, esNegativo, paraDibujar, restar } from "../../dinero";
 import { fecha, texto } from "../../formato";
 import { puede } from "../../modulos";
 import { useSesion } from "../../sesion";
-import type { CajaChicaErp, Empresa, MovimientoCuenta, Parametros, ResumenConta } from "../../tipos";
+import type { Empresa, MovCajaIcr, MovimientoCuenta, Parametros, ResumenCajaIcr, ResumenConta } from "../../tipos";
 import { useDatos } from "../../usarDatos";
 import { exportarExcel, exportarPdf } from "./exportar";
 import { Cuentas, DetalleMovimiento, EnviarFondos, NuevoMovimiento } from "./Modales";
@@ -60,7 +60,7 @@ export function Contabilidad() {
     () => (cuenta ? api<{ movimientos: MovimientoCuenta[]; totales: { ingresos: string; egresos: string } }>("GET", "/contabilidad/movimientos", { consulta: { cuenta_id: cuenta.id, anulados: "1" } }) : Promise.resolve(null)),
     [cuenta?.id],
   );
-  const caja = useDatos(() => api<CajaChicaErp>("GET", "/contabilidad/caja-chica"));
+  const caja = useDatos(() => api<ResumenCajaIcr>("GET", "/caja-icr/resumen").catch(() => null));
   const param = useDatos(() => api<Parametros>("GET", "/parametros"));
   const empresa = useDatos(() => api<Empresa>("GET", "/empresa"));
   useEffect(() => {
@@ -135,12 +135,12 @@ export function Contabilidad() {
           ) : null}
           <button className="btn-secundario" onClick={() => setModal("cuentas")}><Icono n="account_balance" t={18} />Cuentas</button>
           {editar && cuenta ? <button className="btn-secundario" onClick={() => setModal("nuevo")}><Icono n="add" t={18} />Nuevo movimiento</button> : null}
-          {editar ? <button className="btn-primario" onClick={() => setModal("fondos")}><Icono n="savings" t={18} />Enviar fondos a caja chica</button> : null}
+          {editar ? <button className="btn-primario" onClick={() => setModal("fondos")}><Icono n="savings" t={18} />Enviar fondos a Caja ICR</button> : null}
         </div>
       </div>
 
       <div className="flex gap-1.5">
-        {([["principal", "Cuenta principal", "account_balance"], ["caja", "Caja chica", "savings"]] as const).map(([k, l, i]) => (
+        {([["principal", "Cuenta principal", "account_balance"], ["caja", "Caja ICR", "savings"]] as const).map(([k, l, i]) => (
           <button key={k} onClick={() => setTab(k)} className={`btn h-10 ${tab === k ? "bg-primary-soft text-primary-ink" : "font-semibold text-text-2 hover:bg-surface-2"}`}><Icono n={i} t={19} />{l}</button>
         ))}
       </div>
@@ -282,7 +282,7 @@ export function Contabilidad() {
                             <td className="px-3 py-3">{texto(m.categoria)}</td>
                             <td className="px-3 py-3">{m.proyecto_nombre ?? <span className="text-text-3">—</span>}</td>
                             <td className="px-3 py-3">
-                              {m.source === "envio_caja_chica" ? <span className="inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md border border-border bg-surface-2 px-2 text-[11.5px] font-bold text-text-2"><Icono n="savings" t={14} />Caja chica</span> : m.documento ? <span className="font-mono text-[12px]">{m.documento}</span> : <span className="text-text-3">Sin dato</span>}
+                              {m.source !== "erp" ? <span className="inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md border border-border bg-surface-2 px-2 text-[11.5px] font-bold text-text-2"><Icono n="savings" t={14} />{m.source === "envio_caja_chica" ? "Caja chica" : "Caja ICR"}</span> : m.documento ? <span className="font-mono text-[12px]">{m.documento}</span> : <span className="text-text-3">Sin dato</span>}
                             </td>
                             <td className="num whitespace-nowrap px-3 py-3 text-right font-bold" style={{ color: m.anulado ? undefined : m.tipo === "ingreso" ? "var(--success)" : "var(--text)" }}>{m.tipo === "ingreso" ? "+" : "−"}{dinero(m.monto, mon)}</td>
                             <td className="num whitespace-nowrap px-5 py-3 text-right text-text-2">{m.saldo ? dinero(m.saldo, mon) : "—"}</td>
@@ -305,55 +305,67 @@ export function Contabilidad() {
             </section>
           </>
         )
-      ) : caja.cargando && !caja.datos ? <Cargando /> : caja.error ? <ErrorCarga mensaje={caja.error} reintentar={caja.recargar} /> : !caja.datos?.disponible ? (
-        <div className="tarjeta"><Vacio icono="sync_problem" titulo="La caja chica no está disponible">La API de Finanzas todavía no creó sus tablas en el servidor (o falta actualizarla).</Vacio></div>
+      ) : caja.cargando && !caja.datos ? <Cargando /> : !caja.datos ? (
+        <div className="tarjeta"><Vacio icono="sync_problem" titulo="La Caja ICR no está disponible">Falta actualizar el servidor, o tu rol no tiene acceso a la caja.</Vacio></div>
       ) : (
-        <>
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface-2 px-4 py-3 text-[13px] text-text-2">
-            <Icono n="lock" t={18} />Solo lectura. Los movimientos de caja chica se registran en la app de Finanzas y aparecen aquí al instante.
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="tarjeta flex flex-col gap-1.5 p-5">
-              <div className="text-[12.5px] font-semibold text-text-2">Saldo de caja chica</div>
-              <div className="num text-[26px] font-extrabold">{dinero(caja.datos.saldo_total)}</div>
-              <div className="flex flex-wrap gap-x-4 text-[12.5px] text-text-2">{caja.datos.saldos.map((s) => <span key={s.ciudad}>{s.nombre} <b className="num" style={{ color: esNegativo(s.saldo) ? "var(--danger)" : undefined }}>{dinero(s.saldo)}</b></span>)}</div>
-            </div>
-            <div className="tarjeta flex flex-col gap-1.5 p-5"><div className="text-[12.5px] font-semibold text-text-2">Ingresos · {mesLargo(caja.datos.mes)}</div><div className="num text-[26px] font-extrabold">{dinero(caja.datos.ingresos_mes)}</div><div className="text-[12px] text-text-3">Fondos de la cuenta principal y envíos desde la caja diaria</div></div>
-            <div className="tarjeta flex flex-col gap-1.5 p-5"><div className="text-[12.5px] font-semibold text-text-2">Egresos · {mesLargo(caja.datos.mes)}</div><div className="num text-[26px] font-extrabold">{dinero(caja.datos.egresos_mes)}</div><div className="text-[12px] text-text-3">{caja.datos.gastos_mes} gastos · {caja.datos.sin_comprobante_mes} sin foto del recibo</div></div>
-          </div>
-          <section className="tarjeta overflow-hidden">
-            <div className="border-b border-border px-5 py-4"><div className="titulo-seccion">Últimos movimientos de caja chica</div></div>
-            {!caja.datos.movimientos.length ? <Vacio icono="savings" titulo="Sin movimientos" /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] border-collapse text-left text-[13.5px]">
-                  <thead><tr className="border-b border-border text-[12px] font-bold uppercase tracking-wide text-text-3"><th className="px-5 py-2.5">Fecha</th><th className="px-3 py-2.5">Concepto</th><th className="px-3 py-2.5">Caja</th><th className="px-3 py-2.5">Origen</th><th className="px-3 py-2.5">Comprobante</th><th className="px-5 py-2.5 text-right">Monto</th></tr></thead>
-                  <tbody>
-                    {caja.datos.movimientos.map((m) => {
-                      const entra = m.tipo !== "EGRESO";
-                      return (
-                        <tr key={m.id} className="border-b border-border last:border-0">
-                          <td className="num whitespace-nowrap px-5 py-3">{fecha(m.fecha)}</td>
-                          <td className="px-3 py-3"><div className="font-semibold">{m.descripcion}</div><div className="text-[12px] text-text-3">{[m.persona || null, m.proyecto_nombre ?? m.categoria].filter(Boolean).join(" · ") || "Sin dato"}</div></td>
-                          <td className="px-3 py-3">{m.ciudad === "AQP" ? "Arequipa" : m.ciudad === "MOQ" ? "Moquegua" : m.ciudad}</td>
-                          <td className="px-3 py-3 text-[12.5px]">{m.tipo === "FONDO" ? "Cuenta principal" : m.tipo === "TRANSFERENCIA" ? "Caja diaria" : m.origen === "CAPTURA" ? "Foto de recibo" : "Manual"}</td>
-                          <td className="px-3 py-3">{m.adjuntos.length ? <button className="inline-flex items-center gap-1 font-semibold text-primary-ink hover:underline" onClick={() => setVisor(m.adjuntos.map((a, i) => ({ idCaja: a, titulo: m.descripcion, detalle: `${fecha(m.fecha)} · foto ${i + 1}` })))}><Icono n="attach_file" t={16} />Foto{m.adjuntos.length > 1 ? ` (${m.adjuntos.length})` : ""}</button> : entra ? <span className="text-text-3">—</span> : <span className="text-text-3">Sin dato</span>}</td>
-                          <td className="num whitespace-nowrap px-5 py-3 text-right font-bold" style={{ color: entra ? "var(--success)" : undefined }}>{entra ? "+" : "−"}{dinero(m.monto)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </>
+        <CajaIcr d={caja.datos} verFotos={setVisor} />
       )}
 
       {modal === "nuevo" && cuenta ? <NuevoMovimiento cuentas={r.cuentas} cuentaId={cuenta.id} categorias={r.categorias} onCerrar={() => setModal(null)} onHecho={recargarTodo} /> : null}
       {modal === "cuentas" ? <Cuentas cuentas={r.cuentas} editar={editar} onCerrar={() => setModal(null)} onHecho={recargarTodo} /> : null}
-      {modal === "fondos" && caja.datos ? <EnviarFondos cuentas={r.cuentas} caja={caja.datos} onCerrar={() => setModal(null)} onHecho={recargarTodo} /> : null}
+      {modal === "fondos" ? <EnviarFondos cuentas={r.cuentas} saldos={caja.datos?.saldos ?? null} onCerrar={() => setModal(null)} onHecho={recargarTodo} /> : null}
       {detalle ? <DetalleMovimiento m={detalle} moneda={mon} puedeAnular={editar} onCerrar={() => setDetalle(null)} onHecho={recargarTodo} /> : null}
       {visor ? <VisorFotos fotos={visor} onCerrar={() => setVisor(null)} /> : null}
     </div>
+  );
+}
+
+const ORIGEN: Record<MovCajaIcr["origen"], string> = { VENTA: "Venta", FONDO: "Fondos del ERP", GASTO: "Gasto físico", CAPTURA: "Gasto digital (captura)", DEPOSITO: "Depósito a cuenta principal", AJUSTE: "Ajuste" };
+
+/** Pestaña «Caja ICR»: solo lectura; se registra en la app de Finanzas. Los fondos se envían desde aquí. */
+function CajaIcr({ d, verFotos }: { d: ResumenCajaIcr; verFotos: (f: FotoVisor[]) => void }) {
+  const tarjeta = (l: string, v: string, sub: string, i: string) => (
+    <div className="tarjeta flex flex-col gap-1.5 p-5">
+      <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-text-2"><Icono n={i} t={17} />{l}</div>
+      <div className="num text-[26px] font-extrabold" style={{ color: esNegativo(v) ? "var(--danger)" : undefined }}>{dinero(v)}</div>
+      <div className="text-[12px] text-text-3">{sub}</div>
+    </div>
+  );
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface-2 px-4 py-3 text-[13px] text-text-2">
+        <Icono n="lock" t={18} />Solo lectura. Los gastos, las capturas y las ventas se registran en la app de Finanzas y aparecen aquí al instante.
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {tarjeta("Efectivo", d.saldos.efectivo, "Gastos físicos y ventas en efectivo", "payments")}
+        {tarjeta("Digital", d.saldos.digital, "Yape y transferencias", "smartphone")}
+        {tarjeta("Total de la caja", d.saldos.total, `Hoy: entró ${dinero(d.hoy.ingresos)} · salió ${dinero(d.hoy.egresos)}${d.hoy.sin_foto ? ` · ${d.hoy.sin_foto} sin foto` : ""}`, "savings")}
+      </div>
+      <section className="tarjeta overflow-hidden">
+        <div className="border-b border-border px-5 py-4"><div className="titulo-seccion">Últimos movimientos de la Caja ICR</div></div>
+        {!d.recientes.length ? <Vacio icono="savings" titulo="Sin movimientos" /> : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] border-collapse text-left text-[13.5px]">
+              <thead><tr className="border-b border-border text-[12px] font-bold uppercase tracking-wide text-text-3"><th className="px-5 py-2.5">Fecha</th><th className="px-3 py-2.5">Concepto</th><th className="px-3 py-2.5">Medio</th><th className="px-3 py-2.5">Origen</th><th className="px-3 py-2.5">Foto</th><th className="px-5 py-2.5 text-right">Monto</th></tr></thead>
+              <tbody>
+                {d.recientes.map((m) => {
+                  const entra = m.tipo === "INGRESO";
+                  return (
+                    <tr key={m.id} className="border-b border-border last:border-0">
+                      <td className="num whitespace-nowrap px-5 py-3">{fecha(m.fecha)}</td>
+                      <td className="px-3 py-3"><div className="font-semibold">{m.descripcion}</div><div className="text-[12px] text-text-3">{[m.persona, m.proyecto ?? (m.subcategoria ? `${m.categoria} · ${m.subcategoria}` : m.categoria)].filter(Boolean).join(" · ") || "Sin dato"}</div></td>
+                      <td className="px-3 py-3">{m.medio === "EFECTIVO" ? "Efectivo" : "Digital"}</td>
+                      <td className="px-3 py-3 text-[12.5px]">{ORIGEN[m.origen]}</td>
+                      <td className="px-3 py-3">{m.adjuntos.length ? <button className="inline-flex items-center gap-1 font-semibold text-primary-ink hover:underline" onClick={() => verFotos(m.adjuntos.map((a, i) => ({ idIcr: a, titulo: m.descripcion, detalle: `${fecha(m.fecha)} · foto ${i + 1}` })))}><Icono n="attach_file" t={16} />Foto{m.adjuntos.length > 1 ? ` (${m.adjuntos.length})` : ""}</button> : entra || m.origen === "DEPOSITO" ? <span className="text-text-3">—</span> : <span className="text-text-3">Sin dato</span>}</td>
+                      <td className="num whitespace-nowrap px-5 py-3 text-right font-bold" style={{ color: entra ? "var(--success)" : undefined }}>{entra ? "+" : "−"}{dinero(m.monto)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
   );
 }

@@ -82,7 +82,7 @@ export function Inicio() {
   const netoAnt = k ? restar(k.ingresos_mes_anterior, k.egresos_mes_anterior) : null;
   const apps = [
     { sub: "cotizador" as const, nombre: "Logística", icono: "local_shipping", ver: !!d.permisos.logistica },
-    { sub: "finanzas" as const, nombre: "Finanzas (caja chica)", icono: "savings", ver: !!d.permisos.caja_chica },
+    { sub: "finanzas" as const, nombre: "Finanzas (Caja ICR)", icono: "savings", ver: !!d.permisos.caja_chica },
   ].filter((a) => a.ver && enlaceApp(a.sub));
   const rapidos = [
     d.permisos.proyectosCompleto && { l: "Nuevo proyecto", i: "add", go: () => navegar("/proyectos?nuevo=1"), primario: true },
@@ -113,9 +113,11 @@ export function Inicio() {
               {f.cuentas.filter((c) => c.id !== f.cuenta?.id && c.activa).map((c) => <div key={c.id} className="num text-[12px] opacity-90">{c.nombre}: <b>{dinero(c.saldo, c.moneda)}</b></div>)}
             </Link>
             <Link to="/contabilidad" className="tarjeta flex flex-col gap-1.5 p-5 font-normal text-text no-underline hover:border-primary-line">
-              <div className="flex items-center justify-between text-[12.5px] font-semibold text-text-2">Caja chica<span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 text-[11px] font-bold"><Icono n="savings" t={14} />Caja chica</span></div>
-              <div className="num text-[30px] font-extrabold tracking-tight">{f.caja.disponible ? dinero(f.caja.saldo_total) : "Sin dato"}</div>
-              {f.caja.disponible ? <div className="flex flex-wrap gap-x-4 text-[12.5px] text-text-2">{f.caja.saldos.map((s) => <span key={s.ciudad}>{s.nombre} <b className="num" style={{ color: esNegativo(s.saldo) ? "var(--danger)" : undefined }}>{dinero(s.saldo)}</b></span>)}</div> : <div className="text-[12.5px] text-text-3">La caja de Finanzas no está disponible.</div>}
+              <div className="flex items-center justify-between text-[12.5px] font-semibold text-text-2">Caja ICR<span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 text-[11px] font-bold"><Icono n="savings" t={14} />Finanzas</span></div>
+              <div className="num text-[30px] font-extrabold tracking-tight" style={{ color: esNegativo(f.caja.saldos.total) ? "var(--danger)" : undefined }}>{dinero(f.caja.saldos.total)}</div>
+              <div className="flex flex-wrap gap-x-4 text-[12.5px] text-text-2">
+                {([["Efectivo", f.caja.saldos.efectivo], ["Digital", f.caja.saldos.digital]] as const).map(([l, v]) => <span key={l}>{l} <b className="num" style={{ color: esNegativo(v) ? "var(--danger)" : undefined }}>{dinero(v)}</b></span>)}
+              </div>
             </Link>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

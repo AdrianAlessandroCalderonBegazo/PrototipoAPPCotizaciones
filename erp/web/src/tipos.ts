@@ -51,7 +51,7 @@ export type Proyecto = {
   gastado: string; saldo: string; porcentaje: number | null; n_gastos: number; ultimo_gasto: string | null;
 };
 export type GastoProyecto = {
-  origen: "cuenta_principal" | "caja_chica" | "caja_diaria"; id: string; fecha: string; concepto: string; categoria: string | null; monto: string;
+  origen: "cuenta_principal" | "caja_icr" | "caja_chica" | "caja_diaria"; id: string; fecha: string; concepto: string; categoria: string | null; monto: string;
   por: string | null; comprobante: string | null; adjuntos: string[]; ciudad: string | null; registrado_en: string;
 };
 export type DetalleProyecto = {
@@ -67,7 +67,7 @@ export type Cuenta = {
 };
 export type MovimientoCuenta = {
   id: number; cuenta_id: number; fecha: string; tipo: "ingreso" | "egreso"; monto: string; concepto: string; categoria: string | null; proyecto_id: number | null;
-  proyecto_codigo: string | null; proyecto_nombre: string | null; documento: string | null; contraparte: string | null; source: "erp" | "envio_caja_chica";
+  proyecto_codigo: string | null; proyecto_nombre: string | null; documento: string | null; contraparte: string | null; source: "erp" | "envio_caja_chica" | "envio_caja_icr" | "deposito_caja_icr";
   anulado: boolean; anulado_motivo: string | null; anulado_por: string | null; anulado_en: string | null; registrado_por: string | null; creado_en: string; saldo: string | null;
 };
 export type ResumenConta = {
@@ -78,13 +78,18 @@ export type ResumenConta = {
   egresos_por_proyecto: { id: number; codigo: string; nombre: string; estado: EstadoProyecto; total: string }[];
   categorias: { ingreso: string[]; egreso: string[] };
 };
-export type MovChicaErp = {
-  id: string; ciudad: string; fecha: string; tipo: "EGRESO" | "TRANSFERENCIA" | "FONDO"; descripcion: string; persona: string; categoria: string | null; monto: string;
-  origen: string; proyecto_id: number | null; proyecto_nombre: string | null; registrado_por: string | null; adjuntos: string[];
+// ---- Fase 11: Caja ICR (una sola caja, dos saldos) ----
+export type MedioCaja = "EFECTIVO" | "DIGITAL";
+export type MovCajaIcr = {
+  id: string; fecha: string; tipo: "INGRESO" | "EGRESO"; medio: MedioCaja; origen: "VENTA" | "FONDO" | "GASTO" | "CAPTURA" | "DEPOSITO" | "AJUSTE";
+  categoria: string | null; subcategoria: string | null; descripcion: string; persona: string | null; destinatario: string | null; operacion: string | null;
+  comprobante: string | null; monto: string; proyecto_id: number | null; proyecto: string | null; cuenta_movimiento_id: number | null;
+  anulado: boolean; anulado_motivo: string | null; creado_por: string | null; creado_en: string; adjuntos: number[];
 };
-export type CajaChicaErp =
-  | { disponible: false }
-  | { disponible: true; mes: string; saldos: { ciudad: string; nombre: string; saldo: string }[]; saldo_total: string; ingresos_mes: string; egresos_mes: string; gastos_mes: number; sin_comprobante_mes: number; movimientos: MovChicaErp[] };
+export type SaldosCajaIcr = { efectivo: string; digital: string; total: string };
+export type ResumenCajaIcr = {
+  fecha: string; saldos: SaldosCajaIcr; hoy: { ingresos: string; egresos: string; movimientos: number; sin_foto: number }; recientes: MovCajaIcr[];
+};
 
 // ---- Fase 3 ----
 export type Producto = {
@@ -122,7 +127,7 @@ export type InicioDatos = {
   fecha: string;
   permisos: Record<"proyectos" | "contabilidad" | "cotizacion" | "logistica" | "caja_chica" | "configuracion" | "facturacion" | "proyectosCompleto" | "cotizacionCompleto" | "contabilidadCompleto" | "facturacionCompleto", boolean>;
   facturacion?: { emitidos_mes: number; monto_mes: string; borradores: number; enviados: number };
-  finanzas?: { cuenta: Cuenta | null; cuentas: Cuenta[]; kpis: ResumenConta["kpis"]; caja: CajaChicaErp };
+  finanzas?: { cuenta: Cuenta | null; cuentas: Cuenta[]; kpis: ResumenConta["kpis"]; caja: ResumenCajaIcr };
   proyectos?: { activos: Proyecto[]; pausados: (Proyecto & { pausado_desde: string | null })[]; total_activos: number; con_alerta: number; aviso_pct: number; limite_pct: number };
   cotizaciones?: { ultimas: { id: number; numero: string; cliente: string; sistema: string | null; estado: EstadoCot | null; origen: string; fecha: string; total: string | null }[]; del_mes: number; monto_mes: string; aceptadas_mes: number };
   logistica?: { por_aprobar: number; por_entregar: number; urgentes: number; herramientas_fuera: number; salidas_por_confirmar: number };

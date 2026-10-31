@@ -2,8 +2,8 @@ import { Icono } from "../componentes/Icono";
 import type { EntradaMenu } from "../modulos";
 
 const QUE_TRAE: Partial<Record<EntradaMenu["clave"], string[]>> = {
-  proyectos: ["Crear proyectos con nombre y presupuesto", "Estados activo, pausado (con causa) y finalizado, con historial", "Gastos que llegan desde la caja chica, con su comprobante", "Galería de fotos por proyecto"],
-  contabilidad: ["Movimientos de la cuenta principal con saldo y flujo mensual", "Resumen de la caja chica (solo lectura)", "Enviar fondos a la caja chica en una sola operación", "Exportar a Excel y PDF"],
+  proyectos: ["Crear proyectos con nombre y presupuesto", "Estados activo, pausado (con causa) y finalizado, con historial", "Gastos que llegan desde la Caja ICR, con su comprobante", "Galería de fotos por proyecto"],
+  contabilidad: ["Movimientos de la cuenta principal con saldo y flujo mensual", "Resumen de la Caja ICR (solo lectura)", "Enviar fondos a la Caja ICR en una sola operación", "Exportar a Excel y PDF"],
   cotizacion: ["Catálogo de productos migrado desde el Cotizador", "Importar CSV e imágenes", "Kits de venta editables", "Cotizaciones con IGV, PDF con el logo y envío por WhatsApp"],
   cotizador_ia: ["Cotizar por texto o por voz con IA local (qwen3:4b)", "Solo productos y precios reales de la base", "Historial compartido y contexto editable"],
   comparador: ["Proveedores y sus listas de precios (Excel/CSV)", "Historial de precios sin sobrescribir", "Equivalencias y tabla comparativa en soles"],

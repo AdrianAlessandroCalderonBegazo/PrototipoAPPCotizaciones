@@ -15,8 +15,9 @@ import { useDatos } from "../../usarDatos";
 import { PillEstado, colorAvance, pctTexto } from "./comun";
 
 const ORIGEN: Record<GastoProyecto["origen"], { l: string; i: string }> = {
-  caja_chica: { l: "Caja chica", i: "savings" },
-  caja_diaria: { l: "Caja diaria", i: "point_of_sale" },
+  caja_icr: { l: "Caja ICR", i: "savings" },
+  caja_chica: { l: "Caja chica (anterior)", i: "savings" },
+  caja_diaria: { l: "Caja diaria (anterior)", i: "point_of_sale" },
   cuenta_principal: { l: "Cuenta principal", i: "account_balance" },
 };
 const COLORES = ["var(--primary)", "var(--solar)", "var(--navy-a)", "var(--success)", "var(--ai)", "var(--neutral)"];
@@ -309,7 +310,7 @@ export function ProyectoDetalle() {
           <div className="titulo-seccion">Gastos del proyecto <span className="font-medium text-text-3">· {d.gastos.length === d.gastos.slice(0, 12).length || verTodos ? `${d.gastos.length} registros` : `mostrando 12 de ${d.gastos.length}`}</span></div>
           <div className="flex items-center gap-1.5 text-[12.5px] text-text-3">
             <Icono n={d.caja_disponible ? "sync" : "sync_problem"} t={16} />
-            {d.caja_disponible ? "Incluye la caja chica y la caja diaria de Finanzas" : "La caja de Finanzas no está disponible en el servidor"}
+            Incluye los gastos de la Caja ICR (app de Finanzas)
           </div>
         </div>
         {d.gastos.length ? (
@@ -331,7 +332,7 @@ export function ProyectoDetalle() {
                     </td>
                     <td className="px-3 py-3">
                       {g.adjuntos.length ? (
-                        <button className="inline-flex items-center gap-1 font-semibold text-primary-ink hover:underline" onClick={() => setVisor({ fotos: g.adjuntos.map((a, i) => ({ idCaja: a, titulo: g.concepto, detalle: `${fecha(g.fecha)} · foto ${i + 1} de ${g.adjuntos.length}` })), i: 0 })}>
+                        <button className="inline-flex items-center gap-1 font-semibold text-primary-ink hover:underline" onClick={() => setVisor({ fotos: g.adjuntos.map((a, i) => ({ ...(g.origen === "caja_icr" ? { idIcr: Number(a) } : { idCaja: a }), titulo: g.concepto, detalle: `${fecha(g.fecha)} · foto ${i + 1} de ${g.adjuntos.length}` })), i: 0 })}>
                           <Icono n="attach_file" t={16} />{g.comprobante ? `${g.comprobante[0]}${g.comprobante.slice(1).toLowerCase()}` : "Foto"}{g.adjuntos.length > 1 ? ` (${g.adjuntos.length})` : ""}
                         </button>
                       ) : g.comprobante ? <span>{g.comprobante[0]}{g.comprobante.slice(1).toLowerCase()}</span> : <span className="text-text-3">Sin dato</span>}

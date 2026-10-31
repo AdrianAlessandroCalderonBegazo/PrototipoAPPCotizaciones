@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { fotoCaja } from "../api";
 import { Icono } from "./Icono";
 
-export type FotoVisor = { url?: string; idCaja?: string; titulo?: string; detalle?: string };
+export type FotoVisor = { url?: string; idCaja?: string; idIcr?: number; titulo?: string; detalle?: string };
 
 /** Visor a pantalla completa con flechas. Las fotos de la caja se piden recién al mostrarlas. */
 export function VisorFotos({ fotos, inicio = 0, onCerrar }: { fotos: FotoVisor[]; inicio?: number; onCerrar: () => void }) {
@@ -14,9 +14,9 @@ export function VisorFotos({ fotos, inicio = 0, onCerrar }: { fotos: FotoVisor[]
     let local: string | null = null;
     setError(null);
     setUrl(f?.url ?? null);
-    if (f?.idCaja) {
+    if (f?.idCaja || f?.idIcr) {
       setUrl(null);
-      fotoCaja(f.idCaja)
+      fotoCaja((f.idIcr ?? f.idCaja)!, !!f.idIcr)
         .then((u) => setUrl((local = u)))
         .catch((e) => setError(e instanceof Error ? e.message : "No se pudo abrir la foto."));
     }

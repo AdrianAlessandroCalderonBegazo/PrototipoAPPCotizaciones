@@ -14,7 +14,7 @@ import { useDatos } from "../../usarDatos";
 export const ROLES: { k: Rol; l: string; d: string }[] = [
   { k: "admin", l: "Administrador", d: "Todo, incluidos usuarios y permisos" },
   { k: "ventas", l: "Ventas", d: "Cotiza; pide materiales en Logística" },
-  { k: "contabilidad", l: "Contabilidad", d: "Caja chica completa; ve cotizaciones" },
+  { k: "contabilidad", l: "Contabilidad", d: "Caja ICR completa; ve cotizaciones" },
   { k: "tecnico", l: "Técnico", d: "Logística completa: aprueba, alista, salidas" },
 ];
 const etiqueta = (r: string) => ROLES.find((x) => x.k === r)?.l ?? r;

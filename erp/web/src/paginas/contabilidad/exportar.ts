@@ -22,7 +22,7 @@ export async function exportarExcel(d: DatosExportar) {
   for (const m of [...d.movimientos].reverse()) {
     const r = ws.addRow([
       new Date(`${m.fecha}T12:00:00`), m.concepto, m.tipo === "ingreso" ? "Ingreso" : "Egreso", m.categoria ?? "", m.proyecto_nombre ? `${m.proyecto_codigo} · ${m.proyecto_nombre}` : "",
-      m.documento ?? (m.source === "envio_caja_chica" ? "Caja chica" : ""), m.contraparte ?? "", m.tipo === "ingreso" ? n(m.monto) : null, m.tipo === "egreso" ? n(m.monto) : null, n(m.saldo),
+      m.documento ?? (m.source === "envio_caja_chica" ? "Caja chica" : m.source === "erp" ? "" : "Caja ICR"), m.contraparte ?? "", m.tipo === "ingreso" ? n(m.monto) : null, m.tipo === "egreso" ? n(m.monto) : null, n(m.saldo),
       m.registrado_por ?? "", m.anulado ? `Anulado: ${m.anulado_motivo ?? ""}` : "",
     ]);
     if (m.anulado) r.font = { strike: true, color: { argb: "FF7A8B99" } };
@@ -52,7 +52,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 export function exportarPdf(d: DatosExportar) {
   const mon = d.cuenta.moneda;
   const filas = d.movimientos
-    .map((m) => `<tr class="${m.anulado ? "anulado" : ""}"><td>${fecha(m.fecha)}</td><td>${esc(m.concepto)}${m.anulado ? ` <em>(anulado: ${esc(m.anulado_motivo ?? "")})</em>` : ""}</td><td>${esc(m.categoria ?? "")}</td><td>${esc(m.proyecto_nombre ?? "")}</td><td>${esc(m.documento ?? (m.source === "envio_caja_chica" ? "Caja chica" : ""))}</td><td class="n">${m.tipo === "ingreso" ? dinero(m.monto, mon) : ""}</td><td class="n">${m.tipo === "egreso" ? dinero(m.monto, mon) : ""}</td><td class="n">${m.saldo ? dinero(m.saldo, mon) : "—"}</td></tr>`)
+    .map((m) => `<tr class="${m.anulado ? "anulado" : ""}"><td>${fecha(m.fecha)}</td><td>${esc(m.concepto)}${m.anulado ? ` <em>(anulado: ${esc(m.anulado_motivo ?? "")})</em>` : ""}</td><td>${esc(m.categoria ?? "")}</td><td>${esc(m.proyecto_nombre ?? "")}</td><td>${esc(m.documento ?? (m.source === "envio_caja_chica" ? "Caja chica" : m.source === "erp" ? "" : "Caja ICR"))}</td><td class="n">${m.tipo === "ingreso" ? dinero(m.monto, mon) : ""}</td><td class="n">${m.tipo === "egreso" ? dinero(m.monto, mon) : ""}</td><td class="n">${m.saldo ? dinero(m.saldo, mon) : "—"}</td></tr>`)
     .join("");
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(nombreArchivo(d.cuenta, "pdf"))}</title>
 <style>body{font-family:Manrope,Arial,sans-serif;color:#0E2233;margin:24px;font-size:11px}h1{font-size:18px;margin:0}p{margin:4px 0 14px;color:#4A5D6E}

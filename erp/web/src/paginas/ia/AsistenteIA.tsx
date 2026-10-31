@@ -14,7 +14,7 @@ const FRECUENTES: [string, string, string][] = [
   ["account_balance", "Resumen de finanzas del mes", "Resumen de ingresos y egresos de este mes"],
   ["solar_power", "Cómo van los proyectos activos", "¿Cómo van los proyectos activos y su presupuesto?"],
   ["verified", "Ventas facturadas del mes", "Facturas y boletas emitidas este mes"],
-  ["savings", "Caja chica este mes", "¿Cuánto se gastó de caja chica este mes?"],
+  ["savings", "Caja ICR este mes", "¿Cómo va la caja ICR este mes?"],
   ["request_quote", "Cotizaciones enviadas", "¿Qué cotizaciones están enviadas y sin respuesta?"],
   ["inventory", "Stock bajo en almacén", "¿Qué artículos del almacén están con stock bajo?"],
 ];
@@ -108,7 +108,7 @@ export function AsistenteIA() {
                 <div className="max-w-md">
                   <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl" style={{ background: "var(--ai-soft)", color: "var(--ai)" }}><Icono n="psychology" t={30} /></span>
                   <div className="mt-3 text-[17px] font-extrabold">Pregunta sobre el ERP</div>
-                  <p className="mt-1 text-[13.5px] text-text-2">Finanzas, proyectos, caja chica, cotizaciones, facturas y almacén: el asistente consulta los datos que tu rol puede ver y te responde con tablas y gráficos.</p>
+                  <p className="mt-1 text-[13.5px] text-text-2">Finanzas, proyectos, Caja ICR, cotizaciones, facturas y almacén: el asistente consulta los datos que tu rol puede ver y te responde con tablas y gráficos.</p>
                 </div>
               </div>
             ) : (

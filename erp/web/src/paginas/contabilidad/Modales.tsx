@@ -6,11 +6,13 @@ import { Modal } from "../../componentes/Modal";
 import { dinero, esNegativo, leerMonto, restar, sumarMontos } from "../../dinero";
 import { fecha, fechaHora, hoyLima, texto } from "../../formato";
 import { useSesion } from "../../sesion";
-import type { CajaChicaErp, Cuenta, MovimientoCuenta, ResumenConta } from "../../tipos";
+import type { Cuenta, MedioCaja, MovimientoCuenta, ResumenConta, SaldosCajaIcr } from "../../tipos";
 import { useDatos } from "../../usarDatos";
 
 const Error = ({ m }: { m: string | null }) => (m ? <div className="rounded-xl bg-danger-soft px-3 py-2.5 text-[13px] font-semibold text-danger">{m}</div> : null);
 const mensaje = (e: unknown, def: string) => (e instanceof ErrorApi || e instanceof globalThis.Error ? e.message : def);
+// Categorías que pone el sistema solo (envíos a la Caja ICR y depósitos que llegan desde ella): no se eligen a mano.
+const AUTOMATICAS = ["Envío a Caja ICR", "Depósito desde Caja ICR", "Envío a caja chica"];
 
 // ---------------------------------------------------------------------------------------------
 // Nuevo movimiento de la cuenta
@@ -66,7 +68,7 @@ export function NuevoMovimiento({ cuentas, cuentaId, categorias, onCerrar, onHec
           <span className="etiqueta">Categoría</span>
           <select className="campo" value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })}>
             <option value="">Sin categoría</option>
-            {categorias[f.tipo].filter((c) => c !== "Envío a caja chica").map((c) => <option key={c}>{c}</option>)}
+            {categorias[f.tipo].filter((c) => !AUTOMATICAS.includes(c)).map((c) => <option key={c}>{c}</option>)}
           </select>
         </label>
         {f.tipo === "egreso" ? (
@@ -113,14 +115,16 @@ export function DetalleMovimiento({ m, moneda, puedeAnular, onCerrar, onHecho }:
   if (m.anulado) filas.push(["Anulado", `${texto(m.anulado_motivo)} · ${texto(m.anulado_por)} · ${fechaHora(m.anulado_en)}`]);
   return (
     <Modal titulo={m.concepto} icono={m.tipo === "ingreso" ? "south_west" : "north_east"} onCerrar={onCerrar}
-      pie={puedeAnular && !m.anulado && m.source === "erp" ? (anulando ? <><button className="btn-secundario" onClick={() => setAnulando(false)}>Volver</button><button className="btn-peligro" disabled={!motivo.trim()} onClick={anular}>Anular movimiento</button></> : <button className="btn-secundario text-danger" onClick={() => setAnulando(true)}>Anular…</button>) : undefined}>
+      pie={puedeAnular && !m.anulado && (m.source === "erp" || m.source === "envio_caja_icr") ? (anulando ? <><button className="btn-secundario" onClick={() => setAnulando(false)}>Volver</button><button className="btn-peligro" disabled={!motivo.trim()} onClick={anular}>Anular movimiento</button></> : <button className="btn-secundario text-danger" onClick={() => setAnulando(true)}>Anular…</button>) : undefined}>
       <div className="num mb-3 text-[26px] font-extrabold" style={{ color: m.anulado ? "var(--text-3)" : m.tipo === "ingreso" ? "var(--success)" : "var(--danger)", textDecoration: m.anulado ? "line-through" : undefined }}>
         {m.tipo === "ingreso" ? "+" : "−"}{dinero(m.monto, moneda)}
       </div>
       <div className="overflow-hidden rounded-xl border border-border">
         {filas.map(([a, b]) => <div key={a} className="flex justify-between gap-3 border-b border-border px-3 py-2 text-[13px] last:border-0"><span className="text-text-3">{a}</span><b className="text-right">{b}</b></div>)}
       </div>
-      {m.source === "envio_caja_chica" ? <p className="mt-3 text-[12.5px] text-text-3">Este egreso es un envío a caja chica: no se puede anular desde el ERP porque la caja ya recibió el dinero.</p> : null}
+      {m.source === "envio_caja_chica" ? <p className="mt-3 text-[12.5px] text-text-3">Este egreso es un envío a la caja chica anterior: no se puede anular desde el ERP.</p> : null}
+      {m.source === "envio_caja_icr" ? <p className="mt-3 text-[12.5px] text-text-3">Envío a la Caja ICR: si lo anulas, el dinero también sale de la caja (se anulan juntos).</p> : null}
+      {m.source === "deposito_caja_icr" ? <p className="mt-3 text-[12.5px] text-text-3">Este ingreso es un depósito registrado en la Caja ICR (app de Finanzas). Se anula allí y aquí se anula solo.</p> : null}
       {anulando ? (
         <label className="mt-3 block"><span className="etiqueta">¿Por qué se anula? (queda en la auditoría)</span><input className="campo" autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej. Registrado dos veces" /></label>
       ) : null}
@@ -204,15 +208,20 @@ export function Cuentas({ cuentas, editar, onCerrar, onHecho }: { cuentas: Cuent
 }
 
 // ---------------------------------------------------------------------------------------------
-// Enviar fondos a caja chica (2 pasos)
+// Enviar fondos a la Caja ICR (2 pasos): sale de la cuenta y entra al saldo en efectivo o digital de la caja
 // ---------------------------------------------------------------------------------------------
 
-export function EnviarFondos({ cuentas, caja, onCerrar, onHecho }: { cuentas: Cuenta[]; caja: CajaChicaErp; onCerrar: () => void; onHecho: () => void }) {
+const MEDIOS: [MedioCaja, string, string, string][] = [
+  ["EFECTIVO", "Efectivo", "payments", "Para gastos físicos"],
+  ["DIGITAL", "Digital", "smartphone", "Yape / transferencias"],
+];
+
+export function EnviarFondos({ cuentas, saldos, onCerrar, onHecho }: { cuentas: Cuenta[]; saldos: SaldosCajaIcr | null; onCerrar: () => void; onHecho: () => void }) {
   const { usuario } = useSesion();
   const avisar = useAvisos();
   const enSoles = cuentas.filter((c) => c.moneda === "PEN" && c.activa);
   const [cuentaId, setCuentaId] = useState(enSoles.find((c) => c.principal)?.id ?? enSoles[0]?.id);
-  const [ciudad, setCiudad] = useState<string | null>(null);
+  const [medio, setMedio] = useState<MedioCaja | null>(null);
   const [montoTxt, setMontoTxt] = useState("");
   const [concepto, setConcepto] = useState("");
   const [paso, setPaso] = useState(1);
@@ -223,31 +232,28 @@ export function EnviarFondos({ cuentas, caja, onCerrar, onHecho }: { cuentas: Cu
   const [enviando, setEnviando] = useState(false);
   const cuenta = enSoles.find((c) => c.id === cuentaId);
   const monto = leerMonto(montoTxt);
-  const saldos = caja.disponible ? caja.saldos : [];
-  const destino = saldos.find((s) => s.ciudad === ciudad);
+  const saldoMedio = medio && saldos ? saldos[medio === "EFECTIVO" ? "efectivo" : "digital"] : null;
+  const nombreMedio = MEDIOS.find((x) => x[0] === medio)?.[1].toLowerCase();
   const cuentaDespues = cuenta?.saldo && monto ? restar(cuenta.saldo, monto) : null;
-  const cajaDespues = destino && monto ? sumarMontos(destino.saldo, monto) : null;
+  const cajaDespues = saldoMedio && monto ? sumarMontos(saldoMedio, monto) : null;
   const esAdmin = usuario?.rol === "admin";
 
-  if (!caja.disponible) {
-    return <Modal titulo="Enviar fondos a caja chica" icono="savings" onCerrar={onCerrar}><p className="text-[13.5px] text-text-2">La caja chica todavía no está lista en el servidor (falta actualizar Finanzas).</p></Modal>;
-  }
   if (!enSoles.length) {
-    return <Modal titulo="Enviar fondos a caja chica" icono="savings" onCerrar={onCerrar}><p className="text-[13.5px] text-text-2">Primero crea una cuenta en soles (botón «Cuentas»).</p></Modal>;
+    return <Modal titulo="Enviar fondos a Caja ICR" icono="savings" onCerrar={onCerrar}><p className="text-[13.5px] text-text-2">Primero crea una cuenta en soles (botón «Cuentas»).</p></Modal>;
   }
 
   const siguiente = async () => {
     if (paso === 1) {
       setIntento(true);
-      if (!ciudad || !monto || !concepto.trim()) return;
+      if (!medio || !monto || !concepto.trim()) return;
       setPaso(2);
       return;
     }
     setEnviando(true);
     setError(null);
     try {
-      await api("POST", "/contabilidad/envios", { cuerpo: { cuenta_id: cuentaId, ciudad, monto, concepto, autorizar_negativo: negativo && autorizo ? true : undefined } });
-      avisar("Fondos enviados", `${dinero(monto)} a la caja chica de ${destino?.nombre}. Ya se ve en la app de Finanzas.`);
+      await api("POST", "/contabilidad/envios", { cuerpo: { cuenta_id: cuentaId, medio, monto, concepto, autorizar_negativo: negativo && autorizo ? true : undefined } });
+      avisar("Fondos enviados", `${dinero(monto)} al saldo ${nombreMedio} de la Caja ICR. Ya se ve en la app de Finanzas.`);
       onHecho();
       onCerrar();
     } catch (e) {
@@ -262,14 +268,14 @@ export function EnviarFondos({ cuentas, caja, onCerrar, onHecho }: { cuentas: Cu
   const resumen: [string, string, boolean?][] = [
     ["Desde", cuenta?.nombre ?? "Sin dato"],
     ["Saldo de la cuenta", cuenta?.saldo ? `${dinero(cuenta.saldo)} → ${cuentaDespues ? dinero(cuentaDespues) : "—"}` : "Sin dato", !!cuentaDespues && esNegativo(cuentaDespues)],
-    ["Caja destino", destino ? destino.nombre : "Elige una caja"],
-    ["Saldo de la caja", destino ? `${dinero(destino.saldo)} → ${cajaDespues ? dinero(cajaDespues) : "—"}` : "—"],
+    ["Va a", medio ? `Caja ICR · ${nombreMedio}` : "Elige efectivo o digital"],
+    ["Saldo de la caja", saldoMedio ? `${dinero(saldoMedio)} → ${cajaDespues ? dinero(cajaDespues) : "—"}` : "—"],
     ["Monto", monto ? dinero(monto) : "—"],
   ];
   if (paso === 2) resumen.push(["Concepto", concepto]);
 
   return (
-    <Modal titulo="Enviar fondos a caja chica" icono="savings" ancho={540} onCerrar={onCerrar}
+    <Modal titulo="Enviar fondos a Caja ICR" icono="savings" ancho={540} onCerrar={onCerrar}
       pie={<><button className="btn-secundario" onClick={() => (paso === 1 ? onCerrar() : (setPaso(1), setNegativo(null), setAutorizo(false)))}>{paso === 1 ? "Cancelar" : "Atrás"}</button><button className="btn-primario" disabled={enviando || (paso === 2 && !!negativo && !(esAdmin && autorizo))} onClick={siguiente}>{paso === 1 ? "Revisar" : enviando ? "Enviando…" : "Confirmar envío"}</button></>}>
       <div className="mb-3 text-[12.5px] font-semibold text-text-3">Paso {paso} de 2 · {paso === 1 ? "Datos del envío" : "Confirmar"}</div>
       <div className="flex flex-col gap-4">
@@ -281,16 +287,17 @@ export function EnviarFondos({ cuentas, caja, onCerrar, onHecho }: { cuentas: Cu
               </label>
             ) : null}
             <div>
-              <span className="etiqueta">Caja destino</span>
+              <span className="etiqueta">¿A qué saldo de la Caja ICR?</span>
               <div className="grid grid-cols-2 gap-2">
-                {saldos.map((s) => (
-                  <button key={s.ciudad} onClick={() => setCiudad(s.ciudad)} className={`rounded-xl border p-3 text-left ${ciudad === s.ciudad ? "border-primary bg-primary-soft" : "border-border hover:bg-surface-2"}`}>
-                    <div className="font-bold">{s.nombre}</div>
-                    <div className="num text-[12.5px] text-text-3">Saldo {dinero(s.saldo)}</div>
+                {MEDIOS.map(([k, l, i, sub]) => (
+                  <button key={k} onClick={() => setMedio(k)} className={`rounded-xl border p-3 text-left ${medio === k ? "border-primary bg-primary-soft" : "border-border hover:bg-surface-2"}`}>
+                    <div className="flex items-center gap-1.5 font-bold"><Icono n={i} t={18} />{l}</div>
+                    <div className="text-[12px] text-text-3">{sub}</div>
+                    <div className="num text-[12.5px] text-text-3">Saldo {saldos ? dinero(saldos[k === "EFECTIVO" ? "efectivo" : "digital"]) : "Sin dato"}</div>
                   </button>
                 ))}
               </div>
-              {intento && !ciudad ? <span className="mt-1 block text-[12px] font-semibold text-danger">Elige la caja que recibe el dinero.</span> : null}
+              {intento && !medio ? <span className="mt-1 block text-[12px] font-semibold text-danger">Elige si el dinero va al efectivo o al saldo digital.</span> : null}
             </div>
             <label>
               <span className="etiqueta">Monto</span>
@@ -309,7 +316,7 @@ export function EnviarFondos({ cuentas, caja, onCerrar, onHecho }: { cuentas: Cu
           <div className="mb-1.5 font-bold">{paso === 1 ? "Así quedará" : "Resumen del envío"}</div>
           {resumen.map(([a, b, rojo]) => <div key={a} className="flex justify-between gap-3 py-0.5"><span className="text-text-3">{a}</span><b className="num text-right" style={{ color: rojo ? "var(--danger)" : undefined }}>{b}</b></div>)}
         </div>
-        {paso === 2 ? <div className="flex gap-2 rounded-xl bg-primary-soft px-3 py-2.5 text-[12.5px] text-primary-ink"><Icono n="info" t={18} />Este envío no se puede deshacer desde el ERP. La caja recibirá el monto y lo verá en la app de Finanzas.</div> : null}
+        {paso === 2 ? <div className="flex gap-2 rounded-xl bg-primary-soft px-3 py-2.5 text-[12.5px] text-primary-ink"><Icono n="info" t={18} />La caja recibe el monto al instante (se ve en la app de Finanzas). Si te equivocas, anula el egreso en Movimientos: sale de la caja también.</div> : null}
         {negativo ? (
           <div className="flex flex-col gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-[13px] text-warning">
             <div className="flex gap-2 font-semibold"><Icono n="warning" t={18} />{negativo.mensaje}</div>
