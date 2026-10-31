@@ -1,19 +1,20 @@
-// Contabilidad (ERP · Fase 2): cuentas de la empresa, movimientos de la cuenta principal, resumen, caja chica (solo lectura)
+// Contabilidad (ERP · Fase 2): cuentas de la empresa, movimientos de la cuenta principal, resumen y envío de fondos a la Caja ICR
 // y el envío de fondos a caja chica (una sola transacción: egreso en la cuenta + ingreso FONDO en la caja chica).
 // Regla del saldo: saldo = saldo inicial (al empezar el día saldo_inicial_fecha) + movimientos desde esa fecha, sin anulados.
 import { randomUUID } from 'node:crypto';
 import { auditar } from './auditoria.js';
-import { cajaDisponible } from './caja.js';
+import { recibirFondo } from './cajaicr.js';
 import { consulta, enTransaccion } from './db.js';
 import { aCentimos, deCentimos, monto, montoEntrada } from './dinero.js';
 import { falla } from './errores.js';
 import { sqlGastos } from './proyectos.js';
 
 export const CATEGORIAS = {
-  ingreso: ['Cobro a cliente', 'Adelanto de cliente', 'Depósito de caja diaria (efectivo)', 'Préstamo / aporte', 'Devolución', 'Otros ingresos'],
-  egreso: ['Proveedores / equipos', 'Materiales', 'Planilla', 'Impuestos', 'Servicios', 'Alquiler', 'Fletes', 'Comisiones bancarias', 'Gasto de proyecto', 'Envío a caja chica', 'Otros egresos'],
+  ingreso: ['Cobro a cliente', 'Adelanto de cliente', 'Depósito desde Caja ICR', 'Préstamo / aporte', 'Devolución', 'Otros ingresos'],
+  egreso: ['Compra de productos', 'Proveedores / equipos', 'Materiales', 'Pago de sueldos', 'Impuestos', 'Servicios', 'Alquiler', 'Fletes', 'Comisiones bancarias', 'Gasto de proyecto', 'Envío a Caja ICR', 'Otros egresos'],
 };
-export const CIUDADES = { AQP: 'Arequipa', MOQ: 'Moquegua' };
+// Las que crea el sistema (no se eligen a mano): el envío a la Caja ICR y el depósito que llega desde ella.
+const AUTOMATICAS = { 'Envío a Caja ICR': 'Para enviar dinero a la Caja ICR usa «Enviar fondos a Caja ICR».', 'Depósito desde Caja ICR': 'Los depósitos desde la Caja ICR se registran solos al anotarlos en la app de Finanzas.' };
 
 const textoONulo = (v, max) => {
   if (v === undefined || v === null) return null;
@@ -172,7 +173,7 @@ export async function registrarMovimiento(b, u, req = null) {
   if (!concepto) throw falla(400, 'Escribe el concepto del movimiento.');
   const categoria = textoONulo(b?.categoria, 80);
   if (categoria && !CATEGORIAS[tipo].includes(categoria)) throw falla(400, 'Elige una categoría de la lista.');
-  if (categoria === 'Envío a caja chica') throw falla(400, 'Para enviar dinero a caja chica usa «Enviar fondos a caja chica».');
+  if (AUTOMATICAS[categoria]) throw falla(400, AUTOMATICAS[categoria]);
   const proyectoId = b?.proyecto_id ? entero(b.proyecto_id, 'El proyecto') : null;
   if (proyectoId && tipo !== 'egreso') throw falla(400, 'Solo los egresos se asignan a un proyecto.');
   return enTransaccion(async (c) => {
@@ -202,6 +203,14 @@ export async function anularMovimiento(idIn, b, u, req = null) {
     if (!antes) throw falla(404, 'No existe ese movimiento.');
     if (antes.anulado) throw falla(409, 'Ese movimiento ya está anulado.');
     if (antes.source === 'envio_caja_chica') throw falla(409, 'Un envío a caja chica no se puede anular desde el ERP: la caja ya recibió el dinero.');
+    if (antes.source === 'deposito_caja_icr') throw falla(409, 'Este depósito vino de la Caja ICR: se anula allí (app de Finanzas › Historial) y se anula aquí solo.');
+    if (antes.source === 'envio_caja_icr') {
+      // El fondo vuelve a salir de la Caja ICR: se anulan juntos.
+      await c.query(
+        `UPDATE caja_icr_mov SET anulado = TRUE, anulado_motivo = $2, anulado_por = $3, anulado_en = now() AT TIME ZONE 'America/Lima' WHERE cuenta_movimiento_id = $1 AND origen = 'FONDO' AND NOT anulado`,
+        [id, `Envío anulado en el ERP: ${motivo}`, u.nombre],
+      );
+    }
     await c.query(
       `UPDATE cuenta_movimientos SET anulado = TRUE, anulado_motivo = $2, anulado_por = $3, anulado_en = now() AT TIME ZONE 'America/Lima' WHERE id = $1`,
       [id, motivo, u.nombre],
@@ -285,43 +294,6 @@ function siguienteMes(mes) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Caja chica (solo lectura en el ERP)
-// ---------------------------------------------------------------------------------------------
-
-export async function cajaChica(q = {}) {
-  if (!(await cajaDisponible())) return { disponible: false };
-  const mes = /^\d{4}-\d{2}$/.test(String(q.mes ?? '')) ? q.mes : mesDe(hoyLima());
-  const desde = `${mes}-01`;
-  const hasta = `${siguienteMes(mes)}-01`;
-  const { rows: s } = await consulta('SELECT ciudad, saldo::text AS saldo FROM v_caja_chica_saldo ORDER BY ciudad');
-  const { rows: tot } = await consulta(
-    `SELECT CASE WHEN tipo = 'EGRESO' THEN 'egreso' ELSE 'ingreso' END AS lado, SUM(monto)::text AS total, count(*)::int AS n,
-            count(*) FILTER (WHERE tipo = 'EGRESO' AND NOT EXISTS (SELECT 1 FROM caja_adjunto a WHERE a.movimiento_id = m.id))::int AS sin_foto
-       FROM caja_chica_mov m WHERE deleted_at IS NULL AND fecha >= $1 AND fecha < $2 GROUP BY 1`,
-    [desde, hasta],
-  );
-  const { rows: movs } = await consulta(
-    `SELECT m.id::text, m.ciudad, m.fecha::text AS fecha, m.tipo, m.descripcion, m.persona, COALESCE(m.subcategoria, m.categoria) AS categoria,
-            m.monto::text AS monto, m.origen, m.proyecto_id, m.proyecto_nombre, COALESCE(u.nombre, m.created_by) AS registrado_por,
-            ARRAY(SELECT a.id::text FROM caja_adjunto a WHERE a.movimiento_id = m.id ORDER BY a.created_at) AS adjuntos
-       FROM caja_chica_mov m LEFT JOIN usuarios u ON u.id::text = m.created_by
-      WHERE m.deleted_at IS NULL ORDER BY m.fecha DESC, m.created_at DESC LIMIT 100`,
-  );
-  const lado = (l) => tot.find((t) => t.lado === l);
-  return {
-    disponible: true,
-    mes,
-    saldos: s.map((x) => ({ ciudad: x.ciudad, nombre: CIUDADES[x.ciudad] ?? x.ciudad, saldo: monto(x.saldo) })),
-    saldo_total: deCentimos(s.reduce((a, x) => a + aCentimos(x.saldo), 0)),
-    ingresos_mes: monto(lado('ingreso')?.total ?? '0'),
-    egresos_mes: monto(lado('egreso')?.total ?? '0'),
-    gastos_mes: lado('egreso')?.n ?? 0,
-    sin_comprobante_mes: lado('egreso')?.sin_foto ?? 0,
-    movimientos: movs.map((m) => ({ ...m, monto: monto(m.monto) })),
-  };
-}
-
-// ---------------------------------------------------------------------------------------------
 // Enviar fondos a caja chica
 // ---------------------------------------------------------------------------------------------
 
@@ -329,11 +301,11 @@ export async function cajaChica(q = {}) {
  * En una transacción: egreso en la cuenta (PEN) + ingreso FONDO en la caja chica de la ciudad + historial de Finanzas.
  * Si la cuenta quedaría en negativo (o su saldo no se conoce), solo sigue con la confirmación de un Administrador.
  */
+/** Envía dinero de la cuenta principal a la Caja ICR (a su saldo en efectivo o digital): egreso aquí e ingreso allá, juntos. */
 export async function enviarFondos(b, u, req = null) {
-  if (!(await cajaDisponible())) throw falla(503, 'La caja chica todavía no está lista en el servidor (falta actualizar Finanzas).');
   const cuentaId = entero(b?.cuenta_id, 'La cuenta');
-  const ciudad = String(b?.ciudad ?? '');
-  if (!CIUDADES[ciudad]) throw falla(400, 'Elige la caja destino (Arequipa o Moquegua).');
+  const medio = b?.medio === 'EFECTIVO' ? 'EFECTIVO' : b?.medio === 'DIGITAL' ? 'DIGITAL' : null;
+  if (!medio) throw falla(400, 'Elige a qué saldo de la Caja ICR va: efectivo o digital (Yape / transferencia).');
   const valor = montoEntrada(b?.monto);
   const concepto = textoONulo(b?.concepto, 200);
   if (!concepto) throw falla(400, 'Indica para qué es el envío.');
@@ -342,7 +314,7 @@ export async function enviarFondos(b, u, req = null) {
     const { rows: cs } = await c.query('SELECT id, moneda, activa FROM cuentas WHERE id = $1 FOR UPDATE', [cuentaId]);
     if (!cs[0]) throw falla(404, 'No existe esa cuenta.');
     if (!cs[0].activa) throw falla(409, 'La cuenta está desactivada.');
-    if (cs[0].moneda !== 'PEN') throw falla(400, 'La caja chica es en soles: envía desde una cuenta en soles.');
+    if (cs[0].moneda !== 'PEN') throw falla(400, 'La Caja ICR es en soles: envía desde una cuenta en soles.');
     const cuenta = (await saldos(c, cuentaId))[0];
     const despues = cuenta.saldo === null ? null : deCentimos(aCentimos(cuenta.saldo) - aCentimos(valor));
     const negativo = despues === null || aCentimos(despues) < 0;
@@ -356,33 +328,18 @@ export async function enviarFondos(b, u, req = null) {
       if (u.rol !== 'admin') throw falla(403, 'Solo un Administrador puede confirmar un envío que deja la cuenta en negativo.', datos);
     }
     const { rows: mv } = await c.query(
-      `INSERT INTO cuenta_movimientos (cuenta_id, fecha, tipo, monto, concepto, categoria, source, registrado_por_id, registrado_por)
-       VALUES ($1, $2, 'egreso', $3, $4, 'Envío a caja chica', 'envio_caja_chica', $5, $6) RETURNING id`,
-      [cuentaId, fecha, valor, `Envío a caja chica ${CIUDADES[ciudad]} · ${concepto}`, u.id, u.nombre],
+      `INSERT INTO cuenta_movimientos (cuenta_id, fecha, tipo, monto, concepto, categoria, source, contraparte, registrado_por_id, registrado_por)
+       VALUES ($1, $2, 'egreso', $3, $4, 'Envío a Caja ICR', 'envio_caja_icr', 'Caja ICR', $5, $6) RETURNING id`,
+      [cuentaId, fecha, valor, `Envío a Caja ICR (${medio === 'EFECTIVO' ? 'efectivo' : 'digital'}) · ${concepto}`.slice(0, 255), u.id, u.nombre],
     );
-    const movChica = randomUUID();
-    const descripcion = `Fondos de la cuenta principal · ${concepto}`;
-    await c.query(
-      `INSERT INTO caja_chica_mov (id, ciudad, fecha, tipo, descripcion, persona, monto, origen, created_by, updated_by)
-       VALUES ($1::uuid, $2, $3::date, 'FONDO', $4, $5, $6, 'ERP', $7, $7)`,
-      [movChica, ciudad, fecha, descripcion, u.nombre, valor, String(u.id)],
-    );
-    await c.query(
-      `INSERT INTO caja_auditoria (usuario_id, usuario, rol, accion, entidad, entidad_id, ciudad, fecha_dia, antes, despues, motivo)
-       VALUES ($1, $2, $3, 'crear', 'mov_chica', $4, $5, $6::date, NULL, $7::jsonb, 'Envío desde el ERP')`,
-      [String(u.id), u.nombre, u.rol, movChica, ciudad, fecha, JSON.stringify({ tipo: 'FONDO', descripcion, monto: Number(valor), origen: 'ERP' })],
-    );
-    const { rows: env } = await c.query(
-      `INSERT INTO envios_caja_chica (cuenta_id, movimiento_id, caja_chica_mov_id, ciudad, fecha, monto, concepto, saldo_negativo_autorizado, usuario_id, usuario)
-       VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10) RETURNING id, creado_en::text AS creado_en`,
-      [cuentaId, mv[0].id, movChica, ciudad, fecha, valor, concepto, negativo, u.id, u.nombre],
-    );
-    const envio = { id: env[0].id, cuenta_id: cuentaId, movimiento_id: mv[0].id, caja_chica_mov_id: movChica, ciudad, fecha, monto: valor, concepto, saldo_negativo_autorizado: negativo };
+    const movCaja = randomUUID();
+    const mov = await recibirFondo(c, { id: movCaja, fecha, medio, monto: valor, descripcion: `Fondos de la cuenta principal · ${concepto}`.slice(0, 300), cuentaMovimientoId: mv[0].id, u });
+    const envio = { cuenta_id: cuentaId, movimiento_id: mv[0].id, caja_icr_mov_id: movCaja, medio, fecha, monto: valor, concepto, saldo_negativo_autorizado: negativo };
     await auditar(req ?? { usuario: u }, {
-      accion: 'enviar_fondos', entidad: 'envio_caja_chica', entidadId: envio.id,
+      accion: 'enviar_fondos', entidad: 'envio_caja_icr', entidadId: mv[0].id,
       antes: { saldo_cuenta: cuenta.saldo }, despues: { ...envio, saldo_cuenta: despues },
       detalle: negativo ? 'Confirmado por un Administrador (la cuenta queda en negativo o sin saldo conocido)' : null,
     }, c);
-    return { envio, saldo_antes: cuenta.saldo, saldo_despues: despues };
+    return { envio, movimiento_caja: mov, saldo_antes: cuenta.saldo, saldo_despues: despues };
   });
 }

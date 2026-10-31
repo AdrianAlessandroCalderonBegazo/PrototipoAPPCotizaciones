@@ -1,6 +1,6 @@
 # HTTPS automático (Let's Encrypt) para cada subdominio. DOMINIO viene del .env
 # (por ejemplo icrenergy.tech). Los registros DNS tipo A de cotizador., app.,
-# api., finanzas., finanza. y erp. deben apuntar a la IP del VPS.
+# api., finanzas. y erp. deben apuntar a la IP del VPS.
 
 (seguridad) {
 	encode zstd gzip
@@ -62,18 +62,19 @@ api.{$DOMINIO} {
 	reverse_proxy api:3000
 }
 
-# Finanzas (caja diaria, caja chica, cierre del día, reportes): la PWA + su API en /api-caja (mismo origen, sin CORS).
+# Finanzas (Caja ICR: gastos, capturas, ventas, historial, reportes y «Preguntar»): la PWA en el mismo origen que sus APIs (sin CORS).
 # Es una app en línea: nada se guarda para usar sin internet, por eso index.html y sw.js nunca se quedan en caché.
 finanzas.{$DOMINIO} {
 	import seguridad
 	request_body {
 		max_size 12MB
 	}
+	# Historial de la caja diaria y la caja chica anteriores (API de Finanzas 1).
 	handle /api-caja/* {
 		reverse_proxy finanzas-api:8787
 	}
-	# «Preguntar» (IA de Finanzas): la responde la API principal, con la misma sesión.
-	handle /api/ia/* {
+	# Caja ICR, ingreso y «Preguntar»: la API principal, con la misma sesión.
+	handle /api/* {
 		reverse_proxy api:3000
 	}
 	handle {
@@ -82,53 +83,6 @@ finanzas.{$DOMINIO} {
 		header /index.html Cache-Control "no-cache"
 		header /sw.js Cache-Control "no-cache"
 		header /manifest.webmanifest Cache-Control "no-cache"
-		try_files {path} /index.html
-		file_server
-	}
-}
-
-# Finanzas 2 (versión de prueba): su PWA + su propia API en /api-fin (otra base de datos y otras fotos que Finanzas 1).
-# Es una app que también funciona sin internet, por eso el service worker (sw.js) y el index nunca se quedan en caché.
-finanza.{$DOMINIO} {
-	import seguridad
-	request_body {
-		max_size 12MB
-	}
-	handle /api-fin/* {
-		reverse_proxy finanzas2-api:8788
-	}
-	handle {
-		root * /srv/finanzas2
-		header /_expo/* Cache-Control "public, max-age=31536000, immutable"
-		header /index.html Cache-Control "no-cache"
-		header /sw.js Cache-Control "no-cache"
-		header /manifest.webmanifest Cache-Control "no-cache"
-		try_files {path} /index.html
-		file_server
-	}
-}
-
-# ERP ICR: la app web (React) + la API principal en /api y los archivos subidos en /uploads (mismo origen, sin CORS).
-# /api-caja va a la API de Finanzas (fotos de recibos de la caja chica; misma sesión).
-# Los archivos con huella en el nombre (/assets/*) se guardan en caché un año; index.html nunca.
-erp.{$DOMINIO} {
-	import seguridad
-	request_body {
-		max_size 12MB
-	}
-	handle /api-caja/* {
-		reverse_proxy finanzas-api:8787
-	}
-	handle /api/* {
-		reverse_proxy api:3000
-	}
-	handle /uploads/* {
-		reverse_proxy api:3000
-	}
-	handle {
-		root * /srv/erp
-		header /assets/* Cache-Control "public, max-age=31536000, immutable"
-		header /index.html Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

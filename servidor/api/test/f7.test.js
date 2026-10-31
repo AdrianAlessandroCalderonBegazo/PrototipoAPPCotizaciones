@@ -1,4 +1,4 @@
-// ERP · Fase 7: la IA en la app de Finanzas (caja diaria y caja chica), con un Ollama falso y datos de caja reales en Postgres.
+// ERP · Fase 7: la IA en la app de Finanzas (Caja ICR), con un Ollama falso y datos de caja reales en Postgres.
 // Uso:  DATABASE_ADMIN_URL=postgres://postgres@localhost:5432/postgres npm test
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -96,19 +96,21 @@ const { rangoDe } = await import('../src/ia/herramientas.js');
 
 describe('IA de Finanzas', () => {
   before(async () => {
-    // Datos de caja de verdad (las mismas tablas que usa la app de Finanzas).
+    // Datos de la Caja ICR de verdad (la misma tabla que usa la app de Finanzas).
     const p = (await pool.query("INSERT INTO proyectos (codigo, nombre, presupuesto) VALUES ('PRY-901', 'Hostal Los Tambos', 50000) RETURNING id")).rows[0].id;
-    const mov = (ciudad, fecha, desc, cat, monto, proyecto = null) =>
-      pool.query("INSERT INTO caja_chica_mov (ciudad, fecha, tipo, descripcion, persona, categoria, subcategoria, monto, proyecto_id) VALUES ($1, $2, 'EGRESO', $3, 'Luis', $4, $4, $5, $6) RETURNING id", [ciudad, fecha, desc, cat, monto, proyecto]);
-    const m1 = (await mov('AQP', hoy, 'Taxi a obra', 'Movilidad', '15.50')).rows[0].id;
-    await mov('AQP', hoy, 'Almuerzo cuadrilla', 'Alimentación', '84.00');
-    await mov('MOQ', hoy, 'Pasaje a Ilo', 'Movilidad', '30.00', p);
-    await mov('AQP', '2020-01-15', 'Gasto viejo', 'Movilidad', '999.00');
-    await pool.query("INSERT INTO caja_adjunto (movimiento_id, archivo, mime, bytes) VALUES ($1, 'x.jpg', 'image/jpeg', 10)", [m1]);
-    await pool.query("INSERT INTO caja_chica_mov (ciudad, fecha, tipo, descripcion, monto) VALUES ('AQP', $1, 'FONDO', 'Fondos', 500)", [hoy]);
-    const h = (await pool.query("INSERT INTO caja_hoja (ciudad, fecha) VALUES ('AQP', $1) RETURNING id", [hoy])).rows[0].id;
-    await pool.query("INSERT INTO caja_fila (hoja_id, tipo, descripcion, caja_ingreso_efectivo, cta_cte_ingreso) VALUES ($1, 'VTA', 'Venta mostrador', 1200, 350)", [h]);
-    await pool.query("INSERT INTO caja_fila (hoja_id, tipo, descripcion, caja_salida_efectivo, categoria, proyecto_id) VALUES ($1, 'OBRA', 'Cemento', 200, 'Materiales', $2)", [h, p]);
+    const mov = (origen, medio, fecha, desc, cat, monto, proyecto = null) =>
+      pool.query(`INSERT INTO caja_icr_mov (id, fecha, tipo, medio, origen, categoria, descripcion, persona, monto, proyecto_id)
+                  VALUES (gen_random_uuid(), $1, CASE WHEN $2 IN ('VENTA', 'FONDO') THEN 'INGRESO' ELSE 'EGRESO' END, $3, $2, $4, $5, 'Luis', $6, $7) RETURNING id`, [fecha, origen, medio, cat, desc, monto, proyecto]);
+    const m1 = (await mov('GASTO', 'EFECTIVO', hoy, 'Taxi a obra', 'Movilidad', '15.50')).rows[0].id;
+    await mov('GASTO', 'EFECTIVO', hoy, 'Almuerzo cuadrilla', 'Viáticos', '84.00');
+    await mov('CAPTURA', 'DIGITAL', hoy, 'Yape pasaje a Ilo', 'Movilidad', '30.00', p);
+    await mov('GASTO', 'EFECTIVO', '2020-01-15', 'Gasto viejo', 'Movilidad', '999.00');
+    await mov('DEPOSITO', 'EFECTIVO', hoy, 'Depósito BCP', 'Depósito a cuenta principal', '100.00');
+    await pool.query("INSERT INTO caja_icr_adjunto (mov_id, archivo, mime, bytes) VALUES ($1, 'x.jpg', 'image/jpeg', 10)", [m1]);
+    await mov('FONDO', 'EFECTIVO', hoy, 'Fondos de la cuenta principal', 'Fondos de la cuenta principal', '500');
+    await mov('VENTA', 'EFECTIVO', hoy, 'Venta mostrador', 'Venta', '1200');
+    await mov('VENTA', 'DIGITAL', hoy, 'Venta por Yape', 'Venta', '350');
+    await mov('GASTO', 'EFECTIVO', hoy, 'Cemento', 'Material', '200', p);
   });
 
   it('períodos: semana desde el lunes, mes anterior completo', () => {
@@ -117,7 +119,7 @@ describe('IA de Finanzas', () => {
     assert.equal(rangoDe({}, '2026-10-30').desde, '2026-10-01');
   });
   it('todos los que entran a la caja pueden preguntar (basta lectura); los demás no', async () => {
-    assert.equal((await preguntar(sesiones.vera, { texto: 'hola' })).estado, 403); // ventas: sin caja chica
+    assert.equal((await preguntar(sesiones.vera, { texto: 'hola' })).estado, 403); // ventas: sin Caja ICR
     await pool.query("UPDATE rol_permisos SET nivel = 'lectura' WHERE rol = 'tecnico' AND modulo = 'caja_chica'");
     await pool.query("INSERT INTO rol_permisos (rol, modulo, nivel) VALUES ('tecnico', 'caja_chica', 'lectura') ON CONFLICT DO NOTHING");
     const { matriz } = await import('../src/permisos.js');
@@ -126,46 +128,47 @@ describe('IA de Finanzas', () => {
     assert.equal(r.estado, 200);
     assert.ok(r.fin, JSON.stringify(r.error));
   });
-  it('gastos de caja chica: total del servidor, por categoría y sin recibo; no cuenta FONDO ni gastos de otras fechas', async () => {
+  it('gastos de la Caja ICR: total del servidor, por categoría y sin foto; no cuenta ingresos, depósitos ni otras fechas', async () => {
     const r = await preguntar(sesiones.fina, { texto: '¿Cuánto se gastó este mes?' });
     const d = r.fin.mensaje.datos;
-    assert.equal(d.herramientas[0], 'gastos_caja_chica');
+    assert.equal(d.herramientas[0], 'gastos_caja');
     const k = d.bloques.find((b) => b.tipo === 'kpis').items;
-    assert.equal(k[0].v, 'S/ 129.50');
-    assert.equal(k[1].v, '3');
-    assert.equal(k[2].v, '2'); // solo el taxi tiene foto
-    assert.match(r.texto, /S\/ 129\.50/);
-    assert.deepEqual(d.fuentes, ['Caja chica']); // respuesta directa: no la generó la IA
+    assert.equal(k[0].v, 'S/ 329.50');
+    assert.equal(k[1].v, '4');
+    assert.equal(k[2].v, '3'); // solo el taxi tiene foto
+    assert.match(r.texto, /S\/ 329\.50/);
+    assert.deepEqual(d.fuentes, ['Caja ICR']); // respuesta directa: no la generó la IA
     assert.equal(d.rapida, true);
-    const moq = await preguntar(sesiones.fina, { texto: '¿Cuánto se gastó en Moquegua este mes?' });
-    assert.equal(moq.fin.mensaje.datos.bloques[0].items[0].v, 'S/ 30.00');
+    const yape = await preguntar(sesiones.fina, { texto: '¿Cuánto se pagó por Yape este mes?' });
+    assert.equal(yape.fin.mensaje.datos.bloques[0].items[0].v, 'S/ 30.00');
   });
-  it('caja diaria (efectivo y Yape), saldos y gastos de un proyecto desde las cajas', async () => {
-    const d = (await preguntar(sesiones.fina, { texto: '¿Cómo va la caja diaria y el Yape este mes?' })).fin.mensaje.datos;
-    assert.equal(d.herramientas[0], 'caja_diaria');
-    assert.equal(d.bloques[0].items[0].v, 'S/ 1,200.00');
-    assert.equal(d.bloques[0].items[2].v, 'S/ 350.00 / S/ 0.00');
-    const s = (await preguntar(sesiones.fina, { texto: '¿Cuál es el saldo de las cajas?' })).fin.mensaje.datos;
-    assert.equal(s.bloques[1].filas[0][1], 'S/ -598.50'); // AQP caja chica: 500 − 15.50 − 84 − 999 (incluye el gasto viejo)
+  it('resumen (ventas, fondos, depósitos por efectivo y digital), saldos y gastos de un proyecto desde la caja', async () => {
+    const d = (await preguntar(sesiones.fina, { texto: 'Resumen de ventas y fondos de este mes' })).fin.mensaje.datos;
+    assert.equal(d.herramientas[0], 'resumen_caja');
+    assert.equal(d.bloques[0].items[0].v, 'S/ 1,550.00');
+    assert.equal(d.bloques[0].items[3].v, 'S/ 100.00');
+    const s = (await preguntar(sesiones.fina, { texto: '¿Cuál es el saldo de la caja?' })).fin.mensaje.datos;
+    // efectivo: 500 + 1200 − 15.50 − 84 − 999 (el gasto viejo también cuenta) − 100 − 200; digital: 350 − 30
+    assert.deepEqual(s.bloques[0].items.map((x) => x.v), ['S/ 301.50', 'S/ 320.00', 'S/ 621.50']);
     const p = await preguntar(sesiones.fina, { texto: '¿Cuánto va gastado del proyecto PRY-901?' });
     const kp = p.fin.mensaje.datos.bloques[0].items;
-    assert.equal(kp[0].v, 'S/ 230.00'); // 30 caja chica + 200 caja diaria
+    assert.equal(kp[0].v, 'S/ 230.00'); // 30 por Yape + 200 en efectivo
     assert.equal(kp[2].v, 'S/ 50,000.00'); // contabilidad también ve Proyectos: se agrega el presupuesto
   });
   it('las preguntas frecuentes se responden sin IA (al instante, aunque la IA esté apagada); las demás van a la IA', async () => {
     const chats = () => ollama.pedidos.filter((x) => x.ruta === '/api/chat').length;
     const antes = chats();
-    const r = await preguntar(sesiones.fina, { texto: '¿Qué gastos de caja chica no tienen recibo este mes?' });
+    const r = await preguntar(sesiones.fina, { texto: '¿Qué gastos no tienen foto del recibo este mes?' });
     assert.equal(chats(), antes, 'no debe llamar al modelo');
     assert.equal(r.fin.mensaje.datos.rapida, true);
     assert.equal(r.fin.mensaje.modelo, null);
-    assert.match(r.fin.mensaje.texto, /2 no tienen foto del recibo/);
+    assert.match(r.fin.mensaje.texto, /3 no tienen foto/);
     const url = process.env.OLLAMA_URL;
     delete process.env.OLLAMA_URL; // IA apagada
     try {
-      const s = await preguntar(sesiones.fina, { texto: 'saldo de las cajas' });
+      const s = await preguntar(sesiones.fina, { texto: 'saldo de la caja' });
       assert.ok(s.fin, JSON.stringify(s.error));
-      assert.match(s.fin.mensaje.texto, /Arequipa/);
+      assert.match(s.fin.mensaje.texto, /efectivo \*\*S\/ 301\.50\*\*/);
       const otra = await preguntar(sesiones.fina, { texto: '¿Por qué subieron tanto los gastos?' });
       assert.ok(otra.error); // esa sí necesita la IA
     } finally {
@@ -176,10 +179,10 @@ describe('IA de Finanzas', () => {
     assert.notEqual(ia.fin.mensaje.datos.rapida, true);
   });
   it('la IA no registra nada y las conversaciones son privadas', async () => {
-    const antes = (await pool.query('SELECT count(*)::int AS n FROM caja_chica_mov')).rows[0].n;
+    const antes = (await pool.query('SELECT count(*)::int AS n FROM caja_icr_mov')).rows[0].n;
     const r = await preguntar(sesiones.fina, { texto: 'Registra un gasto de 20 soles de taxi' });
     assert.match(r.texto, /Solo puedo leer/);
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM caja_chica_mov')).rows[0].n, antes);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM caja_icr_mov')).rows[0].n, antes);
     const id = r.eventos.find((e) => e.tipo === 'conversacion').id;
     assert.equal((await llamar('GET', `/api/ia/finanzas/conversaciones/${id}`, { token: sesiones.tito })).estado, 404);
     assert.ok((await llamar('GET', '/api/ia/finanzas/conversaciones', { token: sesiones.fina })).datos.length >= 1);

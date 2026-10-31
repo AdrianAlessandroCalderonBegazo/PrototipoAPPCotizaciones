@@ -24,7 +24,7 @@ export const MODULOS = [
   { clave: 'asistente_ia', nombre: 'Asistente IA', grupo: 'Inteligencia', lectura: 'Ver conversaciones', completo: 'Consultar al asistente (con los datos que el rol puede ver)' },
   { clave: 'configuracion', nombre: 'Configuración', grupo: 'Sistema', lectura: 'Ver la configuración y la auditoría', completo: 'Cambiar usuarios, permisos, empresa e integraciones' },
   { clave: 'logistica', nombre: 'PWA Logística', grupo: 'Apps', lectura: 'Ver, pedir requerimientos y salidas, confirmar lo recibido', completo: 'Además aprobar, alistar, confirmar salidas y devoluciones, editar listas y maletas' },
-  { clave: 'caja_chica', nombre: 'PWA Finanzas (caja chica)', grupo: 'Apps', lectura: 'Ver la caja, alertas e historial', completo: 'Registrar, corregir días anteriores y cerrar el día' },
+  { clave: 'caja_chica', nombre: 'Finanzas (Caja ICR)', grupo: 'Apps', lectura: 'Ver saldos, historial y reportes de la Caja ICR', completo: 'Registrar gastos, capturas y ventas; corregir y anular' },
 ];
 const CLAVES = new Set(MODULOS.map((m) => m.clave));
 

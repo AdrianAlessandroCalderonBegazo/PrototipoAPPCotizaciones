@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { auditar } from './auditoria.js';
 import {
-  CATEGORIAS, anularMovimiento, cajaChica, crearCuenta, editarCuenta, enviarFondos, listarCuentas, listarMovimientos, registrarMovimiento, resumen,
+  CATEGORIAS, anularMovimiento, crearCuenta, editarCuenta, enviarFondos, listarCuentas, listarMovimientos, registrarMovimiento, resumen,
 } from './contabilidad.js';
 import { falla } from './errores.js';
 import { buscar, inicio, marcarLeidas, notificaciones } from './inicio.js';
@@ -70,8 +70,7 @@ export function crearRutasF2() {
   r.post('/contabilidad/movimientos/:id/anular', nivel('contabilidad', 'completo', 'anular movimientos'), async (req, res) => {
     res.json(await anularMovimiento(req.params.id, req.body, req.usuario, req));
   });
-  r.get('/contabilidad/caja-chica', nivel('contabilidad', 'lectura'), async (req, res) => res.json(await cajaChica(req.query)));
-  r.post('/contabilidad/envios', nivel('contabilidad', 'completo', 'enviar fondos a caja chica'), async (req, res) => {
+  r.post('/contabilidad/envios', nivel('contabilidad', 'completo', 'enviar fondos a la Caja ICR'), async (req, res) => {
     res.status(201).json(await enviarFondos(req.body, req.usuario, req));
   });
 

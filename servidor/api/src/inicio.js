@@ -1,8 +1,8 @@
 // ERP · Fase 4: Inicio (un solo pedido con todo lo del panel), alertas/notificaciones y búsqueda global.
 // Cada parte se arma solo si el rol puede ver ese módulo (matriz de permisos).
-import { cajaDisponible } from './caja.js';
 import { leerParametros } from './configuracion.js';
-import { resumen as resumenConta, cajaChica } from './contabilidad.js';
+import { resumen as resumenIcr, saldos as saldosIcr } from './cajaicr.js';
+import { resumen as resumenConta } from './contabilidad.js';
 import { consulta } from './db.js';
 import { aCentimos } from './dinero.js';
 import { tieneNivel } from './permisos.js';
@@ -58,17 +58,18 @@ export async function calcularAlertas(u, datos = {}) {
     }
   }
 
-  if (p.caja_chica && (await cajaDisponible())) {
-    const { rows } = await consulta('SELECT ciudad, saldo::text AS saldo FROM v_caja_chica_saldo');
-    for (const r of rows) {
-      if (aCentimos(r.saldo) < 0) out.push({ clave: `caja_negativa:${r.ciudad}:${hoy}`, nivel: 'alta', icono: 'savings', titulo: `La caja chica de ${r.ciudad === 'AQP' ? 'Arequipa' : 'Moquegua'} está en negativo.`, origen: 'Caja chica', ruta: p.contabilidad ? '/contabilidad' : null, cta: 'Ver caja chica' });
+  if (p.caja_chica) {
+    // Caja ICR: un saldo (efectivo o digital) en negativo y los gastos físicos del mes sin foto del recibo.
+    const s = await saldosIcr();
+    for (const [k, l] of [['efectivo', 'en efectivo'], ['digital', 'digital']]) {
+      if (aCentimos(s[k]) < 0) out.push({ clave: `caja_negativa:${k}:${hoy}`, nivel: 'alta', icono: 'savings', titulo: `El saldo ${l} de la Caja ICR está en negativo (${s[k]}).`, origen: 'Caja ICR', ruta: p.contabilidad ? '/contabilidad' : null, cta: 'Ver Caja ICR' });
     }
     const { rows: sf } = await consulta(
-      `SELECT count(*)::int AS n FROM caja_chica_mov m WHERE m.deleted_at IS NULL AND m.tipo = 'EGRESO' AND m.fecha >= date_trunc('month', $1::date)
-         AND NOT EXISTS (SELECT 1 FROM caja_adjunto a WHERE a.movimiento_id = m.id)`,
+      `SELECT count(*)::int AS n FROM caja_icr_mov m WHERE NOT m.anulado AND m.origen = 'GASTO' AND m.fecha >= date_trunc('month', $1::date)
+         AND NOT EXISTS (SELECT 1 FROM caja_icr_adjunto a WHERE a.mov_id = m.id)`,
       [hoy],
     );
-    if (sf[0].n > 0) out.push({ clave: `sin_foto:${hoy.slice(0, 7)}:${Math.ceil(sf[0].n / 5) * 5}`, nivel: 'media', icono: 'receipt', titulo: `${sf[0].n} gasto${sf[0].n === 1 ? '' : 's'} de caja chica de este mes sin foto del recibo.`, origen: 'Caja chica', ruta: p.contabilidad ? '/contabilidad' : null, cta: 'Revisar' });
+    if (sf[0].n > 0) out.push({ clave: `sin_foto:${hoy.slice(0, 7)}:${Math.ceil(sf[0].n / 5) * 5}`, nivel: 'media', icono: 'receipt', titulo: `${sf[0].n} gasto${sf[0].n === 1 ? '' : 's'} físico${sf[0].n === 1 ? '' : 's'} de la Caja ICR de este mes sin foto del recibo.`, origen: 'Caja ICR', ruta: p.contabilidad ? '/contabilidad' : null, cta: 'Revisar' });
   }
 
   if (p.contabilidad) {
@@ -169,7 +170,7 @@ export async function inicio(u) {
   let proyectos = null;
   if (p.contabilidad) {
     const r = await resumenConta({});
-    out.finanzas = { cuenta: r.cuenta, cuentas: r.cuentas, kpis: r.kpis, caja: await cajaChica({}) };
+    out.finanzas = { cuenta: r.cuenta, cuentas: r.cuentas, kpis: r.kpis, caja: await resumenIcr() };
   }
   if (p.proyectos) {
     proyectos = (await listarProyectos({})).proyectos;

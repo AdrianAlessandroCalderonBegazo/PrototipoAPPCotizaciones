@@ -1,4 +1,4 @@
-// ERP · Fase 2: proyectos, cuenta principal, caja chica y envío de fondos (contra PostgreSQL de verdad, con las tablas de Finanzas).
+// ERP · Fase 2: proyectos, cuenta principal, caja chica (anterior) y envío de fondos a la Caja ICR (contra PostgreSQL de verdad, con las tablas de Finanzas).
 // Uso:  DATABASE_ADMIN_URL=postgres://postgres@localhost:5432/postgres npm test
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -200,7 +200,8 @@ describe('cuenta principal', () => {
     // ni a futuro, ni categoría inventada, ni «envío a caja chica» a mano
     assert.equal((await llamar('POST', '/api/contabilidad/movimientos', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, tipo: 'ingreso', monto: 1, fecha: '2999-01-01', concepto: 'x' } })).estado, 400);
     assert.equal((await llamar('POST', '/api/contabilidad/movimientos', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, tipo: 'ingreso', monto: 1, fecha: hoy, concepto: 'x', categoria: 'Inventada' } })).estado, 400);
-    assert.equal((await llamar('POST', '/api/contabilidad/movimientos', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, tipo: 'egreso', monto: 1, fecha: hoy, concepto: 'x', categoria: 'Envío a caja chica' } })).estado, 400);
+    assert.equal((await llamar('POST', '/api/contabilidad/movimientos', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, tipo: 'egreso', monto: 1, fecha: hoy, concepto: 'x', categoria: 'Envío a Caja ICR' } })).estado, 400);
+    assert.equal((await llamar('POST', '/api/contabilidad/movimientos', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, tipo: 'ingreso', monto: 1, fecha: hoy, concepto: 'x', categoria: 'Depósito desde Caja ICR' } })).estado, 400);
   });
 
   it('anular con motivo (no se borra); el saldo lo descuenta; queda en la auditoría', async () => {
@@ -256,31 +257,43 @@ describe('gastos de proyecto desde la caja (Finanzas)', () => {
   });
 });
 
-describe('enviar fondos a caja chica', () => {
-  const saldoChica = async (ciudad) => (await sql('SELECT saldo::text AS s FROM v_caja_chica_saldo WHERE ciudad = $1', [ciudad]))[0].s;
+describe('enviar fondos a la Caja ICR', () => {
+  const saldoIcr = async (medio) => (await sql("SELECT COALESCE(SUM(CASE WHEN tipo = 'INGRESO' THEN monto ELSE -monto END), 0)::text AS s FROM caja_icr_mov WHERE NOT anulado AND medio = $1", [medio]))[0].s;
 
-  it('una sola operación: egreso en la cuenta + ingreso FONDO en la caja + historial de Finanzas + auditoría', async () => {
-    const antes = await saldoChica('MOQ');
-    const r = await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, ciudad: 'MOQ', monto: '250.25', concepto: 'Reposición semana 44' } });
+  it('una sola operación: egreso en la cuenta + ingreso FONDO en la caja (efectivo o digital) + auditoría', async () => {
+    const r = await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, medio: 'EFECTIVO', monto: '250.25', concepto: 'Reposición semana 44' } });
     assert.equal(r.estado, 201, JSON.stringify(r.datos));
     assert.equal(r.datos.saldo_antes, '1200.05');
     assert.equal(r.datos.saldo_despues, '949.80');
-    assert.equal(deCentimos(aCentimos(await saldoChica('MOQ')) - aCentimos(antes)), '250.25');
-    const [mov] = await sql('SELECT tipo, origen, monto::text AS monto FROM caja_chica_mov WHERE id = $1', [r.datos.envio.caja_chica_mov_id]);
-    assert.deepEqual(mov, { tipo: 'FONDO', origen: 'ERP', monto: '250.25' });
-    assert.equal((await sql("SELECT count(*)::int AS n FROM caja_auditoria WHERE entidad_id = $1 AND accion = 'crear'", [r.datos.envio.caja_chica_mov_id]))[0].n, 1);
-    assert.equal((await sql("SELECT count(*)::int AS n FROM audit_log WHERE entidad = 'envio_caja_chica'"))[0].n, 1);
-    // el egreso del envío no se anula desde el ERP
-    assert.equal((await llamar('POST', `/api/contabilidad/movimientos/${r.datos.envio.movimiento_id}/anular`, { token: sesiones.admin, cuerpo: { motivo: 'x' } })).estado, 409);
-    // y aparece en la caja chica del ERP
-    const caja = (await llamar('GET', '/api/contabilidad/caja-chica', { token: sesiones.fina })).datos;
-    assert.equal(caja.disponible, true);
-    assert.ok(caja.movimientos.some((m) => m.tipo === 'FONDO' && m.monto === '250.25'));
-    assert.equal(caja.saldos.find((s) => s.ciudad === 'MOQ').saldo, await saldoChica('MOQ'));
+    assert.equal(await saldoIcr('EFECTIVO'), '250.25');
+    assert.equal(await saldoIcr('DIGITAL'), '0');
+    const [mov] = await sql('SELECT tipo, origen, medio, monto::text AS monto, cuenta_movimiento_id FROM caja_icr_mov WHERE id = $1', [r.datos.envio.caja_icr_mov_id]);
+    assert.deepEqual(mov, { tipo: 'INGRESO', origen: 'FONDO', medio: 'EFECTIVO', monto: '250.25', cuenta_movimiento_id: r.datos.envio.movimiento_id });
+    assert.equal((await sql("SELECT count(*)::int AS n FROM audit_log WHERE entidad = 'envio_caja_icr'"))[0].n, 1);
+    // aparece en la Caja ICR que ve el ERP
+    const caja = (await llamar('GET', '/api/caja-icr/resumen', { token: sesiones.fina })).datos;
+    assert.equal(caja.saldos.efectivo, '250.25');
+    assert.ok(caja.recientes.some((m) => m.origen === 'FONDO' && m.monto === '250.25'));
+    // sin medio, no
+    assert.equal((await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, monto: 10, concepto: 'x' } })).estado, 400);
+  });
+
+  it('anular el envío en el ERP también lo saca de la Caja ICR', async () => {
+    const r = await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, medio: 'DIGITAL', monto: '40', concepto: 'Para Yape' } });
+    assert.equal(r.estado, 201);
+    assert.equal(await saldoIcr('DIGITAL'), '40.00');
+    // desde la caja no se anula un fondo
+    assert.equal((await llamar('POST', `/api/caja-icr/movimientos/${r.datos.envio.caja_icr_mov_id}/anular`, { token: sesiones.fina, cuerpo: { motivo: 'x' } })).estado, 409);
+    const a = await llamar('POST', `/api/contabilidad/movimientos/${r.datos.envio.movimiento_id}/anular`, { token: sesiones.fina, cuerpo: { motivo: 'Me equivoqué de medio' } });
+    assert.equal(a.estado, 200, JSON.stringify(a.datos));
+    assert.equal(await saldoIcr('DIGITAL'), '0');
+    const [mov] = await sql('SELECT anulado, anulado_motivo FROM caja_icr_mov WHERE id = $1', [r.datos.envio.caja_icr_mov_id]);
+    assert.equal(mov.anulado, true);
+    assert.match(mov.anulado_motivo, /Me equivoqué/);
   });
 
   it('si la cuenta queda en negativo: solo un Administrador lo confirma', async () => {
-    const cuerpo = { cuenta_id: cta.id, ciudad: 'AQP', monto: '5000', concepto: 'Obra grande' };
+    const cuerpo = { cuenta_id: cta.id, medio: 'EFECTIVO', monto: '5000', concepto: 'Obra grande' };
     const r1 = await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo });
     assert.equal(r1.estado, 409);
     assert.equal(r1.datos.codigo, 'SALDO_NEGATIVO');
@@ -290,20 +303,19 @@ describe('enviar fondos a caja chica', () => {
     const ok = await llamar('POST', '/api/contabilidad/envios', { token: sesiones.admin, cuerpo: { ...cuerpo, autorizar_negativo: true } });
     assert.equal(ok.estado, 201);
     assert.equal(ok.datos.envio.saldo_negativo_autorizado, true);
-    // nada quedó a medias de los intentos rechazados: 2 envíos en total
-    assert.equal((await sql('SELECT count(*)::int AS n FROM envios_caja_chica'))[0].n, 2);
-    assert.equal((await sql("SELECT count(*)::int AS n FROM caja_chica_mov WHERE tipo = 'FONDO'"))[0].n, 2);
+    // nada quedó a medias de los intentos rechazados: 3 fondos en total (uno anulado)
+    assert.equal((await sql("SELECT count(*)::int AS n FROM caja_icr_mov WHERE origen = 'FONDO'"))[0].n, 3);
+    assert.equal((await sql("SELECT count(*)::int AS n FROM cuenta_movimientos WHERE source = 'envio_caja_icr'"))[0].n, 3);
   });
 
   it('cuenta sin saldo conocido o en dólares; ventas no puede enviar', async () => {
     const usd = (await llamar('POST', '/api/contabilidad/cuentas', { token: sesiones.fina, cuerpo: { nombre: 'BCP US$', moneda: 'USD', saldo_inicial: '1000', saldo_inicial_fecha: hoy } })).datos;
-    assert.equal((await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: usd.id, ciudad: 'AQP', monto: 10, concepto: 'x' } })).estado, 400);
+    assert.equal((await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: usd.id, medio: 'EFECTIVO', monto: 10, concepto: 'x' } })).estado, 400);
     const sin = (await llamar('POST', '/api/contabilidad/cuentas', { token: sesiones.fina, cuerpo: { nombre: 'Interbank S/', moneda: 'PEN' } })).datos;
-    const r = await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: sin.id, ciudad: 'AQP', monto: 10, concepto: 'x' } });
+    const r = await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: sin.id, medio: 'EFECTIVO', monto: 10, concepto: 'x' } });
     assert.equal(r.estado, 409);
     assert.match(r.datos.error, /saldo inicial/);
-    assert.equal((await llamar('POST', '/api/contabilidad/envios', { token: sesiones.vera, cuerpo: { cuenta_id: cta.id, ciudad: 'AQP', monto: 10, concepto: 'x' } })).estado, 403);
-    assert.equal((await llamar('POST', '/api/contabilidad/envios', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, ciudad: 'LIM', monto: 10, concepto: 'x' } })).estado, 400);
+    assert.equal((await llamar('POST', '/api/contabilidad/envios', { token: sesiones.vera, cuerpo: { cuenta_id: cta.id, medio: 'EFECTIVO', monto: 10, concepto: 'x' } })).estado, 403);
   });
 });
 
@@ -314,9 +326,9 @@ describe('resumen de contabilidad', () => {
     assert.equal(r.flujo.length, 6);
     assert.equal(r.flujo.at(-1).mes, hoy.slice(0, 7));
     assert.equal(r.kpis.ingresos_mes, '1000.10');
-    // egresos: 200.05 + 100.00 (proyecto) + 250.25 + 5000.00 (envíos); el anulado no cuenta
+    // egresos: 200.05 + 100.00 (proyecto) + 250.25 + 5000.00 (envíos); los anulados no cuentan
     assert.equal(r.kpis.egresos_mes, '5550.30');
-    const env = r.egresos_por_categoria.find((c) => c.categoria === 'Envío a caja chica');
+    const env = r.egresos_por_categoria.find((c) => c.categoria === 'Envío a Caja ICR');
     assert.equal(env.monto, '5250.25');
     const p = r.egresos_por_proyecto.find((x) => x.id === pry.id);
     assert.equal(p.total, '400.40'); // 100 cuenta + 300.40 caja diaria (el de caja chica se borró)

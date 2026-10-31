@@ -26,6 +26,11 @@ export async function sqlGastos(filtro = '') {
     `SELECT 'cuenta_principal' AS origen, m.id::text AS id, m.fecha::text AS fecha, m.concepto, m.categoria, m.monto::text AS monto,
             m.registrado_por AS por, m.documento AS comprobante, '{}'::text[] AS adjuntos, NULL::text AS ciudad, m.proyecto_id, m.creado_en::text AS registrado_en
        FROM cuenta_movimientos m WHERE m.tipo = 'egreso' AND NOT m.anulado AND m.proyecto_id IS NOT NULL ${filtro && `AND m.proyecto_id = ${filtro}`}`,
+    // Caja ICR (Fase 11): gastos físicos y digitales con proyecto (un depósito a la cuenta principal no es gasto).
+    `SELECT 'caja_icr', m.id::text, m.fecha::text, m.descripcion, COALESCE(m.subcategoria, m.categoria), m.monto::text,
+            m.creado_por, CASE WHEN m.comprobante = 'NINGUNO' THEN NULL ELSE m.comprobante END,
+            ARRAY(SELECT a.id::text FROM caja_icr_adjunto a WHERE a.mov_id = m.id ORDER BY a.id), m.medio, m.proyecto_id, m.creado_en::text
+       FROM caja_icr_mov m WHERE m.tipo = 'EGRESO' AND m.origen <> 'DEPOSITO' AND NOT m.anulado AND m.proyecto_id IS NOT NULL ${filtro && `AND m.proyecto_id = ${filtro}`}`,
   ];
   if (await cajaDisponible()) {
     partes.push(

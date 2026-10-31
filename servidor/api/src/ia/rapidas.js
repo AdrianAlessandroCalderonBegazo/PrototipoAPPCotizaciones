@@ -22,15 +22,17 @@ const PERIODOS = [
   [/\bayer\b/, 'ayer'], [/\bhoy\b/, 'hoy'], [/\bsemana\b/, 'semana'], [/\bmes\b/, 'mes'],
 ];
 const PALABRAS_PERIODO = ['semana', 'pasada', 'pasado', 'anterior', 'ayer', 'hoy', 'mes', 'esta', 'este'];
-const CIUDADES = [[/\b(arequipa|aqp)\b/, 'AQP'], [/\b(moquegua|moq)\b/, 'MOQ']];
-const PALABRAS_CIUDAD = ['arequipa', 'aqp', 'moquegua', 'moq', 'ciudad', 'ciudades', 'ambas'];
-// Categorías de caja chica (las de la app de Finanzas) y cómo se escriben.
+// Efectivo (gastos físicos) o digital (Yape / transferencias): los dos saldos de la Caja ICR.
+const MEDIOS = [[/\b(efectivo|fisicos?)\b/, 'EFECTIVO'], [/\b(digital|digitales|yape|yapes|transferencias?|capturas?|plin)\b/, 'DIGITAL']];
+const PALABRAS_MEDIO = ['efectivo', 'fisico', 'fisicos', 'digital', 'digitales', 'yape', 'yapes', 'transferencia', 'transferencias', 'captura', 'capturas', 'plin', 'medio'];
+// Categorías de la Caja ICR (las de la app de Finanzas) y cómo se escriben.
 const CATEGORIAS = [['movilidad', 'movilidad'], ['material', 'material'], ['materiales', 'material'], ['oficina', 'oficina'], ['fletes', 'fletes'], ['flete', 'fletes'],
-  ['viaticos', 'viaticos'], ['viatico', 'viaticos'], ['proveedores', 'proveedores'], ['equipos', 'equipos'], ['combustible', 'movilidad']];
+  ['viaticos', 'viaticos'], ['viatico', 'viaticos'], ['proveedores', 'proveedores'], ['equipos', 'equipos'], ['combustible', 'movilidad'], ['sueldos', 'sueldos'],
+  ['alquiler', 'alquiler'], ['servicios', 'servicios'], ['fijos', 'gastos fijos']];
 
 const tokens = (t) => sinTildes(t).replace(/[^a-z0-9ñ\s/.-]/g, ' ').split(/\s+/).filter(Boolean);
 const periodoDe = (n) => PERIODOS.find(([re]) => re.test(n))?.[1] ?? null;
-const ciudadDe = (n) => CIUDADES.find(([re]) => re.test(n))?.[1];
+const medioDe = (n) => MEDIOS.find(([re]) => re.test(n))?.[1];
 /** Palabras que sobran después de quitar las vacías y las conocidas para esta consulta. */
 const sobrantes = (n, conocidas) => tokens(n).filter((w) => !VACIAS.has(w) && !conocidas.some((c) => (c instanceof RegExp ? c.test(w) : c === w)));
 
@@ -39,25 +41,25 @@ const sobrantes = (n, conocidas) => tokens(n).filter((w) => !VACIAS.has(w) && !c
 // ---------------------------------------------------------------------------------------------
 
 function finanzas(n) {
-  const base = [...PALABRAS_PERIODO, ...PALABRAS_CIUDAD, /^caj(a|as)$/, 'chica', 'diaria'];
+  const base = [...PALABRAS_PERIODO, ...PALABRAS_MEDIO, /^caj(a|as)$/, 'icr'];
   const periodo = periodoDe(n) ?? 'mes';
-  const ciudad = ciudadDe(n);
+  const medio = medioDe(n);
   const proy = n.match(/\bproyecto\s+(.+)$/);
   if (proy) {
-    const nombre = proy[1].replace(/\b(desde|las|cajas?|chica|diaria)\b/g, ' ').trim();
+    const nombre = proy[1].replace(/\b(desde|la|las|cajas?|icr)\b/g, ' ').trim();
     return nombre ? { herramienta: 'gastos_proyecto_caja', args: { proyecto: nombre } } : null;
   }
-  if (/\bsaldos?\b/.test(n)) return sobrantes(n, [...base, /^saldos?$/, 'yape', 'efectivo', 'queda', 'quedan', 'hay']).length ? null : { herramienta: 'saldos_caja', args: {} };
-  if (/\b(caja diaria|yape|efectivo|ingresos?|entro|entraron)\b/.test(n)) {
-    return sobrantes(n, [...base, 'yape', 'efectivo', /^ingresos?$/, 'entro', 'entraron', /^salidas?$/, 'salio', 'movimientos', 'cta', 'cte', 'corriente', 'cuenta'])
-      .length ? null : { herramienta: 'caja_diaria', args: { periodo, ...(ciudad ? { ciudad } : {}) } };
+  if (/\bsaldos?\b/.test(n)) return sobrantes(n, [...base, /^saldos?$/, 'queda', 'quedan', 'hay', 'tenemos']).length ? null : { herramienta: 'saldos_caja', args: {} };
+  if (/\b(ventas?|vendi|vendimos|ingresos?|entro|entraron|fondos?|depositos?|resumen|movimientos)\b/.test(n)) {
+    return sobrantes(n, [...base, /^ventas?$/, 'vendi', 'vendimos', /^ingresos?$/, 'entro', 'entraron', /^fondos?$/, /^depositos?$/, /^egresos?$/, /^salidas?$/, 'salio',
+      'movimientos', 'cuenta', 'principal', 'erp', 'enviados', 'enviaron', 'llegaron', 'banco', /^gast/]).length ? null : { herramienta: 'resumen_caja', args: { periodo } };
   }
-  if (/\b(gast|egres|recibo|comprobante|caja chica)/.test(n)) {
+  if (/\b(gast|egres|recibo|comprobante|foto|captura)/.test(n) || medio) {
     const cat = CATEGORIAS.find(([w]) => new RegExp(`\\b${w}\\b`).test(n))?.[1];
     const sinRecibo = /\b(recibos?|comprobantes?|fotos?)\b/.test(n) && /\b(no|sin|falta|faltan)\b/.test(n);
-    const sobra = sobrantes(n, [...base, /^gast/, /^egresos?$/, /^recibos?$/, /^comprobantes?$/, /^fotos?$/, 'no', 'falta', 'faltan', 'categoria', 'categorias',
+    const sobra = sobrantes(n, [...base, /^gast/, /^egresos?$/, /^recibos?$/, /^comprobantes?$/, /^fotos?$/, 'no', 'falta', 'faltan', 'categoria', 'categorias', 'pagos', 'pago',
       ...CATEGORIAS.map(([w]) => w)]);
-    return sobra.length ? null : { herramienta: 'gastos_caja_chica', args: { periodo, ...(ciudad ? { ciudad } : {}), ...(cat ? { categoria: cat } : {}), ...(sinRecibo ? { sin_recibo: true } : {}) } };
+    return sobra.length ? null : { herramienta: 'gastos_caja', args: { periodo, ...(medio ? { medio } : {}), ...(cat ? { categoria: cat } : {}), ...(sinRecibo ? { sin_recibo: true } : {}) } };
   }
   return null;
 }
@@ -73,8 +75,9 @@ function asistente(n) {
     if (bajo && !resto.length) return { herramienta: 'stock_almacen', args: {} };
     return resto.length ? { herramienta: 'stock_almacen', args: { articulo: resto.join(' ') } } : { herramienta: 'stock_almacen', args: {} };
   }
-  if (/\bcaja chica\b/.test(n)) {
-    return sobrantes(n, [...per, 'caja', 'chica', /^gast/, /^comprobantes?$/, /^recibos?$/, 'no', 'saldo', /^egresos?$/]).length ? null : { herramienta: 'caja_chica', args: mes ? { mes } : {} };
+  if (/\bcaja (icr|chica)\b/.test(n)) {
+    return sobrantes(n, [...per, 'caja', 'icr', 'chica', /^gast/, /^comprobantes?$/, /^recibos?$/, 'no', /^saldos?$/, /^egresos?$/, /^ventas?$/, 'efectivo', 'digital', 'yape'])
+      .length ? null : { herramienta: 'caja_icr', args: mes ? { mes } : {} };
   }
   if (/\b(factur|boleta|comprobante|vendi|ventas?)/.test(n)) {
     return sobrantes(n, [...per, /^factur/, /^boletas?$/, /^comprobantes?$/, /^emitid/, /^ventas?$/, 'vendimos', 'vendio', /^clientes?$/, 'sunat'])
@@ -119,16 +122,16 @@ export function resumir(herramienta, m) {
   if (!m) return 'Sin dato.';
   if (m.error) return m.error;
   switch (herramienta) {
-    case 'gastos_caja_chica':
+    case 'gastos_caja':
       return m.cantidad
-        ? `${cap(m.periodo)} se gastó **${m.total_gastado}** de caja chica en ${m.cantidad} gasto${m.cantidad === 1 ? '' : 's'} (${m.ciudad}).${m.sin_recibo ? ` ${m.sin_recibo} no tiene${m.sin_recibo === 1 ? '' : 'n'} foto del recibo (${m.total_sin_recibo}).` : ' Todos tienen foto del recibo.'}`
-        : `No hay gastos de caja chica ${m.periodo} (${m.ciudad}) con esos datos.`;
-    case 'caja_diaria':
-      return `Caja diaria ${m.periodo} (${m.ciudad}): entraron **${m.ingresos_efectivo}** en efectivo y ${m.ingresos_transferencia} por transferencia; salieron ${m.salidas_efectivo} en efectivo. Yape: entró ${m.yape_ingresos} y salió ${m.yape_salidas}.${m.salidas_sin_comprobante ? ` ${m.salidas_sin_comprobante} salida${m.salidas_sin_comprobante === 1 ? '' : 's'} sin comprobante.` : ''}`;
+        ? `${cap(m.periodo)} se gastó **${m.total_gastado}** de la Caja ICR en ${m.cantidad} gasto${m.cantidad === 1 ? '' : 's'} (${m.medio}).${m.sin_recibo ? ` ${m.sin_recibo} no tiene${m.sin_recibo === 1 ? '' : 'n'} foto (${m.total_sin_recibo}).` : ' Todos tienen su foto.'}`
+        : `No hay gastos de la Caja ICR ${m.periodo} (${m.medio}) con esos datos.`;
+    case 'resumen_caja':
+      return `Caja ICR ${m.periodo}: ventas **${m.ventas}**, fondos del ERP ${m.fondos_del_erp}, gastos ${m.gastos} y depósitos a la cuenta principal ${m.depositos_a_cuenta_principal}. Saldo al final: efectivo **${m.efectivo.saldo_final}**, digital **${m.digital.saldo_final}**.`;
     case 'saldos_caja':
-      return `Saldos: ${m.saldos.map((s) => `**${s.ciudad}** — caja chica ${s.caja_chica}, efectivo ${s.caja_diaria_efectivo}, Yape ${s.yape}`).join('; ')}.`;
+      return `Saldos de la Caja ICR: efectivo **${m.efectivo}**, digital **${m.digital}** (total ${m.total}).`;
     case 'gastos_proyecto_caja':
-      return `En **${m.proyecto}** se gastó ${m.gastado_desde_cajas ?? 'Sin dato'} desde las cajas.`;
+      return `En **${m.proyecto}** se gastó ${m.gastado_desde_cajas ?? 'Sin dato'} desde la caja.`;
     case 'resumen_finanzas':
       return `En **${mesTexto(m.mes)}** entraron ${m.ingresos} y salieron ${m.egresos}: flujo neto **${m.flujo_neto}**${m.variacion_egresos && m.variacion_egresos !== 'Sin dato' ? ` (egresos ${m.variacion_egresos} vs. el mes anterior)` : ''}.${m.saldo_actual && m.saldo_actual !== 'Sin dato' ? ` Saldo actual de ${m.cuenta ?? 'la cuenta principal'}: ${m.saldo_actual}.` : ''}`;
     case 'proyectos': {
@@ -138,8 +141,8 @@ export function resumir(herramienta, m) {
     }
     case 'comprobantes':
       return m.comprobantes ? `En **${mesTexto(m.mes)}** se emitieron ${m.emitidos} comprobante${m.emitidos === 1 ? '' : 's'} por **${m.total_emitido}**.` : `No hay comprobantes en ${mesTexto(m.mes)}.`;
-    case 'caja_chica':
-      return `Caja chica en **${mesTexto(m.mes)}**: salieron ${m.egresos_mes} en ${m.gastos_mes ?? 0} gasto${m.gastos_mes === 1 ? '' : 's'}${m.sin_comprobante ? `, ${m.sin_comprobante} sin comprobante` : ''}. Saldo actual: **${m.saldo_total}**.`;
+    case 'caja_icr':
+      return `Caja ICR en **${mesTexto(m.mes)}**: ${m.gastos_mes} en ${m.cantidad_gastos ?? 0} gasto${m.cantidad_gastos === 1 ? '' : 's'}${m.sin_foto ? ` (${m.sin_foto} sin foto)` : ''} y ventas por ${m.ventas_mes}. Saldos: efectivo **${m.saldo_efectivo}**, digital **${m.saldo_digital}**.`;
     case 'cotizaciones': {
       const e = m.por_estado ?? {};
       return m.cantidad ? `Hay **${m.cantidad}** cotizaci${m.cantidad === 1 ? 'ón' : 'ones'} por ${m.monto_total}: ${e.enviada ?? 0} enviadas, ${e.aceptada ?? 0} aceptadas, ${e.rechazada ?? 0} rechazadas y ${e.borrador ?? 0} en borrador.` : 'No hay cotizaciones con ese filtro.';
@@ -167,15 +170,16 @@ export const FRECUENTES = {
     ['account_balance', 'Resumen de finanzas del mes', 'Resumen de ingresos y egresos de este mes', 'resumen_finanzas'],
     ['solar_power', 'Cómo van los proyectos activos', '¿Cómo van los proyectos activos y su presupuesto?', 'proyectos'],
     ['verified', 'Ventas facturadas del mes', 'Facturas y boletas emitidas este mes', 'comprobantes'],
-    ['savings', 'Caja chica este mes', '¿Cuánto se gastó de caja chica este mes?', 'caja_chica'],
+    ['savings', 'Caja ICR este mes', '¿Cómo va la caja ICR este mes?', 'caja_icr'],
     ['request_quote', 'Cotizaciones enviadas', '¿Qué cotizaciones están enviadas y sin respuesta?', 'cotizaciones'],
     ['inventory', 'Stock bajo en almacén', '¿Qué artículos del almacén están con stock bajo?', 'stock_almacen'],
   ],
   finanzas: [
-    ['¿Cuánto se gastó esta semana?', 'gastos_caja_chica'],
-    ['¿Qué gastos de caja chica no tienen recibo este mes?', 'gastos_caja_chica'],
-    ['¿Cuál es el saldo de las cajas?', 'saldos_caja'],
-    ['¿Cuánto se gastó en movilidad este mes en Moquegua?', 'gastos_caja_chica'],
-    ['¿Cómo va la caja diaria y el Yape este mes?', 'caja_diaria'],
+    ['¿Cuánto se gastó esta semana?', 'gastos_caja'],
+    ['¿Qué gastos no tienen foto del recibo este mes?', 'gastos_caja'],
+    ['¿Cuál es el saldo de la caja?', 'saldos_caja'],
+    ['¿Cuánto se gastó en movilidad este mes?', 'gastos_caja'],
+    ['¿Cuánto se pagó por Yape esta semana?', 'gastos_caja'],
+    ['Resumen de ventas y fondos de este mes', 'resumen_caja'],
   ],
 };

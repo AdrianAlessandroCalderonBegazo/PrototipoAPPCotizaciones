@@ -2,7 +2,8 @@
 // Cada una revisa el permiso de quien pregunta (la IA ve solo lo que esa persona puede ver) y los totales los calcula el servidor:
 // el modelo recibe los números ya hechos y la pantalla muestra tablas y gráficos armados aquí, nunca por el modelo.
 import { leerParametros } from '../configuracion.js';
-import { cajaChica, listarMovimientos, resumen as resumenConta } from '../contabilidad.js';
+import { listar as listarCaja, reportes as reportesCaja, saldos as saldosCaja } from '../cajaicr.js';
+import { listarMovimientos, resumen as resumenConta } from '../contabilidad.js';
 import { calcular } from '../cotizar.js';
 import { consulta } from '../db.js';
 import { aCentimos, deCentimos, monto } from '../dinero.js';
@@ -12,7 +13,7 @@ import { buscar as buscarEnProveedores } from '../comparador.js';
 import { listarComprobantes } from '../facturacion.js';
 import { detalleKit, listarKits } from '../kits.js';
 import { tieneNivel } from '../permisos.js';
-import { detalleProyecto, listarProyectos } from '../proyectos.js';
+import { detalleProyecto, listarProyectos, sqlGastos } from '../proyectos.js';
 import { buscarProductos, normalizar, productoExacto, productoPorId } from './indice.js';
 
 const hoyLima = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
@@ -192,7 +193,7 @@ const proyectos = {
 };
 
 const gastos_proyecto = {
-  nombre: 'gastos_proyecto', fuente: 'Proyectos', modulo: 'proyectos', fuentesExtra: ['Caja chica'],
+  nombre: 'gastos_proyecto', fuente: 'Proyectos', modulo: 'proyectos', fuentesExtra: ['Caja ICR'],
   descripcion: 'Detalle de gastos de UN proyecto (por código PRY-001 o nombre): presupuesto, gastado, por categoría, de dónde salió y cuántos no tienen comprobante.',
   parametros: { type: 'object', properties: { proyecto: { type: 'string', description: 'Código o nombre del proyecto' } }, required: ['proyecto'] },
   async ejecutar(a) {
@@ -202,8 +203,8 @@ const gastos_proyecto = {
     const d = await detalleProyecto(rows[0].id);
     const p = d.proyecto;
     const sinComp = d.gastos.filter((g) => !g.comprobante && !(g.adjuntos ?? []).length).length;
-    const porOrigen = ['cuenta_principal', 'caja_chica', 'caja_diaria'].map((o) => [o, sumar(d.gastos.filter((g) => g.origen === o).map((g) => g.monto))]);
-    const nombreOrigen = { cuenta_principal: 'Cuenta principal', caja_chica: 'Caja chica', caja_diaria: 'Caja diaria' };
+    const nombreOrigen = { cuenta_principal: 'Cuenta principal', caja_icr: 'Caja ICR', caja_chica: 'Caja chica (anterior)', caja_diaria: 'Caja diaria (anterior)' };
+    const porOrigen = Object.keys(nombreOrigen).map((o) => [o, sumar(d.gastos.filter((g) => g.origen === o).map((g) => g.monto))]).filter(([o, t2]) => o === 'cuenta_principal' || o === 'caja_icr' || aCentimos(t2) > 0);
     return {
       modelo: { proyecto: `${p.codigo} · ${p.nombre}`, estado: p.estado, presupuesto: soles(p.presupuesto), gastado: soles(p.gastado), saldo: soles(p.saldo), porcentaje: p.porcentaje, por_categoria: d.categorias.map((c) => ({ ...c, monto: soles(c.monto) })), por_origen: Object.fromEntries(porOrigen.map(([o, t2]) => [nombreOrigen[o], soles(t2)])), gastos: d.gastos.length, gastos_sin_comprobante: sinComp },
       bloques: [
@@ -261,18 +262,22 @@ const comprobantes = {
   },
 };
 
-const caja_chica = {
-  nombre: 'caja_chica', fuente: 'Caja chica', modulo: ['caja_chica', 'contabilidad'],
-  descripcion: 'Caja chica (app de Finanzas): saldo por ciudad, ingresos y egresos del mes, gastos sin comprobante y últimos movimientos.',
+const caja_icr = {
+  nombre: 'caja_icr', fuente: 'Caja ICR', modulo: ['caja_chica', 'contabilidad'],
+  descripcion: 'Caja ICR (app de Finanzas) en un mes: saldos en efectivo y digital, ventas, fondos del ERP, gastos, depósitos a la cuenta principal, gastos sin foto y últimos movimientos.',
   parametros: { type: 'object', properties: { mes: { type: 'string', description: 'AAAA-MM' } } },
   async ejecutar(a) {
-    const r = await cajaChica({ mes: mesValido(a.mes) });
-    if (!r.disponible) return { modelo: { error: 'La caja chica no está disponible en este servidor.' }, bloques: [] };
+    const mes = mesValido(a.mes);
+    const fin = mes === mesActual() ? hoyLima() : new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)).toISOString().slice(0, 10);
+    const r = await reportesCaja({ desde: `${mes}-01`, hasta: fin });
+    const s = await saldosCaja();
+    const n = r.movimientos.filter((m) => m.tipo === 'EGRESO' && m.origen !== 'DEPOSITO').length;
     return {
-      modelo: { mes: r.mes, saldo_total: soles(r.saldo_total), saldos: r.saldos.map((s) => ({ ...s, saldo: soles(s.saldo) })), ingresos_mes: soles(r.ingresos_mes), egresos_mes: soles(r.egresos_mes), gastos_mes: r.gastos_mes, sin_comprobante: r.sin_comprobante_mes, ultimos: r.movimientos.slice(0, 10).map((m) => ({ fecha: m.fecha, tipo: m.tipo, descripcion: m.descripcion, monto: m.monto, ciudad: m.ciudad })) },
+      modelo: { mes, saldo_efectivo: soles(s.efectivo), saldo_digital: soles(s.digital), saldo_total: soles(s.total), ventas_mes: soles(r.ventas), fondos_mes: soles(r.fondos), gastos_mes: soles(r.gastos), cantidad_gastos: n,
+        depositos_mes: soles(r.depositos), sin_foto: r.sin_foto, ultimos: r.movimientos.slice(0, 10).map((m) => ({ fecha: m.fecha, tipo: m.tipo, descripcion: m.descripcion, medio: MEDIO[m.medio], monto: m.monto })) },
       bloques: [
-        { tipo: 'kpis', items: [{ l: 'Saldo total', v: soles(r.saldo_total) }, { l: `Egresos ${r.mes}`, v: soles(r.egresos_mes), c: 'peligro' }, { l: 'Sin comprobante', v: String(r.sin_comprobante_mes) }] },
-        tabla('Últimos movimientos de caja chica', [['Fecha'], ['Descripción'], ['Ciudad'], ['Monto', 'right']], r.movimientos.slice(0, 12).map((m) => [fechaPe(m.fecha), m.descripcion ?? 'Sin dato', m.ciudad, `${m.tipo === 'EGRESO' ? '−' : '+'} ${soles(m.monto)}`])),
+        { tipo: 'kpis', items: [{ l: 'Efectivo', v: soles(s.efectivo) }, { l: 'Digital', v: soles(s.digital) }, { l: `Gastos ${mes}`, v: soles(r.gastos), c: 'peligro' }, { l: 'Gastos sin foto', v: String(r.sin_foto) }] },
+        tabla('Últimos movimientos de la Caja ICR', [['Fecha'], ['Descripción'], ['Medio'], ['Monto', 'right']], r.movimientos.slice(0, 12).map((m) => [fechaPe(m.fecha), m.descripcion ?? 'Sin dato', MEDIO[m.medio], signo(m)])),
       ],
     };
   },
@@ -295,17 +300,9 @@ const requerimientos = {
 };
 
 // ---------------------------------------------------------------------------------------------
-// IA de la app de Finanzas (Fase 7): caja diaria (efectivo y Yape) y caja chica, de Arequipa (AQP) y Moquegua (MOQ)
+// IA de la app de Finanzas (Caja ICR, Fase 11): una sola caja con dos saldos, efectivo y digital (Yape / transferencias)
 // ---------------------------------------------------------------------------------------------
 
-const CIUDAD = { AQP: 'Arequipa', MOQ: 'Moquegua' };
-const ciudadDe = (v) => {
-  const t = normalizar(v ?? '').trim();
-  if (!t) return null;
-  if (t.startsWith('aq') || t.startsWith('areq')) return 'AQP';
-  if (t.startsWith('mo')) return 'MOQ';
-  return null;
-};
 const isoMas = (iso, n) => {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
@@ -335,128 +332,92 @@ export function rangoDe(a = {}, hoy = hoyLima()) {
 }
 const PERIODO = { type: 'string', enum: ['hoy', 'ayer', 'semana', 'semana_anterior', 'mes', 'mes_anterior'], description: 'Período (por defecto «mes», el mes actual). «semana» = desde el lunes.' };
 const FECHAS = { desde: { type: 'string', description: 'AAAA-MM-DD (si se pide un rango exacto)' }, hasta: { type: 'string', description: 'AAAA-MM-DD' } };
-const CIUDAD_P = { type: 'string', enum: ['AQP', 'MOQ'], description: 'Ciudad: AQP = Arequipa, MOQ = Moquegua. Vacío = ambas.' };
+const MEDIO_P = { type: 'string', enum: ['EFECTIVO', 'DIGITAL'], description: 'EFECTIVO = gastos físicos en efectivo; DIGITAL = Yape / transferencias. Vacío = ambos.' };
+const MEDIO = { EFECTIVO: 'Efectivo', DIGITAL: 'Digital' };
+const medioDe = (v) => (v === 'EFECTIVO' || v === 'DIGITAL' ? v : null);
 const contar = (lista, k) => {
   const r = {};
   for (const x of lista) r[x[k] ?? 'Sin categoría'] = sumar([r[x[k] ?? 'Sin categoría'], x.monto]);
   return Object.entries(r).sort((a, b) => aCentimos(b[1]) - aCentimos(a[1]));
 };
+const signo = (m) => `${m.tipo === 'EGRESO' ? '−' : '+'} ${soles(m.monto)}`;
 
-const gastos_caja_chica = {
-  nombre: 'gastos_caja_chica', fuente: 'Caja chica', modulo: ['caja_chica', 'contabilidad'],
-  descripcion: 'Gastos (egresos) de la caja chica en un período: total ya sumado, por categoría y ciudad, cuántos no tienen foto del recibo y la lista. Filtros: ciudad, categoría, persona, texto, solo sin recibo.',
-  parametros: { type: 'object', properties: { periodo: PERIODO, ...FECHAS, ciudad: CIUDAD_P, categoria: { type: 'string', description: 'Ej. movilidad, alimentación, materiales' }, persona: { type: 'string' }, texto: { type: 'string' }, sin_recibo: { type: 'boolean', description: 'Solo los que no tienen foto del recibo' } } },
+const gastos_caja = {
+  nombre: 'gastos_caja', fuente: 'Caja ICR', modulo: ['caja_chica', 'contabilidad'],
+  descripcion: 'Gastos de la Caja ICR en un período (sin contar los depósitos a la cuenta principal): total ya sumado, por categoría y por medio (efectivo o digital), cuántos no tienen foto y la lista. Filtros: medio, categoría, persona, texto, solo sin foto.',
+  parametros: { type: 'object', properties: { periodo: PERIODO, ...FECHAS, medio: MEDIO_P, categoria: { type: 'string', description: 'Ej. movilidad, viáticos, material, gastos fijos' }, persona: { type: 'string' }, texto: { type: 'string' }, sin_recibo: { type: 'boolean', description: 'Solo los que no tienen foto del recibo o captura' } } },
   async ejecutar(a) {
     const r = rangoDe(a);
-    const ciudad = ciudadDe(a.ciudad);
-    const { rows } = await consulta(
-      `SELECT m.ciudad, m.fecha::text AS fecha, m.descripcion, m.persona, COALESCE(m.subcategoria, m.categoria) AS categoria, m.categoria AS grupo, m.monto::text AS monto,
-              m.proyecto_nombre, EXISTS (SELECT 1 FROM caja_adjunto x WHERE x.movimiento_id = m.id) AS con_recibo
-         FROM caja_chica_mov m
-        WHERE m.tipo = 'EGRESO' AND m.deleted_at IS NULL AND m.fecha BETWEEN $1::date AND $2::date AND ($3::text IS NULL OR m.ciudad = $3)
-        ORDER BY m.fecha DESC, m.created_at DESC`,
-      [r.desde, r.hasta, ciudad],
-    );
+    const medio = medioDe(a.medio);
+    const movs = (await listarCaja({ desde: r.desde, hasta: r.hasta, tipo: 'EGRESO', ...(medio ? { medio } : {}), limite: 2000 })).filter((m) => m.origen !== 'DEPOSITO');
     const t = (v) => normalizar(v ?? '').trim();
-    const lista = rows.filter((m) => (!a.categoria || t(`${m.categoria} ${m.grupo}`).includes(t(a.categoria))) && (!a.persona || t(m.persona).includes(t(a.persona)))
-      && (!a.texto || t(`${m.descripcion} ${m.persona} ${m.categoria} ${m.proyecto_nombre ?? ''}`).includes(t(a.texto))) && (!a.sin_recibo || !m.con_recibo));
+    const lista = movs.map((m) => ({ ...m, cat: m.subcategoria ? `${m.categoria} · ${m.subcategoria}` : m.categoria, con_foto: m.adjuntos.length > 0 }))
+      .filter((m) => (!a.categoria || t(m.cat).includes(t(a.categoria))) && (!a.persona || t(m.persona).includes(t(a.persona)))
+        && (!a.texto || t(`${m.descripcion} ${m.persona ?? ''} ${m.destinatario ?? ''} ${m.cat} ${m.proyecto ?? ''}`).includes(t(a.texto))) && (!a.sin_recibo || !m.con_foto));
     const total = sumar(lista.map((m) => m.monto));
-    const porCat = contar(lista, 'categoria');
-    const sinRecibo = lista.filter((m) => !m.con_recibo);
+    const porCat = contar(lista, 'cat');
+    const sinFoto = lista.filter((m) => !m.con_foto);
     return {
-      modelo: { periodo: r.texto, ciudad: ciudad ? CIUDAD[ciudad] : 'Arequipa y Moquegua', total_gastado: soles(total), cantidad: lista.length, por_categoria: Object.fromEntries(porCat.slice(0, 10).map(([c, v]) => [c, soles(v)])),
-        por_ciudad: Object.fromEntries(contar(lista, 'ciudad').map(([c, v]) => [CIUDAD[c] ?? c, soles(v)])), sin_recibo: sinRecibo.length, total_sin_recibo: soles(sumar(sinRecibo.map((m) => m.monto))),
-        gastos: lista.slice(0, 12).map((m) => ({ fecha: m.fecha, descripcion: m.descripcion, persona: m.persona || null, categoria: m.categoria, ciudad: CIUDAD[m.ciudad], monto: soles(m.monto), recibo: m.con_recibo })) },
+      modelo: { periodo: r.texto, medio: medio ? MEDIO[medio] : 'efectivo y digital', total_gastado: soles(total), cantidad: lista.length, por_categoria: Object.fromEntries(porCat.slice(0, 10).map(([c, v]) => [c, soles(v)])),
+        por_medio: Object.fromEntries(contar(lista, 'medio').map(([c, v]) => [MEDIO[c] ?? c, soles(v)])), sin_recibo: sinFoto.length, total_sin_recibo: soles(sumar(sinFoto.map((m) => m.monto))),
+        gastos: lista.slice(0, 12).map((m) => ({ fecha: m.fecha, descripcion: m.descripcion, persona: m.persona || null, categoria: m.cat, medio: MEDIO[m.medio], monto: soles(m.monto), foto: m.con_foto })) },
       bloques: [
-        { tipo: 'kpis', items: [{ l: `Gastado ${r.texto}`, v: soles(total), c: 'peligro' }, { l: 'Gastos', v: String(lista.length) }, { l: 'Sin foto del recibo', v: String(sinRecibo.length) }] },
+        { tipo: 'kpis', items: [{ l: `Gastado ${r.texto}`, v: soles(total), c: 'peligro' }, { l: 'Gastos', v: String(lista.length) }, { l: 'Sin foto', v: String(sinFoto.length) }] },
         ...(porCat.length ? [barras('Por categoría', porCat.slice(0, 8))] : []),
-        ...(lista.length ? [tabla('Gastos de caja chica', [['Fecha'], ['Descripción'], ['Ciudad'], ['Monto', 'right'], ['Recibo']], lista.slice(0, 20).map((m) => [fechaPe(m.fecha), m.descripcion, CIUDAD[m.ciudad], soles(m.monto), m.con_recibo ? 'Sí' : 'No']))] : []),
+        ...(lista.length ? [tabla('Gastos de la Caja ICR', [['Fecha'], ['Descripción'], ['Medio'], ['Monto', 'right'], ['Foto']], lista.slice(0, 20).map((m) => [fechaPe(m.fecha), m.descripcion, MEDIO[m.medio], soles(m.monto), m.con_foto ? 'Sí' : 'No']))] : []),
       ],
     };
   },
 };
 
-const caja_diaria = {
-  nombre: 'caja_diaria', fuente: 'Caja diaria', modulo: ['caja_chica', 'contabilidad'],
-  descripcion: 'Caja diaria en un período: ingresos y salidas en efectivo y por transferencia, movimientos de Yape (cta. cte.), gastos por categoría, salidas sin comprobante y los saldos al final.',
-  parametros: { type: 'object', properties: { periodo: PERIODO, ...FECHAS, ciudad: CIUDAD_P, texto: { type: 'string' } } },
+const resumen_caja = {
+  nombre: 'resumen_caja', fuente: 'Caja ICR', modulo: ['caja_chica', 'contabilidad'],
+  descripcion: 'Resumen de la Caja ICR en un período: ventas, fondos recibidos del ERP, gastos y depósitos a la cuenta principal, separado en efectivo y digital, con el saldo al inicio y al final.',
+  parametros: { type: 'object', properties: { periodo: PERIODO, ...FECHAS } },
   async ejecutar(a) {
     const r = rangoDe(a);
-    const ciudad = ciudadDe(a.ciudad);
-    const { rows } = await consulta(
-      `SELECT h.ciudad, h.fecha::text AS fecha, f.descripcion, f.responsable, f.comprobante, f.interno, COALESCE(f.subcategoria, f.categoria) AS categoria,
-              f.caja_ingreso_efectivo::text AS ie, f.caja_ingreso_transf::text AS it, f.caja_salida_efectivo::text AS se, f.caja_salida_transf::text AS st,
-              f.cta_cte_ingreso::text AS yi, f.cta_cte_salida::text AS ys, EXISTS (SELECT 1 FROM caja_adjunto x WHERE x.fila_id = f.id) AS con_foto
-         FROM caja_fila f JOIN caja_hoja h ON h.id = f.hoja_id
-        WHERE f.deleted_at IS NULL AND h.fecha BETWEEN $1::date AND $2::date AND ($3::text IS NULL OR h.ciudad = $3)
-        ORDER BY h.fecha DESC, f.orden`,
-      [r.desde, r.hasta, ciudad],
-    );
-    const t = (v) => normalizar(v ?? '').trim();
-    const filas = rows.filter((f) => !a.texto || t(`${f.descripcion} ${f.responsable} ${f.categoria ?? ''}`).includes(t(a.texto)));
-    const s = (k) => sumar(filas.map((f) => f[k]));
-    const gastos = filas.filter((f) => !f.interno).map((f) => ({ ...f, monto: sumar([f.se, f.st, f.ys]) })).filter((f) => aCentimos(f.monto) > 0);
-    const sinComp = gastos.filter((f) => f.comprobante === 'NINGUNO' && !f.con_foto);
-    const { rows: sal } = await consulta(
-      `SELECT DISTINCT ON (ciudad) ciudad, fecha::text AS fecha, saldo_final_caja::text AS efectivo, saldo_final_cta_cte::text AS yape
-         FROM v_caja_hoja_resumen WHERE fecha <= $1::date AND ($2::text IS NULL OR ciudad = $2) ORDER BY ciudad, fecha DESC`,
-      [r.hasta, ciudad],
-    );
-    const porCat = contar(gastos, 'categoria');
+    const x = await reportesCaja({ desde: r.desde, hasta: r.hasta });
+    const fila = (l, k) => [l, soles(x.efectivo[k]), soles(x.digital[k])];
     return {
-      modelo: { periodo: r.texto, ciudad: ciudad ? CIUDAD[ciudad] : 'Arequipa y Moquegua', ingresos_efectivo: soles(s('ie')), ingresos_transferencia: soles(s('it')), salidas_efectivo: soles(s('se')), salidas_transferencia: soles(s('st')),
-        yape_ingresos: soles(s('yi')), yape_salidas: soles(s('ys')), gastos_reales: soles(sumar(gastos.map((g) => g.monto))), gastos_por_categoria: Object.fromEntries(porCat.slice(0, 10).map(([c, v]) => [c, soles(v)])),
-        salidas_sin_comprobante: sinComp.length, saldos_al_cierre: sal.map((x) => ({ ciudad: CIUDAD[x.ciudad], dia: x.fecha, efectivo: soles(x.efectivo), yape: soles(x.yape) })) },
+      modelo: { periodo: r.texto, ventas: soles(x.ventas), fondos_del_erp: soles(x.fondos), gastos: soles(x.gastos), depositos_a_cuenta_principal: soles(x.depositos),
+        efectivo: { saldo_inicial: soles(x.efectivo.saldo_inicial), entro: soles(x.efectivo.ingresos), salio: soles(x.efectivo.egresos), saldo_final: soles(x.efectivo.saldo_final) },
+        digital: { saldo_inicial: soles(x.digital.saldo_inicial), entro: soles(x.digital.ingresos), salio: soles(x.digital.egresos), saldo_final: soles(x.digital.saldo_final) } },
       bloques: [
-        { tipo: 'kpis', items: [{ l: 'Ingresos (efectivo + transf.)', v: soles(sumar([s('ie'), s('it')])), c: 'primario' }, { l: 'Salidas (efectivo + transf.)', v: soles(sumar([s('se'), s('st')])), c: 'peligro' }, { l: 'Yape: entró / salió', v: `${soles(s('yi'))} / ${soles(s('ys'))}` }, { l: 'Sin comprobante', v: String(sinComp.length) }] },
-        ...(porCat.length ? [barras('Gastos por categoría', porCat.slice(0, 8))] : []),
-        ...(sal.length ? [tabla('Saldos al cierre', [['Ciudad'], ['Día'], ['Efectivo', 'right'], ['Yape', 'right']], sal.map((x) => [CIUDAD[x.ciudad], fechaPe(x.fecha), soles(x.efectivo), soles(x.yape)]))] : []),
+        { tipo: 'kpis', items: [{ l: 'Ventas', v: soles(x.ventas), c: 'primario' }, { l: 'Fondos del ERP', v: soles(x.fondos) }, { l: 'Gastos', v: soles(x.gastos), c: 'peligro' }, { l: 'Depósitos a cta. principal', v: soles(x.depositos) }] },
+        tabla(`Caja ICR ${r.texto}`, [[''], ['Efectivo', 'right'], ['Digital', 'right']], [fila('Saldo al inicio', 'saldo_inicial'), fila('Entró', 'ingresos'), fila('Salió', 'egresos'), fila('Saldo al final', 'saldo_final')], 3),
       ],
     };
   },
 };
 
 const saldos_caja = {
-  nombre: 'saldos_caja', fuente: 'Caja diaria', modulo: ['caja_chica', 'contabilidad'], fuentesExtra: ['Caja chica'],
-  descripcion: 'Saldos actuales: caja chica por ciudad, y efectivo y Yape de la caja diaria según el último día registrado.',
+  nombre: 'saldos_caja', fuente: 'Caja ICR', modulo: ['caja_chica', 'contabilidad'],
+  descripcion: 'Saldos actuales de la Caja ICR: efectivo, digital (Yape / transferencias) y total.',
   parametros: { type: 'object', properties: {} },
   async ejecutar() {
-    const { rows: ch } = await consulta('SELECT ciudad, saldo::text AS saldo FROM v_caja_chica_saldo ORDER BY ciudad');
-    const { rows: di } = await consulta(`SELECT DISTINCT ON (ciudad) ciudad, fecha::text AS fecha, saldo_final_caja::text AS efectivo, saldo_final_cta_cte::text AS yape FROM v_caja_hoja_resumen ORDER BY ciudad, fecha DESC`);
-    const filas = Object.keys(CIUDAD).map((c) => {
-      const d = di.find((x) => x.ciudad === c);
-      return [CIUDAD[c], soles(ch.find((x) => x.ciudad === c)?.saldo ?? null), d ? soles(d.efectivo) : 'Sin dato', d ? soles(d.yape) : 'Sin dato', d ? fechaPe(d.fecha) : 'Sin dato'];
-    });
+    const s = await saldosCaja();
     return {
-      modelo: { saldos: filas.map(([ciudad, chica, efectivo, yape, dia]) => ({ ciudad, caja_chica: chica, caja_diaria_efectivo: efectivo, yape, ultimo_dia_caja_diaria: dia })) },
-      bloques: [
-        { tipo: 'kpis', items: [{ l: 'Caja chica (total)', v: soles(sumar(ch.map((x) => x.saldo))) }, { l: 'Efectivo caja diaria', v: di.length ? soles(sumar(di.map((x) => x.efectivo))) : 'Sin dato' }, { l: 'Yape', v: di.length ? soles(sumar(di.map((x) => x.yape))) : 'Sin dato' }] },
-        tabla('Saldos por ciudad', [['Ciudad'], ['Caja chica', 'right'], ['Efectivo', 'right'], ['Yape', 'right'], ['Último día']], filas),
-      ],
+      modelo: { efectivo: soles(s.efectivo), digital: soles(s.digital), total: soles(s.total) },
+      bloques: [{ tipo: 'kpis', items: [{ l: 'Efectivo', v: soles(s.efectivo), c: aCentimos(s.efectivo) < 0 ? 'peligro' : undefined }, { l: 'Digital', v: soles(s.digital), c: aCentimos(s.digital) < 0 ? 'peligro' : undefined }, { l: 'Total', v: soles(s.total), c: 'primario' }] }],
     };
   },
 };
 
+const ORIGEN_CAJA = { caja_icr: 'Caja ICR', caja_chica: 'Caja chica (anterior)', caja_diaria: 'Caja diaria (anterior)' };
 const gastos_proyecto_caja = {
-  nombre: 'gastos_proyecto_caja', fuente: 'Caja chica', modulo: ['caja_chica', 'contabilidad'], fuentesExtra: ['Caja diaria'],
-  descripcion: 'Cuánto se gastó en UN proyecto (por código PRY-001 o nombre) desde la caja chica y la caja diaria. Si la persona puede ver Proyectos, también da el presupuesto y el total del proyecto.',
+  nombre: 'gastos_proyecto_caja', fuente: 'Caja ICR', modulo: ['caja_chica', 'contabilidad'],
+  descripcion: 'Cuánto se gastó en UN proyecto (por código PRY-001 o nombre) desde la Caja ICR (y las cajas anteriores). Si la persona puede ver Proyectos, también da el presupuesto y el total del proyecto.',
   parametros: { type: 'object', properties: { proyecto: { type: 'string', description: 'Código o nombre del proyecto' } }, required: ['proyecto'] },
   async ejecutar(a, { u }) {
     const q = String(a.proyecto ?? '').trim();
     const { rows: ps } = await consulta(`SELECT id, codigo, nombre FROM proyectos WHERE lower(codigo) = lower($1) OR translate(lower(nombre), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower($1), 'áéíóúüñ', 'aeiouun') || '%' ORDER BY id DESC LIMIT 1`, [q]);
     const p = ps[0];
     if (!p) return { modelo: { error: `No hay un proyecto que coincida con «${q}».` }, bloques: [] };
-    const { rows } = await consulta(
-      `SELECT 'Caja chica' AS origen, m.fecha::text AS fecha, m.descripcion, m.ciudad, m.monto::text AS monto FROM caja_chica_mov m WHERE m.proyecto_id = $1 AND m.tipo = 'EGRESO' AND m.deleted_at IS NULL
-       UNION ALL
-       SELECT 'Caja diaria', h.fecha::text, f.descripcion, h.ciudad, (f.caja_salida_efectivo + f.caja_salida_transf + f.cta_cte_salida)::text FROM caja_fila f JOIN caja_hoja h ON h.id = f.hoja_id
-        WHERE f.proyecto_id = $1 AND f.deleted_at IS NULL AND NOT f.interno AND (f.caja_salida_efectivo + f.caja_salida_transf + f.cta_cte_salida) > 0
-       ORDER BY 2 DESC`,
-      [p.id],
-    );
-    const total = sumar(rows.map((g) => g.monto));
-    const modelo = { proyecto: `${p.codigo} · ${p.nombre}`, gastado_desde_cajas: soles(total), gastos: rows.length, por_origen: Object.fromEntries(contar(rows, 'origen').map(([o, v]) => [o, soles(v)])) };
-    const kpis = [{ l: 'Desde las cajas', v: soles(total), c: 'peligro' }, { l: 'Gastos', v: String(rows.length) }];
+    const { rows } = await consulta(`SELECT * FROM (${await sqlGastos('$1')}) g WHERE g.origen <> 'cuenta_principal' ORDER BY fecha DESC`, [p.id]);
+    const lista = rows.map((g) => ({ ...g, origen: ORIGEN_CAJA[g.origen] ?? g.origen }));
+    const total = sumar(lista.map((g) => g.monto));
+    const modelo = { proyecto: `${p.codigo} · ${p.nombre}`, gastado_desde_cajas: soles(total), gastos: lista.length, por_origen: Object.fromEntries(contar(lista, 'origen').map(([o, v]) => [o, soles(v)])) };
+    const kpis = [{ l: 'Desde la caja', v: soles(total), c: 'peligro' }, { l: 'Gastos', v: String(lista.length) }];
     if (await tieneNivel(u, 'proyectos', 'lectura')) {
       const d = (await detalleProyecto(p.id)).proyecto;
       Object.assign(modelo, { presupuesto: soles(d.presupuesto), gastado_total_proyecto: soles(d.gastado), porcentaje_usado: d.porcentaje });
@@ -464,7 +425,7 @@ const gastos_proyecto_caja = {
     }
     return {
       modelo,
-      bloques: [{ tipo: 'kpis', items: kpis }, ...(rows.length ? [tabla(`Gastos de ${p.codigo} desde las cajas`, [['Fecha'], ['Descripción'], ['Origen'], ['Monto', 'right']], rows.slice(0, 20).map((g) => [fechaPe(g.fecha), g.descripcion, `${g.origen} · ${CIUDAD[g.ciudad] ?? g.ciudad}`, soles(g.monto)]))] : [])],
+      bloques: [{ tipo: 'kpis', items: kpis }, ...(lista.length ? [tabla(`Gastos de ${p.codigo} desde la caja`, [['Fecha'], ['Descripción'], ['Origen'], ['Monto', 'right']], lista.slice(0, 20).map((g) => [fechaPe(g.fecha), g.concepto, g.origen, soles(g.monto)]))] : [])],
     };
   },
 };
@@ -529,8 +490,8 @@ const cotizacion_guiada = {
 
 export const HERRAMIENTAS = {
   cotizador: [cotizacion_guiada, buscar_productos, ver_kits, proponer_cotizacion],
-  asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_chica, requerimientos, buscar_productos, precios_proveedores, stock_almacen],
-  finanzas: [gastos_caja_chica, caja_diaria, saldos_caja, gastos_proyecto_caja],
+  asistente: [resumen_finanzas, movimientos_cuenta, proyectos, gastos_proyecto, cotizaciones, comprobantes, caja_icr, requerimientos, buscar_productos, precios_proveedores, stock_almacen],
+  finanzas: [gastos_caja, resumen_caja, saldos_caja, gastos_proyecto_caja],
 };
 
 /** Formato de Ollama para la lista de herramientas. */

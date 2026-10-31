@@ -95,7 +95,7 @@ const preparar = () => (listo ??= (async () => {
     const r = await llamar('POST', '/api/contabilidad/movimientos', { token: sesiones.fina, cuerpo: { cuenta_id: cta.id, tipo: 'egreso', monto: m, fecha: hoy, concepto: `Equipos ${p.nombre}`, proyecto_id: p.id, documento: 'F001-77' } });
     assert.equal(r.estado, 201, JSON.stringify(r.datos));
   }
-  await sql("INSERT INTO caja_chica_mov (ciudad, fecha, tipo, descripcion, persona, categoria, monto) VALUES ('MOQ', $1, 'EGRESO', 'Taxi', 'Luis', 'Movilidad', 40)", [hoy]);
+  await sql("INSERT INTO caja_icr_mov (id, fecha, tipo, medio, origen, categoria, descripcion, persona, monto) VALUES (gen_random_uuid(), $1, 'EGRESO', 'EFECTIVO', 'GASTO', 'Movilidad', 'Taxi', 'Luis', 40)", [hoy]);
   await sql("INSERT INTO requerimientos (numero, obra, solicitante, urgente, estado, fecha_creacion) VALUES ('REQ-0001', 'Obra Characato', 'Juan', TRUE, 'pendiente', now())");
   const c = (await llamar('POST', '/api/ventas/cotizaciones', { token: sesiones.vera, cuerpo: { cliente: 'Granja Tiabaya', validez_dias: 15, items: [{ descripcion: 'Panel', cantidad: '2', precio_unitario: '500' }] } })).datos;
   await llamar('POST', `/api/ventas/cotizaciones/${c.id}/estado`, { token: sesiones.vera, cuerpo: { estado: 'enviada' } });
@@ -109,7 +109,7 @@ describe('Inicio en un solo pedido, según el rol', () => {
     assert.equal(r.finanzas.cuenta.id, cta.id);
     assert.equal(r.finanzas.cuenta.saldo, null); // sin saldo inicial = Sin dato
     assert.equal(r.finanzas.kpis.egresos_mes, '2050.00');
-    assert.equal(r.finanzas.caja.disponible, true);
+    assert.deepEqual(r.finanzas.caja.saldos, { efectivo: '-40.00', digital: '0.00', total: '-40.00' });
     assert.equal(r.proyectos.total_activos, 2);
     assert.equal(r.proyectos.con_alerta, 2);
     assert.deepEqual(r.proyectos.activos.map((p) => p.porcentaje), [120, 85]);
@@ -128,12 +128,13 @@ describe('Inicio en un solo pedido, según el rol', () => {
 
 describe('alertas y notificaciones', () => {
   before(preparar);
-  it('presupuesto (aviso y límite), caja chica en negativo, cuenta sin saldo inicial, cotización por vencer, requerimientos', async () => {
+  it('presupuesto (aviso y límite), Caja ICR en negativo, cuenta sin saldo inicial, cotización por vencer, requerimientos', async () => {
     const a = (await llamar('GET', '/api/inicio', { token: sesiones.admin })).datos.alertas;
     const claves = a.map((x) => x.clave);
     assert.ok(claves.includes(`presupuesto:${p120.id}:limite`));
     assert.ok(claves.includes(`presupuesto:${p80.id}:aviso`));
-    assert.ok(claves.some((c) => c.startsWith('caja_negativa:MOQ')));
+    assert.ok(claves.some((c) => c.startsWith('caja_negativa:efectivo')));
+    assert.ok(claves.some((c) => c.startsWith('sin_foto:')));
     assert.ok(claves.includes(`sin_saldo_inicial:${cta.id}`));
     assert.ok(claves.some((c) => c.startsWith('cot_vence:') && c.endsWith(':pronto')));
     assert.ok(claves.some((c) => c.startsWith('req_urgentes:')));
