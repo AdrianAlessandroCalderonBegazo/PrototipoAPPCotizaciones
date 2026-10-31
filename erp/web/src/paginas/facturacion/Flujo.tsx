@@ -616,7 +616,11 @@ export function FlujoComprobante({ id }: { id?: number }) {
                 <li>Descarga la extensión y descomprime el zip en una carpeta que no vayas a borrar.</li>
                 <li>Abre <b>chrome://extensions</b> (en Edge: edge://extensions) y activa <b>Modo de desarrollador</b>.</li>
                 <li>Pulsa <b>Cargar descomprimida</b>, elige la carpeta y vuelve a esta pestaña.</li>
+                <li><b>Recarga esta página (F5)</b>: la extensión solo se conecta a las páginas que se abren después de instalarla o actualizarla.</li>
               </ol>
+              {!["erp.icrenergy.tech", "localhost", "127.0.0.1"].includes(window.location.hostname) ? (
+                <div className="flex gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-[13px] font-semibold text-warning"><Icono n="warning" t={18} />La extensión solo funciona en https://erp.icrenergy.tech y estás en {window.location.host}. Abre el ERP desde esa dirección.</div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <a className="btn-primario no-underline" href={ZIP_EXTENSION} download><Icono n="download" t={18} />Instalar extensión</a>
                 <button className="btn-secundario" onClick={ext.verificar}><Icono n="refresh" t={18} />Ya la instalé, verificar</button>
