@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 # Restaura las fotos desde un respaldo:
-#   ./scripts/restaurar_fotos.sh respaldos/fotos_2026-10-22_0230.tar.gz api                    (fotos de la app y del ERP)
-#   ./scripts/restaurar_fotos.sh respaldos/fotos_finanzas_2026-10-22_0230.tar.gz finanzas      (recibos de Finanzas 1)
-#   ./scripts/restaurar_fotos.sh respaldos/fotos_finanzas2_2026-10-22_0230.tar.gz finanzas2    (recibos de Finanzas 2)
+#   ./scripts/restaurar_fotos.sh respaldos/fotos_2026-10-22_0230.tar.gz api                    (fotos de la app, del ERP y de la Caja ICR)
+#   ./scripts/restaurar_fotos.sh respaldos/fotos_finanzas_2026-10-22_0230.tar.gz finanzas      (recibos de la caja anterior de Finanzas)
 # Agrega o reemplaza archivos; no borra los que ya estén.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ARCHIVO="${1:?Indica el archivo de respaldo (.tar.gz)}"
-SERVICIO="${2:?Indica el servicio: api, finanzas o finanzas2}"
+SERVICIO="${2:?Indica el servicio: api o finanzas}"
 tar -tzf "$ARCHIVO" > /dev/null || { echo "El archivo está dañado." >&2; exit 1; }
 case "$SERVICIO" in
   finanzas)  docker compose exec -T finanzas-api tar -xzf - -C /data < "$ARCHIVO" ;;
-  finanzas2) docker compose exec -T finanzas2-api tar -xzf - -C /data < "$ARCHIVO" ;;
   api)       docker compose exec -T api tar -xzf - -C /app < "$ARCHIVO" ;;
-  *) echo "El servicio debe ser api, finanzas o finanzas2." >&2; exit 1 ;;
+  *) echo "El servicio debe ser api o finanzas." >&2; exit 1 ;;
 esac
 echo "Fotos restauradas."

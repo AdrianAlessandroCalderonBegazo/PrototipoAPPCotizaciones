@@ -1,6 +1,6 @@
 # ICR — guía del repositorio
 
-Sistema de Inversiones ICR (Arequipa): **ICR ERP** (app central), **Logística** (antes Cotizador, Flutter) y **Finanzas** (caja diaria y caja chica),
+Sistema de Inversiones ICR (Arequipa): **ICR ERP** (app central), **Logística** (antes Cotizador, Flutter) y **Finanzas** (una sola **Caja ICR**: efectivo y digital),
 todo sobre un solo Postgres en un VPS con Docker + Caddy (`icrenergy.tech`). Plan y decisiones del ERP: `erp/ESPECIFICACION.md`.
 Se escribe y se responde en **español**, en lenguaje simple (el dueño del proyecto no es programador).
 
@@ -14,9 +14,8 @@ Se escribe y se responde en **español**, en lenguaje simple (el dueño del proy
 | `servidor/Caddyfile`, `docker-compose.yml`, `scripts/`, `DESPLIEGUE.md` | Despliegue en el VPS | Docker, Caddy |
 | `erp/web` | **ICR ERP** (`erp.`) | React 18 + TS + Vite + Tailwind 3, react-router 6 |
 | `lib/`, `test/` | App **Logística** (`cotizador.` PWA y APK) | Flutter |
-| `finanzas/api` | API de Finanzas 1 (`/api-caja`) y Finanzas 2 (`MODO=fin`, `/api-fin`, base `finanzas2`) | Node TS (tsx), servidor HTTP propio |
-| `finanzas/app` | Finanzas 1 (`finanzas.`) | Expo / React Native Web |
-| `finanzas/app2` | Finanzas 2, versión de prueba (`finanza.`) | Expo / React Native Web |
+| `finanzas/api` | API de Finanzas (`/api-caja`): ingreso, permisos, proyectos e historial de la caja anterior | Node TS (tsx), servidor HTTP propio |
+| `finanzas/app` | Finanzas · Caja ICR (`finanzas.`) | Expo / React Native Web |
 | `extension` | Extensión de Chrome «ICR Autollenado SUNAT» (rellena el portal SOL; el ERP la empaqueta en `/icr-autollenado-sunat.zip`) | Manifest V3, JS |
 
 ## Comandos
@@ -35,7 +34,7 @@ cd finanzas/api && npm ci && npm run typecheck && npm test              # usa PG
 cd finanzas/app && npm ci && npm run typecheck && npm test
 ```
 
-Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build finanzas`, `Build finanzas2`) → zip descargable → el usuario lo sube con
+Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build finanzas`) → zip descargable → el usuario lo sube con
 `scp` y corre `servidor/scripts/actualizar_*.sh`. **No lanzar `build_apk.yml`** (el usuario no quiere APK por ahora).
 
 ## Reglas y decisiones
@@ -51,12 +50,17 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
 - **Nunca inventar datos**: desconocido = `null` en la base y «Sin dato» en pantalla (`erp/web/src/formato.ts`).
 - **Dinero**: `NUMERIC` + moneda; la API principal parsea `NUMERIC` como float (`db.js`), así que el código nuevo de dinero lee `::text` y calcula en céntimos
   (`servidor/api/src/dinero.js`; en pantalla `erp/web/src/dinero.ts`). Las fechas `DATE` también se leen como `::text`.
-- **Caja chica**: `caja_chica_mov.tipo` = `EGRESO` (resta) | `TRANSFERENCIA` (desde caja diaria) | `FONDO` (desde la cuenta principal, lo crea el ERP).
-  Las tablas de la caja son de Finanzas (`finanzas/db/migrations`); la API principal las lee si existen (`servidor/api/src/caja.js`).
+- **Caja ICR** (Fase 11, `servidor/api/src/cajaicr.js`, rutas `/api/caja-icr/*` en `rutas_f11.js`, migración `011_caja_icr.sql`): una sola caja,
+  dos saldos (`medio` EFECTIVO | DIGITAL), sin ciudades ni cierre. `origen`: VENTA, FONDO (lo crea el ERP al enviar fondos), GASTO (físico, con foto),
+  CAPTURA (digital, capturas de Yape/BCP; `operacion` única para no duplicar), DEPOSITO (categoría «Depósito a cuenta principal»: crea el ingreso en
+  la cuenta principal en la misma transacción y se anulan juntos) y AJUSTE (solo admin). El id lo pone la app (un reintento no duplica). Nada se
+  borra: se anula con motivo. Permiso: módulo `caja_chica` (en pantalla «Finanzas (Caja ICR)»). La app llama a la API principal por `finanzas.…/api/*`.
+  La caja diaria y la caja chica anteriores (tablas de `finanzas/db/migrations`) quedan solo como historial (`caja.js`, gastos de proyectos antiguos).
+  Finanzas 2 se eliminó.
 - **Módulos del ERP construidos**: Inicio (con alertas, campana y búsqueda Ctrl+K), Almacén (inventario, kardex y consulta de Logística), Activos y control (sistemas, equipos, VRM embebido), Proyectos, Contabilidad, Cotización (catálogo,
   CSV, imágenes, kits, cotizaciones, PDF, WhatsApp), Facturación SUNAT, Cotizador IA, Asistente IA, Comparador de proveedores, Configuración. Rutas: `servidor/api/src/rutas_erp.js` (fase 1), `rutas_f2.js` (proyectos,
-  contabilidad, inicio/notificaciones/búsqueda) `rutas_f3.js` (catálogo, kits, cotizaciones) `rutas_f5.js` (facturación), `rutas_f6.js` (IA), `rutas_f8.js` (comparador) y `rutas_f9.js` (almacén y activos). Pruebas: `servidor/api/test/erp.test.js`,
-  `f2.test.js`, `f3.test.js`, `f4.test.js`, `f5.test.js`, `f6.test.js`, `f7.test.js`, `f8.test.js`, `f9.test.js`, `f10.test.js` (aplican también las migraciones de Finanzas).
+  contabilidad, inicio/notificaciones/búsqueda) `rutas_f3.js` (catálogo, kits, cotizaciones) `rutas_f5.js` (facturación), `rutas_f6.js` (IA), `rutas_f8.js` (comparador), `rutas_f9.js` (almacén y activos) y `rutas_f11.js` (Caja ICR). Pruebas: `servidor/api/test/erp.test.js`,
+  `f2.test.js` … `f11.test.js` (aplican también las migraciones de Finanzas).
 - **Cotización**: los precios del catálogo **incluyen IGV**; valor de venta = total ÷ 1.18. Misma cuenta en `servidor/api/src/cotizar.js` y
   `erp/web/src/paginas/cotizacion/calculo.ts`. Imágenes de productos: `assets/productos/` se copian al build del ERP (`scripts/copiar-imagenes.mjs`).
 - **Facturación**: el ERP prepara, la extensión rellena SOL y la persona emite; **la extensión nunca pulsa «Emitir»** ni guarda la clave SOL. El número lo
@@ -76,8 +80,7 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
   movimiento contrario); el stock nunca queda negativo; cantidades en texto con 2 decimales (como el dinero). Logística no se modifica.
 - **Activos / VRM** (`servidor/api/src/activos.js`): decisión del dueño: VRM **solo en iframe** con la sesión de cada persona (la API de VRM no
   funcionó); solo direcciones `https://vrm.victronenergy.com/…`; no hay token de VRM.
-- **Caja diaria ≠ cuenta principal**: la «Cta. cte.» de la caja diaria es Yape; los depósitos de efectivo al banco se registran en el ERP como ingreso
-  «Depósito de caja diaria (efectivo)».
+- **Cuenta principal** (solo desde el ERP: compras, sueldos, etc.): «Envío a Caja ICR» y «Depósito desde Caja ICR» los pone el sistema (no a mano).
 - **Seguridad** (Fase 10): la API confía solo en proxies internos (`trust proxy` loopback/uniquelocal); Finanzas reenvía la IP real al iniciar
   sesión (`finanzas/api/src/login.ts`) para que el límite de intentos sea por persona. Cambiar la clave propia cierra las demás sesiones.
   Caddy manda `frame-ancestors 'self'`. Respaldos: `respaldo.sh`, `probar_respaldo.sh`, `restaurar.sh`. Manual por rol: `erp/MANUAL.md`.
@@ -87,5 +90,5 @@ Builds para el VPS: GitHub Actions a mano (`Build ERP`, `Build web`, `Build fina
 - **Diseño del ERP**: tokens del sistema de diseño en `erp/web/src/index.css` (variables CSS, modo oscuro con `data-theme`), clases en
   `tailwind.config.js`. Respetar el diseño de `ERP_ICR.zip`; no cambiarlo sin consultar.
 - **Fases**: el ERP se construye por fases (ver `erp/ESPECIFICACION.md`); al empezar cada una se presenta el plan y se espera aprobación.
-  La cotización ya se quitó de Logística (Fase 3). Fases 0 a 10 terminadas (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
+  La cotización ya se quitó de Logística (Fase 3). Fases 0 a 11 terminadas (`FASE_ACTUAL` en `erp/web/src/modulos.ts`).
 - Rama de trabajo: `claude/checklist-productos-apk-build-xruncz`.

@@ -23,6 +23,7 @@ const FASES: [number, string][] = [
   [8, "Comparador de proveedores"],
   [9, "Activos y control (Victron) y Almacén"],
   [10, "Cierre: pruebas, seguridad y respaldos"],
+  [11, "Finanzas: una sola Caja ICR (efectivo y digital)"],
 ];
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const saludo = () => {
@@ -223,8 +224,8 @@ export function Inicio() {
           ) : null}
           <section className="tarjeta p-5">
             <div className="titulo-seccion">Avance del ERP</div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-track"><div className="h-full rounded-full bg-success" style={{ width: `${(FASE_ACTUAL / 10) * 100}%` }} /></div>
-            <div className="mt-1.5 text-[12.5px] text-text-3">{FASE_ACTUAL >= 10 ? "Las 10 fases están terminadas" : <>Fase {FASE_ACTUAL} de 10 terminada · siguiente: {FASES.find(([n]) => n === FASE_ACTUAL + 1)?.[1]}</>}</div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-track"><div className="h-full rounded-full bg-success" style={{ width: `${(FASE_ACTUAL / FASES.length) * 100}%` }} /></div>
+            <div className="mt-1.5 text-[12.5px] text-text-3">{FASE_ACTUAL >= FASES.length ? `Las ${FASES.length} fases están terminadas` : <>Fase {FASE_ACTUAL} de {FASES.length} terminada · siguiente: {FASES.find(([n]) => n === FASE_ACTUAL + 1)?.[1]}</>}</div>
           </section>
         </div>
       </div>

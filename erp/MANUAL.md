@@ -6,7 +6,7 @@ Guía corta para cada rol. Direcciones:
 |---|---|---|
 | **ICR ERP** | `https://erp.icrenergy.tech` | La app central: proyectos, contabilidad, cotizaciones, facturación, almacén, activos, proveedores, IA |
 | **Logística** | `https://cotizador.icrenergy.tech` | En el celular: requerimientos de materiales y salidas de herramientas |
-| **Finanzas** | `https://finanzas.icrenergy.tech` | Caja diaria y caja chica (con foto del recibo) y la pestaña «Preguntar» |
+| **Finanzas** | `https://finanzas.icrenergy.tech` | La **Caja ICR**: gastos, capturas de Yape, ventas, historial, «Preguntar» y reportes |
 | Vista general | `https://app.icrenergy.tech` | Usuarios (versión simple) y la clave de edición de Logística |
 
 Todas usan **el mismo usuario y clave**. Lo que cada persona ve depende de su **rol** (Administrador, Ventas, Contabilidad, Técnico) y de la
@@ -18,7 +18,7 @@ Todas usan **el mismo usuario y clave**. Lo que cada persona ve depende de su **
 - **La sesión dura 30 días** en cada equipo. Para salir: tu nombre (arriba a la derecha) › Cerrar sesión. Hazlo en equipos que no son tuyos.
 - **Cambiar tu clave:** tu nombre › Cambiar clave (mínimo 6 caracteres). Al cambiarla, **se cierran tus sesiones en los otros equipos**.
 - **Buscar cualquier cosa:** `Ctrl + K` (proyectos, cotizaciones, productos, comprobantes…).
-- **La campana** avisa lo que necesita atención: presupuestos al límite, stock bajo, garantías por vencer, comprobantes sin terminar, etc.
+- **La campana** avisa lo que necesita atención: presupuestos al límite, stock bajo, garantías por vencer, la Caja ICR en negativo, comprobantes sin terminar, etc.
 - **«Sin dato»** significa que esa información no se registró: el sistema nunca la inventa.
 - **Modo oscuro:** el botón de la luna, arriba.
 - **Asistente IA y «Preguntar»:** las consultas frecuentes se responden al instante («Respuesta directa · sin IA»); las preguntas más abiertas las
@@ -71,24 +71,32 @@ que dio SUNAT. La extensión se instala una vez: Facturación › «Instalar ext
 
 | Módulo | Qué puede |
 |---|---|
-| Contabilidad | Todo: cuentas, ingresos y egresos, anular, enviar fondos a caja chica, Excel/PDF |
+| Contabilidad | Todo: cuentas, ingresos y egresos (compras, sueldos…), anular, enviar fondos a la Caja ICR, Excel/PDF |
 | Proyectos | Todo: crear, presupuesto, estado, fotos |
 | Facturación SUNAT | Preparar y emitir comprobantes |
-| Finanzas (app) | Todo en caja diaria y caja chica |
+| Finanzas (app) | Todo en la Caja ICR |
 | Asistente IA | Preguntar por finanzas, proyectos, etc. |
 | Cotización, Comparador, Almacén, Activos | Solo consultar |
 
 **Registrar un movimiento:** Contabilidad › Movimientos › Nuevo → ingreso o egreso, monto, categoría, proyecto (si es gasto de obra) → Guardar.
 Un error se corrige con **Anular** (pide motivo) y registrando el correcto.
 
-**Depósito del efectivo de la caja diaria al banco:** se registra en el ERP como ingreso en la cuenta principal con la categoría
-«Depósito de caja diaria (efectivo)». La «Cta. cte.» de la caja diaria es Yape (otra cuenta).
+**Enviar dinero a la Caja ICR:** Contabilidad › «Enviar fondos a Caja ICR» → elige **Efectivo** o **Digital**, monto y motivo. Sale de la
+cuenta principal y entra a la caja en una sola operación. Si te equivocas, anula ese egreso en Movimientos: sale de la caja también.
 
-**Enviar dinero a caja chica:** Contabilidad › Enviar a caja chica → monto y motivo. Sale de la cuenta principal y entra a la caja chica
-en una sola operación.
+**La cuenta principal solo se mueve desde el ERP** (compras de productos, pago de sueldos, etc.). Lo único que llega solo es el
+«Depósito desde Caja ICR», cuando alguien deposita el efectivo de la caja en el banco (se anula desde la app de Finanzas).
 
-**Caja diaria y caja chica (app Finanzas):** registra cada gasto con su **foto del recibo**; al final del día, cierra el día. En «Preguntar»
-puedes escribir por ejemplo «¿cuánto se gastó esta semana en movilidad?».
+**Caja ICR (app Finanzas):** una sola caja con dos saldos, **efectivo** y **digital** (Yape / transferencias). No hay ciudades ni cierre del día.
+- **Gasto físico**: categoría, descripción, monto y la **foto del recibo** (la app lee el recibo y llena lo que pueda).
+- **Gasto digital**: «Elegir capturas» → elige **varias capturas de Yape o del BCP a la vez** → revisa cada una (monto, fecha, categoría) →
+  Registrar. Si una captura ya estaba registrada (mismo n.º de operación), la app avisa y no la duplica.
+- **Venta / ingreso**: en efectivo o digital.
+- **Depósito a cuenta principal**: en Gasto físico, elige esa categoría: el monto sale de la caja y entra a la cuenta principal del ERP.
+- **Historial**: toca un movimiento para ver sus fotos, **corregirlo**, agregar una foto o **anularlo** (pide el motivo).
+- **Preguntar**: por ejemplo «¿cuánto se gastó esta semana?» o «¿cuánto se pagó por Yape este mes?».
+- **Reportes**: elige el período y descarga el **Excel**.
+- **Administrador**: «Ajustar saldo» para poner el saldo inicial de efectivo y de digital, o para cuadrar con lo contado.
 
 ## Técnico
 

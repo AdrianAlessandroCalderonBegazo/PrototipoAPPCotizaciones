@@ -8,10 +8,10 @@ import { fdateLarga } from "../../lib/format";
 import { esNegativo, soles } from "../../lib/icr/dinero";
 import type { Mov, Resumen } from "../../lib/icr/tipos";
 
-export type Accion = "gasto" | "digital" | "venta";
+export type Accion = "gasto" | "digital" | "venta" | "ajuste";
 
-export function Inicio({ datos, error, cargando, recargar, escribir, nombre, onAccion, onVer, onSalir, topInset }: {
-  datos: Resumen | null; error: string | null; cargando: boolean; recargar: () => void; escribir: boolean; nombre: string;
+export function Inicio({ datos, error, cargando, recargar, escribir, esAdmin, nombre, onAccion, onVer, onSalir, topInset }: {
+  datos: Resumen | null; error: string | null; cargando: boolean; recargar: () => void; escribir: boolean; esAdmin: boolean; nombre: string;
   onAccion: (a: Accion) => void; onVer: (m: Mov) => void; onSalir?: () => void; topInset: number;
 }) {
   const s = datos?.saldos;
@@ -58,6 +58,11 @@ export function Inicio({ datos, error, cargando, recargar, escribir, nombre, onA
             {boton("venta", "Venta / ingreso", "Lo que entra: efectivo o digital", C.teal)}
           </View>
         ) : <Franja texto="Tu rol puede ver la caja, pero no registrar." />}
+        {esAdmin ? (
+          <Pressable onPress={() => onAccion("ajuste")} style={{ alignSelf: "flex-start" }}>
+            <Text style={t(12.5, 800, C.teal)}>Ajustar saldo (saldo inicial o cuadre) · solo Administrador</Text>
+          </Pressable>
+        ) : null}
         {datos?.hoy.sin_foto ? <Franja tono="alerta" texto={`${datos.hoy.sin_foto} gasto${datos.hoy.sin_foto === 1 ? "" : "s"} físico${datos.hoy.sin_foto === 1 ? "" : "s"} de hoy sin foto del recibo. Ábrelo en el historial para agregarla.`} /> : null}
         {datos ? (
           <Seccion titulo="ÚLTIMOS MOVIMIENTOS">

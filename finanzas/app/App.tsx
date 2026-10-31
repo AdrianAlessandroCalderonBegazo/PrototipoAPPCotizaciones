@@ -121,7 +121,7 @@ function Shell() {
                 ) : (
                   <>
                     {tab === "inicio" ? (
-                      <Inicio datos={resumen} error={error} cargando={cargando} recargar={cargar} escribir={session.permisos.escribir} nombre={session.nombre}
+                      <Inicio datos={resumen} error={error} cargando={cargando} recargar={cargar} escribir={session.permisos.escribir} esAdmin={session.rolCodigo === "admin"} nombre={session.nombre}
                         onAccion={(a) => setVista(a === "digital" ? { t: "digital" } : { t: "form", modo: a })} onVer={setDetalle} onSalir={escritorio ? undefined : salir} topInset={insets.top} />
                     ) : null}
                     {tab === "historial" ? <Historial version={version} onVer={setDetalle} topInset={insets.top} /> : null}

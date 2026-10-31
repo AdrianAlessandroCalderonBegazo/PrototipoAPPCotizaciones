@@ -8,16 +8,16 @@ Qué queda funcionando al terminar:
 | `https://cotizador.TUDOMINIO` | **Logística** (antes Cotizador; PWA instalable en el celular). Varias personas, una sola base de datos. |
 | `https://app.TUDOMINIO` | Vista general: cotizaciones, requerimientos y salidas de herramientas de todos, en tablas simples. También administra usuarios. |
 | `https://api.TUDOMINIO` | La API sola (para el APK u otras apps que se hagan después). |
-| `https://finanza.TUDOMINIO` | **Finanzas 2** (versión de prueba, base de datos propia). |
-| `https://finanzas.TUDOMINIO` | **Finanzas**: caja diaria, caja chica, cierre del día y reportes. Varias personas a la vez, con su mismo usuario de la app. Sus datos también se ven en la pestaña **Finanzas** de `app.TUDOMINIO`. |
+| `https://finanzas.TUDOMINIO` | **Finanzas · Caja ICR**: una sola caja con dos saldos (efectivo y digital): gastos físicos con foto, gastos digitales con capturas, ventas, historial, «Preguntar» y reportes. Varias personas a la vez, con su mismo usuario. |
 
 Todo corre en el mismo VPS con Docker: **PostgreSQL** (la base, una sola para todo), la **API** del cotizador, la **API de Finanzas** y **Caddy** (que pone el HTTPS solo).
 La base de datos no se expone a internet: solo la API habla con ella.
 
-## 0. Guía rápida: subir la versión final completa (Fases 1 a 10)
+## 0. Guía rápida: subir la versión final completa (Fases 1 a 11)
 
 Para un VPS que ya tenía una versión anterior funcionando. Si es un VPS nuevo, sigue primero las secciones 1 a 5 y vuelve aquí.
-Esta secuencia se ensayó completa con los mismos contenedores (base desde cero, las 10 migraciones, Caddy, respaldo y restauración).
+Esta secuencia se ensayó completa con los mismos contenedores (base desde cero, las migraciones, Caddy, respaldo y restauración).
+Si vienes de una versión con **Finanzas 2**, después de esta guía sigue también la sección **7c** (quitarla del todo).
 
 **Archivos** (súbelos a `/root/` con `scp archivo root@IP:/root/`):
 
@@ -25,8 +25,7 @@ Esta secuencia se ensayó completa con los mismos contenedores (base desde cero,
 |---|---|---|
 | `servidor_icr.zip` | API, base de datos (migraciones), Caddyfile, scripts y API de Finanzas | `unzip` + `docker compose up -d --build` |
 | `erp-web.zip` | ICR ERP | `./scripts/actualizar_erp.sh` |
-| `finanzas_web.zip` | Finanzas 1 | `./scripts/actualizar_finanzas.sh` |
-| `finanzas2_web.zip` | Finanzas 2 (prueba) | `./scripts/actualizar_finanzas2.sh` |
+| `finanzas_web.zip` | Finanzas (Caja ICR) | `./scripts/actualizar_finanzas.sh` |
 | `cotizador-web.zip` | Logística (GitHub › Actions › **Build web**) | `./scripts/actualizar_web.sh` |
 
 ```bash
@@ -36,14 +35,13 @@ cd /opt/icr/servidor && ./scripts/respaldo.sh
 # 2) Servidor nuevo (no toca .env, respaldos ni las carpetas web)
 cd /opt/icr && unzip -o /root/servidor_icr.zip -d /opt/icr
 cd /opt/icr/servidor && chmod +x scripts/*.sh
-docker compose up -d --build
-docker compose ps                                   # api, db, finanzas-api, finanzas2-api, caddy y ollama: "Up"/"healthy"
-docker compose logs api | grep -E "Migración|escuchando"   # aplica las que falten (hasta 010_almacen_activos.sql)
+docker compose up -d --build --remove-orphans      # --remove-orphans apaga servicios que ya no existen (finanzas2-api)
+docker compose ps                                   # api, db, finanzas-api, caddy y ollama: "Up"/"healthy"
+docker compose logs api | grep -E "Migración|escuchando"   # aplica las que falten (hasta 011_caja_icr.sql)
 
 # 3) Las páginas web
 ./scripts/actualizar_erp.sh /root/erp-web.zip
 ./scripts/actualizar_finanzas.sh /root/finanzas_web.zip
-./scripts/actualizar_finanzas2.sh /root/finanzas2_web.zip
 ./scripts/actualizar_web.sh /root/cotizador-web.zip
 docker compose restart caddy                        # toma el Caddyfile nuevo (los bloques de Relay siguen al final)
 
@@ -57,7 +55,8 @@ docker compose restart caddy                        # toma el Caddyfile nuevo (l
 **Revisar después** (5 minutos): abre `https://erp.TUDOMINIO` con `admin`:
 - Inicio no debe mostrar avisos de **Seguridad** (si los muestra, cambia esas claves).
 - Configuración › Integraciones › «Probar» en cada una; Configuración › Inteligencia artificial: «En línea».
-- Abre `cotizador.`, `finanzas.`, `finanza.` y `app.`: entran con el mismo usuario.
+- Abre `cotizador.`, `finanzas.` y `app.`: entran con el mismo usuario.
+- En `finanzas.` (como Administrador): «Ajustar saldo» para poner el **saldo inicial** de efectivo y de digital de la Caja ICR (empieza en S/ 0).
 - Comprueba que Relay sigue respondiendo (`atleta.` y `coach.adriancalderonbegazo.site`).
 
 **Volver atrás** si algo falla: cada web guarda la versión anterior en `CARPETA.anterior` (por ejemplo `erp-web.anterior`; se copia de vuelta
@@ -170,8 +169,8 @@ cd /opt/icr/servidor
 ./scripts/actualizar_finanzas.sh ~/finanzas-web.zip
 ```
 
-(Si te pasaron el zip ya armado, es el mismo paso.) Abre `https://finanzas.TUDOMINIO` e ingresa con un usuario que tenga acceso a caja chica en la matriz de permisos (por defecto **Contabilidad** o **Administrador**).
-La API de Finanzas no necesita configuración extra: usa la misma base y los mismos usuarios.
+(Si te pasaron el zip ya armado, es el mismo paso.) Abre `https://finanzas.TUDOMINIO` e ingresa con un usuario que tenga acceso a «Finanzas (Caja ICR)» en la matriz de permisos (por defecto **Contabilidad** o **Administrador**).
+La Caja ICR la guarda la API principal (Caddy manda `finanzas.…/api/*` allí); la API de Finanzas solo hace el ingreso, los permisos y los proyectos. No necesitan configuración extra.
 
 ## 7. Primer ingreso
 
@@ -180,22 +179,22 @@ La API de Finanzas no necesita configuración extra: usa la misma base y los mis
    `app.TUDOMINIO`). Hay 4 roles, los mismos en el ERP, Logística y Finanzas:
    - **Administrador**: todo, incluido eliminar documentos, manejar usuarios y la matriz de permisos.
    - **Ventas**: cotiza, edita productos; en Logística pide materiales y confirma lo recibido.
-   - **Contabilidad**: caja chica completa (registra, corrige días anteriores, cierra el día); ve cotizaciones.
-   - **Técnico**: Logística completa (aprueba, alista, confirma salidas y devoluciones); sin acceso a caja chica.
+   - **Contabilidad**: Caja ICR completa (registra, corrige y anula); Contabilidad del ERP; ve cotizaciones.
+   - **Técnico**: Logística completa (aprueba, alista, confirma salidas y devoluciones); sin acceso a la Caja ICR.
 
    Qué puede hacer cada rol en cada módulo (ninguno / lectura / completo) se cambia en **ERP › Configuración › Matriz de permisos**
-   (solo el administrador). El servidor lo comprueba en cada pedido; vale para el ERP, Logística, Finanzas 1 y Finanzas 2.
-   En **caja chica**: *lectura* = ver la caja, alertas e historial; *completo* = además registrar, corregir días anteriores y cerrar.
-   Reabrir un día cerrado y cambiar saldos iniciales: solo el administrador.
+   (solo el administrador). El servidor lo comprueba en cada pedido; vale para el ERP, Logística y Finanzas.
+   En **Finanzas (Caja ICR)**: *lectura* = ver saldos, historial y reportes; *completo* = además registrar, corregir y anular.
+   Los ajustes de saldo (saldo inicial o cuadre): solo el administrador.
 
    Al actualizar, los usuarios que ya existían cambian solos de rol: admin → Administrador, vendedor → Ventas,
    finanzas → Contabilidad, y empleado/encargado/almacén → Técnico. Revisa la lista y ajusta lo que haga falta.
 3. Cambia la clave del administrador (botón **Nueva clave**) y, si quieres, la **clave de edición**.
 4. Cada persona abre `https://cotizador.TUDOMINIO` en su celular → menú del navegador → **Instalar app / Agregar a pantalla de inicio**.
 
-## 7b. Cargar las hojas de caja de octubre (una sola vez)
+## 7b. Cargar las hojas de caja de octubre (ya no hace falta)
 
-Esto **BORRA toda la caja diaria y la caja chica que haya** (movimientos, fotos, historial de cambios y saldos iniciales) y carga las hojas de papel
+Era para la caja diaria anterior (hoy solo queda como historial). Esto **BORRA toda la caja diaria y la caja chica que haya** (movimientos, fotos, historial de cambios y saldos iniciales) y carga las hojas de papel
 transcritas (carpeta `BD_CajaDiario`: `datos.json` + `imagenes/recibos/`). Cada día queda con sus recibos adjuntos y cerrado.
 **Primero haz un respaldo** (`./scripts/respaldo.sh`).
 
@@ -213,30 +212,30 @@ docker compose exec finanzas-api npx tsx scripts/importar_caja.ts /tmp/BD_CajaDi
 El simulacro debe mostrar 11 días, 40 movimientos y 7 fotos, con el saldo de cada día igual al de las hojas (el 27/10 queda en S/ 5.40).
 Si algún saldo no coincide con el papel, el script se detiene y no cambia nada.
 
-## 7c. Finanzas 2 (versión de prueba en `finanza.TUDOMINIO`)
+## 7c. Fase 11: Caja ICR y quitar Finanzas 2 (una sola vez)
 
-Otra versión de Finanzas para comparar con la primera: libro único sobre cuentas (bancos y Yape), capturas, menús y reposición. Tiene **su propia base de datos
-(`finanzas2`, se crea sola)**, sus propias fotos y su propio servicio (`finanzas2-api`); lo único compartido son los **usuarios** y las claves.
-Finanzas 1 no se toca.
+Desde la Fase 11, Finanzas es **una sola caja, la Caja ICR**, con dos saldos (efectivo y digital), sin ciudades ni cierre del día.
+Finanzas 2 (`finanza.TUDOMINIO`) **se elimina**. Después de subir la versión nueva (sección 0):
 
-1. **DNS**: en Hostinger agrega un registro **A** con nombre `finanza` apuntando a la IP del VPS (igual que los otros).
-2. Sube `servidor_icr.zip` y `finanzas2_web.zip` a `/root/` y:
+1. **Respaldo final de Finanzas 2** (por si algún día hace falta mirar algo):
    ```bash
-   cd /opt/icr && unzip -o /root/servidor_icr.zip -d /opt/icr
    cd /opt/icr/servidor
-   ./scripts/respaldo.sh                 # respaldo antes
-   docker compose up -d --build
-   docker compose logs finanzas2-api | tail -10    # debe decir "Base de datos creada", "Migración aplicada: 001_fin.sql" y "API de Finanzas 2 escuchando"
-   ./scripts/actualizar_finanzas2.sh /root/finanzas2_web.zip
+   docker compose exec -T db pg_dump -U icr -d finanzas2 --no-owner | gzip > respaldos/finanzas2_FINAL_$(date +%F).sql.gz
+   ls -lh respaldos/finanzas2_FINAL_*        # debe pesar más de 1 KB
    ```
-3. Abre `https://finanza.TUDOMINIO` (el certificado sale solo cuando el DNS ya apunta al VPS) y entra con un usuario con acceso a caja chica en la matriz de permisos
-   (por defecto **Contabilidad** o **Administrador**).
-4. **Primer uso**: Libreta › Cuentas: crear *Cta. cte. 2000*, *Cta. cte. 7074* (con sus últimos 4 dígitos), *Yape Diego* y *Yape Milagros* (titular, saldo inicial y umbral 40).
-   Solo el **Administrador** crea o cambia cuentas. Luego Libreta › Personas.
-5. **Telegram** (opcional): crea un bot con @BotFather y pon `TELEGRAM_BOT_TOKEN=…` en el `.env`; luego `docker compose up -d`.
+   (Si dice que la base `finanzas2` no existe, Finanzas 2 nunca se usó: salta al paso 3.)
+2. **Borrar la base y las fotos de Finanzas 2**:
+   ```bash
+   docker compose exec db psql -U icr -d postgres -c "DROP DATABASE finanzas2"
+   docker volume ls | grep finanzas2_fotos  # muestra el nombre exacto (p. ej. servidor_finanzas2_fotos)
+   docker volume rm servidor_finanzas2_fotos # usa el nombre que salió arriba
+   ```
+3. **Carpetas y DNS**: `rm -rf /opt/icr/servidor/finanzas2-web /opt/icr/servidor/finanzas2-web.anterior` y, en Hostinger, borra el registro **A** `finanza`.
+4. **Saldo inicial de la Caja ICR**: en `https://finanzas.TUDOMINIO`, como **Administrador**, «Ajustar saldo» → *Suma al saldo* → Efectivo
+   (lo que hay en efectivo) y otra vez para Digital (lo que hay en el Yape). Queda en la auditoría.
 
-El respaldo diario (`./scripts/respaldo.sh`) ya incluye la base `finanzas2` y sus fotos. Para descartar la prueba: `docker compose stop finanzas2-api` y, si quieres,
-`docker compose exec db psql -U icr -d postgres -c "DROP DATABASE finanzas2"`.
+La caja diaria y la caja chica anteriores **no se borran**: quedan en la base como historial (y los gastos de proyectos antiguos siguen
+sumando a sus proyectos). Lo nuevo se registra solo en la Caja ICR.
 
 ## 7d. Relay (otro aplicativo en el mismo servidor)
 
@@ -321,14 +320,14 @@ cd /opt/icr/servidor
 ./scripts/respaldo.sh      # prueba: crea respaldos/cotizador_FECHA.sql.gz y las fotos
 ```
 
-Cada respaldo tiene tres archivos: la **base** (`cotizador_*.sql.gz`, con todo: cotizaciones, almacén y finanzas), las **fotos de la app** (`fotos_*.tar.gz`) y las **fotos de recibos de Finanzas** (`fotos_finanzas_*.tar.gz`).
+Cada respaldo tiene tres archivos: la **base** (`cotizador_*.sql.gz`, con todo: cotizaciones, almacén y finanzas), las **fotos de la app, del ERP y de la Caja ICR** (`fotos_*.tar.gz`) y las **fotos de recibos de la caja anterior** (`fotos_finanzas_*.tar.gz`).
 Las fotos no están dentro de la base, por eso van aparte. Si algo falla, el script termina con error y lo dice.
-Para restaurar fotos: `./scripts/restaurar_fotos.sh respaldos/fotos_finanzas_FECHA.tar.gz finanzas` (o `api` para las de la app, `finanzas2` para las de Finanzas 2).
+Para restaurar fotos: `./scripts/restaurar_fotos.sh respaldos/fotos_FECHA.tar.gz api` (app, ERP y **Caja ICR**) o `… fotos_finanzas_FECHA.tar.gz finanzas` (recibos de la caja anterior).
 
 **Probar un respaldo sin tocar nada** (hazlo una vez al mes): `./scripts/probar_respaldo.sh` restaura el más reciente en una base aparte,
 compara las filas de las tablas principales con la base actual, revisa las fotos y borra la base de prueba. Debe terminar en «RESPALDO OK».
 
-**Restaurar de verdad** (solo si se perdieron datos): `./scripts/restaurar.sh respaldos/cotizador_FECHA.sql.gz` (o `finanzas2_FECHA.sql.gz`).
+**Restaurar de verdad** (solo si se perdieron datos): `./scripts/restaurar.sh respaldos/cotizador_FECHA.sql.gz`.
 Pide escribir SI, guarda antes una copia de lo actual (`respaldos/antes_de_restaurar_…`), detiene las APIs que usan esa base y las vuelve a arrancar.
 
 Prográmalo cada noche:

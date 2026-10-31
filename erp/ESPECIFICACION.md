@@ -11,8 +11,7 @@ aprobación antes de empezar.**
 | Base de datos | Postgres 16 en Docker (`db`), base `cotizador` | Usuarios, sesiones, productos (≈800), cotizaciones, requerimientos, salidas de herramientas, listas, maletas, caja diaria y caja chica (Finanzas 1). |
 | API principal | `servidor/api` (Node + Express, JS) | Login y sesiones, catálogo, cotizaciones, requerimientos, herramientas, bitácora. **Es el backend compartido del ERP.** |
 | Logística (antes Cotizador) | Flutter → `cotizador.icrenergy.tech` (PWA) y APK | Checklist de cotización + PDF, requerimientos de materiales y salidas de herramientas. |
-| Finanzas 1 | `finanzas/app` (Expo web) + `finanzas/api` (Node TS) → `finanzas.icrenergy.tech` | Caja diaria y caja chica, cierre del día, auditoría, alertas, reportes, OCR de comprobantes. Misma base `cotizador`. |
-| Finanzas 2 (prueba) | `finanzas/app2` + misma API en modo `fin` → `finanza.icrenergy.tech` | Libro único por cuentas (bancos, Yape), base propia `finanzas2`. Se decidirá cuál queda. |
+| Finanzas (Caja ICR) | `finanzas/app` (Expo web) → `finanzas.icrenergy.tech`; datos en la API principal (`/api/caja-icr`), ingreso por `finanzas/api` | Desde la Fase 11: una sola caja con dos saldos (efectivo y digital). Antes: caja diaria y caja chica (Finanzas 1, hoy historial) y Finanzas 2 (eliminada). |
 | Portal | `servidor/portal` → `app.icrenergy.tech` | Vista general en tablas + pestaña Finanzas + usuarios. |
 | Proxy | Caddy (`servidor/Caddyfile`) | HTTPS de todos los subdominios. **Incluye los bloques de Relay al final: no se borran nunca.** |
 
@@ -70,6 +69,7 @@ aprobación antes de empezar.**
 | 8 | **Comparador de proveedores**: proveedores, listas, historial de precios append-only, equivalencias, buscador y tabla comparativa. | ✅ |
 | 9 | **Activos y control** (sistemas instalados, equipos y garantías, portal Victron VRM embebido) y **Almacén** con inventario y kardex. | ✅ |
 | 10 | **Cierre**: pruebas finales, revisión de seguridad, respaldos y documentación. | ✅ |
+| 11 | **Finanzas · Caja ICR**: se elimina Finanzas 2; una sola caja con dos saldos (efectivo y digital), gastos físicos con foto, gastos digitales con varias capturas, ventas, fondos del ERP, «Depósito a cuenta principal», historial, Preguntar y reportes. La cuenta principal solo se mueve desde el ERP. | ✅ |
 
 ## 4b. Cómo quedó la Fase 2
 
@@ -263,6 +263,31 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
   inversores y baterías en Cotizador IA › Contexto (si no hay, el de menor precio que cumpla). Estructura, cableado e instalación quedan «Sin dato».
   Se usa desde un formulario, desde un pedido escrito claro (sin IA) o como herramienta de la IA (`cotizacion_guiada`).
 
+## 4l. Cómo quedó la Fase 11 (Caja ICR)
+
+Decisiones del dueño: **se elimina Finanzas 2**; Finanzas queda con **una sola caja («Caja ICR»)**, **sin ciudades** y **sin cierre del día**,
+con **dos saldos** (efectivo y digital). Entra dinero solo por **ventas** (registradas en la app) y por **fondos enviados desde el ERP**.
+
+- **Datos en la API principal** (`servidor/api/src/cajaicr.js`, `rutas_f11.js`, migración `011_caja_icr.sql`): `caja_icr_mov` (tipo, medio,
+  origen VENTA | FONDO | GASTO | CAPTURA | DEPOSITO | AJUSTE, categoría, descripción, persona, destinatario, n.º de operación, comprobante,
+  proyecto, monto) y `caja_icr_adjunto` (fotos en `uploads/privado/caja-icr`). Así el depósito a la cuenta principal es **una sola transacción**
+  con `cuenta_movimientos`, con auditoría, permisos e IA en un solo lugar. La app usa el mismo token (Caddy: `finanzas.…/api/*` → API principal).
+- **Registrar**: el id (uuid) lo pone la app: un reintento devuelve el mismo movimiento. Un n.º de operación repetido (no anulado) da 409 con
+  el existente. El saldo puede quedar negativo: se registra y se avisa. Corregir guarda el antes y el después; anular pide motivo.
+- **Depósito a cuenta principal**: categoría de egreso; crea el ingreso «Depósito desde Caja ICR» en la cuenta principal en soles. Se anula
+  en la app y se anula solo en el ERP (desde el ERP no se puede).
+- **Enviar fondos** (ERP › Contabilidad): elige efectivo o digital; crea el egreso «Envío a Caja ICR» y el FONDO en la caja. Anular el egreso
+  en el ERP saca el fondo de la caja. Las dos categorías automáticas no se pueden elegir a mano.
+- **App**: Inicio (saldos, hoy, botones), gasto físico (OCR del recibo), gasto digital (varias capturas, lector de Yape/BCP traído de
+  Finanzas 2, revisión una por una), venta / ingreso, historial y detalle (corregir, agregar foto, anular), ajuste de saldo (solo
+  Administrador, para el saldo inicial), Preguntar y reportes con Excel.
+- **ERP**: pestaña «Caja ICR» en Contabilidad (solo lectura), Inicio con los dos saldos y alertas (saldo negativo, gastos físicos sin foto),
+  los gastos con proyecto suman al proyecto, IA de Finanzas y Asistente con herramientas de la Caja ICR (`gastos_caja`, `resumen_caja`,
+  `saldos_caja`, `gastos_proyecto_caja`, `caja_icr`) y respuestas directas sin IA.
+- **Historial anterior**: las tablas de caja diaria y caja chica no se borran; siguen sumando a los proyectos antiguos. La API de Finanzas
+  (`finanzas/api`) queda para el ingreso, los permisos, los proyectos y ese historial; se quitó su modo de Finanzas 2.
+- Pruebas: `servidor/api/test/f11.test.js` (y f2, f4, f7 actualizadas), `finanzas/app/src/lib/icr/*.test.ts`.
+
 ## 5. Migración de datos
 
 - **Usuarios y roles**: hecho en la Fase 1 (`002_erp_base.sql`), sin perder usuarios ni sesiones.
@@ -288,6 +313,6 @@ registra en el ERP (Contabilidad › Nuevo movimiento › ingreso, categoría «
 | Asistente IA | completo | completo | — |
 | Configuración | — | — | — |
 | PWA Logística | lectura | lectura | completo |
-| PWA Finanzas (caja chica) | — | completo | — |
+| Finanzas (Caja ICR) | — | completo | — |
 
 (La tabla real vive en `servidor/db/migraciones/002_erp_base.sql`; esta copia es solo de referencia.)

@@ -24,7 +24,7 @@ export type Reporte = {
 };
 /** Lo que se manda al registrar (el id lo pone la app: un reintento no duplica). */
 export type NuevoMov = {
-  id: string; origen: "VENTA" | "GASTO" | "CAPTURA"; medio?: Medio; fecha: string; monto: string; descripcion: string; categoria: string; subcategoria?: string | null;
+  id: string; origen: "VENTA" | "GASTO" | "CAPTURA" | "AJUSTE"; tipo?: "INGRESO" | "EGRESO"; medio?: Medio; fecha: string; monto: string; descripcion: string; categoria: string; subcategoria?: string | null;
   persona?: string | null; destinatario?: string | null; operacion?: string | null; comprobante?: Comprobante | null; proyecto_id?: number | null;
 };
 

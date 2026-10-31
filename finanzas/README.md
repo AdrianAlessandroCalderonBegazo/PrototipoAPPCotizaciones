@@ -1,29 +1,45 @@
-# ICR Finanzas — Caja diaria, Caja chica y Reportes
+# ICR Finanzas — Caja ICR
 
-PWA de Inversiones ICR para llevar la **caja diaria** (la planilla de papel «CAJA DIARIO»), la **caja chica**, cerrar el día y sacar **reportes**, por ciudad (Arequipa y Moquegua). Es una app **en línea**: varias personas la usan a la vez sobre los mismos datos (los de la base compartida del sistema), cada una con su propio usuario. Se instala en la pantalla de inicio, pero **no guarda nada en el teléfono ni acepta cambios sin internet**. Diseño ICR (Manrope · teal #0E7490 · cyan #12A3B8 · navy #124C8C).
+PWA de Inversiones ICR para llevar **una sola caja, la Caja ICR**, con **dos saldos**: **efectivo** y **digital** (Yape / transferencias).
+No hay ciudades ni cierre del día: se registra durante todo el día. Es una app **en línea**: varias personas la usan a la vez sobre los mismos
+datos, cada una con su propio usuario. Se instala en la pantalla de inicio, pero no guarda nada en el teléfono. Diseño ICR (Manrope · teal
+#0E7490 · cyan #12A3B8 · navy #124C8C).
 
-Se publica en `https://finanzas.TUDOMINIO` y sus datos también se ven en la pestaña **Finanzas** de la vista general (`https://app.TUDOMINIO`). La guía de despliegue es **[../servidor/DESPLIEGUE.md](../servidor/DESPLIEGUE.md)**; el contrato de la API, **[docs/API.md](docs/API.md)**.
+Se publica en `https://finanzas.TUDOMINIO`. La guía de despliegue es **[../servidor/DESPLIEGUE.md](../servidor/DESPLIEGUE.md)**.
 
 ```
 app/              La PWA (Expo · React Native Web · TypeScript)
-api/              API (Node + Postgres): usa los usuarios y sesiones del sistema; Dockerfile incluido
-db/migrations/    Tablas de caja (001), cierre del día e historial (002), comprobante Recibo (003), saldo solo efectivo (004)
-docs/API.md       Contrato de la API
+api/              API de Finanzas: ingreso (con la sesión de la API principal), permisos, proyectos e historial de la caja anterior
+db/migrations/    Tablas de la caja anterior (caja diaria y caja chica): se conservan solo como historial
+docs/API.md       Contrato de la API de la caja anterior
 design/           Diseño original exportado de Claude Design
 ```
 
 ## Qué hace
 
-- **Caja diaria**: una hoja por día y ciudad. El **saldo de caja es solo efectivo** (como el papel: lo que entra o sale por Yape/transferencia se muestra aparte y no suma al saldo ni al cierre), igual a la planilla de papel (saldo anterior, filas con tipo, responsable, comprobante, ingresos y salidas en efectivo/Yape/cuenta corriente, totales y observaciones). Cada fila admite fotos del recibo. Se puede **enviar dinero a caja chica**.
-- **Caja chica**: egresos con foto del recibo (se lee con OCR y rellena el formulario) o a mano.
-- **Cierre del día**: se escribe el efectivo contado, la app muestra la diferencia con el saldo calculado (la nota es obligatoria si hay diferencia) y el día queda **bloqueado para todos**. Los días se cierran en orden. Solo un administrador puede reabrirlo, con un motivo.
-- **Historial de cambios**: cada alta, corrección, eliminación, cierre y reapertura guarda quién, cuándo y **cómo estaba antes**. Se ve con «Ver cambios del día» y en la pestaña Finanzas del portal.
-- **Roles reales en el servidor** (sin códigos compartidos): `admin`, `finanzas` y `encargado` entran; solo `admin` y `finanzas` corrigen días anteriores y cierran; solo `admin` reabre y cambia saldos iniciales. Los demás roles (empleado, almacén, vendedor) no ven Finanzas. Se ajusta con las variables `FINANZAS_ROLES_*` (ver `servidor/.env.example`).
-- **Alertas de descuadre** (Historial y portal): cajas en negativo, filas sin comprobante, días sin cerrar y cierres con diferencia.
-- **Historial** de días anteriores y **Reportes** por día o rango, una ciudad o ambas, en Excel (.xlsx) o CSV.
-- **Varias personas a la vez**: la app consulta cada 6 s si algo cambió y se actualiza sola; si dos personas cambian lo mismo, la segunda recibe un aviso y ve lo que dejó la primera.
-- Lo que es ingreso o gasto real puede reflejarse en el ERP (Contabilidad → Flujo de caja) si se define `ERP_API_URL`; si no, no se refleja nada.
-- **Respaldo**: `servidor/scripts/respaldo.sh` guarda cada noche la base **y** la carpeta de fotos de recibos (las fotos no están en la base).
+- **Gasto físico** (sale del efectivo): categoría, descripción, monto, fecha, quién gastó, comprobante, proyecto y **foto del recibo**
+  (se lee con OCR y rellena lo que falte).
+- **Gasto digital** (sale del saldo digital): se eligen **varias capturas de Yape o del BCP a la vez**; la app lee monto, fecha, a quién se
+  pagó, n.º de operación y mensaje, y cada una se revisa antes de registrarla. La captura queda como comprobante. Si el n.º de operación ya
+  está registrado, se avisa y **no se duplica**.
+- **Venta / ingreso**: en efectivo o digital.
+- **Fondos desde el ERP**: Contabilidad envía dinero de la cuenta principal al efectivo o al digital de la caja (se ve al instante).
+- **Depósito a cuenta principal** (categoría de egreso): el monto sale de la caja y entra a la cuenta principal del ERP en la misma
+  operación. Si se anula en la app, se anula también en el ERP.
+- **Historial** con filtros (período, ingreso/egreso, efectivo/digital, texto, anulados). Nada se borra: se **anula** con un motivo.
+  Corregir queda en la auditoría con el antes y el después.
+- **Preguntar** (IA de solo lectura, como en el ERP): las preguntas frecuentes se responden al instante sin IA.
+- **Reportes** por período: efectivo y digital (inicio, entró, salió, final), ventas, fondos, gastos, depósitos, por categoría, persona y
+  proyecto; **Excel**.
+- **Permisos**: módulo «Finanzas (Caja ICR)» de la matriz del ERP (`caja_chica`): lectura = ver; completo = registrar, corregir y anular.
+
+## Dónde vive cada cosa
+
+- Los datos de la Caja ICR (`caja_icr_mov`, `caja_icr_adjunto`) y sus reglas están en la **API principal**:
+  `servidor/api/src/cajaicr.js`, rutas `/api/caja-icr/*` (`rutas_f11.js`), migración `servidor/db/migraciones/011_caja_icr.sql`.
+  La app las llama con el mismo token de su sesión (Caddy manda `finanzas.…/api/*` a la API principal).
+- La API de Finanzas (`api/`, en `/api-caja`) se usa para ingresar, leer los permisos y los proyectos activos. Sus rutas de caja diaria y
+  caja chica quedan solo para consultar el historial anterior (el ERP muestra esas fotos en los proyectos antiguos).
 
 ## Desarrollo
 
@@ -34,22 +50,8 @@ npm run typecheck && npm test
 npm run build:web            # exporta la web y la convierte en PWA (dist/)
 
 cd ../api && npm ci
-AUTH_MODE=dev npm start      # API con base en memoria y login de prueba, en :8787
-npm test                     # incluye las migraciones sobre Postgres (PGlite) y pruebas con varias personas a la vez
+npm run typecheck && npm test
 ```
-
-## Reflejo en el ERP (Contabilidad → Flujo de caja)
-
-Solo si se define `ERP_API_URL`. Cada fila y cada egreso de caja chica **reales** se registran también en el ERP; lo demás no:
-
-| Origen | Ingreso al ERP | Gasto al ERP |
-|---|---|---|
-| Fila de caja diaria (no `interno`) | `caja_ingreso_efectivo + caja_ingreso_transf + cta_cte_ingreso` | `caja_salida_efectivo + caja_salida_transf + cta_cte_salida` |
-| Fila `interno` (depósito al banco, retiro, envío a caja chica) | — | — |
-| Egreso de caja chica | — | `monto` |
-| Envío a caja chica (transferencia) | — | — (sería contar dos veces el mismo dinero) |
-
-Si el ERP no responde, la fila queda con `erp_pendiente = true` y se reintenta con `POST /caja/erp/reintentar`; la caja **nunca** se bloquea por culpa del ERP. Detalles y supuestos por verificar en `docs/API.md`.
 
 ## APK
 

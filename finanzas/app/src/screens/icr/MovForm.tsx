@@ -17,7 +17,7 @@ import { elegirFoto, FotoError } from "../../lib/icr/foto";
 import { nuevoId } from "../../lib/icr/ids";
 import { COMPROBANTES, COMPROBANTE_LABEL, MEDIO_LABEL, type Comprobante, type Medio, type Mov, type Resumen } from "../../lib/icr/tipos";
 
-export type ModoForm = "gasto" | "venta";
+export type ModoForm = "gasto" | "venta" | "ajuste";
 
 export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bottomInset }: {
   modo: ModoForm;
@@ -30,18 +30,20 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
   bottomInset: number;
 }) {
   const venta = modo === "venta";
+  const ajuste = modo === "ajuste" || mov?.origen === "AJUSTE";
   const soloTexto = mov && (mov.origen === "FONDO" || mov.origen === "DEPOSITO");
   const captura = mov?.origen === "CAPTURA";
   const cats = (venta ? opciones.categorias.INGRESO : opciones.categorias.EGRESO).filter((c) => !mov || c !== opciones.categoria_deposito);
   const idRef = useRef(nuevoId()); // el mismo id en cada reintento: el servidor no duplica
   const [f, setF] = useState({
-    categoria: mov?.categoria ?? (venta ? "Venta" : ""),
+    categoria: mov?.categoria ?? (venta ? "Venta" : modo === "ajuste" ? "Ajuste de saldo" : ""),
     subcategoria: mov?.subcategoria ?? "",
     descripcion: mov?.descripcion ?? "",
     monto: mov?.monto ?? "",
     fecha: mov?.fecha ?? today(),
     persona: mov?.persona ?? "",
-    medio: (mov?.medio ?? (venta ? "" : "EFECTIVO")) as Medio | "",
+    medio: (mov?.medio ?? (venta || modo === "ajuste" ? "" : "EFECTIVO")) as Medio | "",
+    sentido: (mov?.tipo ?? "") as "INGRESO" | "EGRESO" | "",
     comprobante: (mov?.comprobante ?? "") as Comprobante | "",
     proyecto_id: mov?.proyecto_id ?? null,
   });
@@ -56,6 +58,7 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
   const faltan = useMemo(() => {
     const e: Record<string, string> = {};
     if (!f.categoria) e.categoria = "Elige una categoría.";
+    if (modo === "ajuste" && !f.sentido) e.sentido = "Elige si el ajuste suma o resta.";
     if (subs.length && !f.subcategoria) e.subcategoria = "Elige una subcategoría.";
     if (!f.descripcion.trim()) e.descripcion = "Escribe qué fue.";
     if (!monto) e.monto = "Escribe un monto mayor a 0 (hasta 2 decimales).";
@@ -109,6 +112,10 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
           ...(captura || mov.origen === "VENTA" || mov.origen === "AJUSTE" ? {} : { comprobante: (f.comprobante || null) as Comprobante | null, proyecto_id: f.proyecto_id }),
           ...(captura ? {} : { medio: f.medio as Medio }),
         });
+      } else if (modo === "ajuste") {
+        const r = await icr.registrar({ id: idRef.current, origen: "AJUSTE", tipo: f.sentido as "INGRESO" | "EGRESO", medio: f.medio as Medio, fecha: f.fecha, monto: monto!, descripcion: f.descripcion, categoria: "Ajuste de saldo" });
+        id = r.mov.id;
+        aviso = r.aviso;
       } else {
         const r = await icr.registrar({
           id: idRef.current, origen: venta ? "VENTA" : "GASTO", medio: f.medio as Medio, fecha: f.fecha, monto: monto!, descripcion: f.descripcion, categoria: f.categoria,
@@ -132,7 +139,7 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
         setError(`Se registró, pero ${fallidas.length === 1 ? "una foto no se pudo subir" : `${fallidas.length} fotos no se pudieron subir`}. Pulsa de nuevo para reintentar.`);
         return;
       }
-      onListo(mov ? "Corrección guardada." : `${venta ? "Ingreso" : deposito ? "Depósito" : "Gasto"} de ${soles(monto)} registrado.${deposito ? " Ya está en la cuenta principal del ERP." : ""}${aviso ? ` ${aviso}` : ""}`);
+      onListo(mov ? "Corrección guardada." : modo === "ajuste" ? `Ajuste de ${soles(monto)} registrado.${aviso ? ` ${aviso}` : ""}` : `${venta ? "Ingreso" : deposito ? "Depósito" : "Gasto"} de ${soles(monto)} registrado.${deposito ? " Ya está en la cuenta principal del ERP." : ""}${aviso ? ` ${aviso}` : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo guardar.");
     } finally {
@@ -140,8 +147,8 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
     }
   };
 
-  const titulo = mov ? "Corregir movimiento" : venta ? "Venta / ingreso" : "Gasto físico";
-  const sub = mov ? "Queda en el historial de cambios, con el antes y el después." : venta ? "Entra a la caja: en efectivo o digital (Yape / transferencia)." : "Sale del efectivo de la caja. Toma la foto del recibo.";
+  const titulo = mov ? "Corregir movimiento" : modo === "ajuste" ? "Ajuste de saldo" : venta ? "Venta / ingreso" : "Gasto físico";
+  const sub = mov ? "Queda en el historial de cambios, con el antes y el después." : modo === "ajuste" ? "Solo el Administrador: para el saldo inicial o para cuadrar con lo contado." : venta ? "Entra a la caja: en efectivo o digital (Yape / transferencia)." : "Sale del efectivo de la caja. Toma la foto del recibo.";
   const e = (k: string) => (intento ? faltan[k] : undefined);
   return (
     <Screen>
@@ -150,7 +157,17 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           <Cuerpo ancho={ANCHO.formulario - 40} style={{ gap: 18 }}>
             {soloTexto ? <Franja texto={mov!.origen === "FONDO" ? "Un fondo enviado desde el ERP solo se corrige en el ERP: aquí puedes cambiar la descripción." : "Un depósito a la cuenta principal no se corrige: anúlalo y regístralo de nuevo. Aquí puedes cambiar la descripción."} /> : null}
-            {!soloTexto ? (
+            {modo === "ajuste" ? (
+              <>
+                <Franja texto="Para empezar la caja con el dinero que ya hay (saldo inicial), o para cuadrarla con lo contado. Queda en el historial y en la auditoría." />
+                <View>
+                  <FieldLabel>¿Suma o resta?</FieldLabel>
+                  <OptionGrid options={["INGRESO", "EGRESO"] as const} value={f.sentido} onPick={(v) => set("sentido", v)} columns={2} height={46} fontSize={13} labels={{ INGRESO: "Suma al saldo", EGRESO: "Resta del saldo" }} />
+                  <ErrorText>{e("sentido")}</ErrorText>
+                </View>
+              </>
+            ) : null}
+            {!soloTexto && !ajuste ? (
               <View>
                 <FieldLabel>Categoría</FieldLabel>
                 <OptionGrid options={cats} value={f.categoria} onPick={(c) => setF((x) => ({ ...x, categoria: c, subcategoria: "", ...(c === opciones.categoria_deposito ? { proyecto_id: null } : {}) }))} columns={venta ? 3 : 2} height={44} fontSize={12.5} />
@@ -165,16 +182,16 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
                 <ErrorText>{e("subcategoria")}</ErrorText>
               </View>
             ) : null}
-            {!soloTexto && (venta || deposito) && !captura ? (
+            {!soloTexto && (venta || deposito || ajuste) && !captura ? (
               <View>
-                <FieldLabel>{venta ? "¿Cómo entró?" : "¿De qué saldo sale?"}</FieldLabel>
+                <FieldLabel>{ajuste ? "¿Qué saldo?" : venta ? "¿Cómo entró?" : "¿De qué saldo sale?"}</FieldLabel>
                 <OptionGrid options={["EFECTIVO", "DIGITAL"] as Medio[]} value={f.medio} onPick={(m) => set("medio", m)} columns={2} height={46} fontSize={13} labels={{ EFECTIVO: MEDIO_LABEL.EFECTIVO, DIGITAL: "Digital (Yape / transf.)" }} />
                 <ErrorText>{e("medio")}</ErrorText>
               </View>
             ) : null}
             <View>
               <FieldLabel>Descripción</FieldLabel>
-              <TextField value={f.descripcion} onChangeText={(v) => set("descripcion", v)} placeholder={venta ? "Ej. Venta de 2 paneles 550 W" : deposito ? "Ej. Depósito en BCP agencia Mercaderes" : "Ej. Taxi a la obra de Characato"} maxLength={300} />
+              <TextField value={f.descripcion} onChangeText={(v) => set("descripcion", v)} placeholder={ajuste ? "Ej. Saldo inicial de la Caja ICR (conteo del 31/10)" : venta ? "Ej. Venta de 2 paneles 550 W" : deposito ? "Ej. Depósito en BCP agencia Mercaderes" : "Ej. Taxi a la obra de Characato"} maxLength={300} />
               <ErrorText>{e("descripcion")}</ErrorText>
             </View>
             {!soloTexto ? (
@@ -189,13 +206,13 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
                   <DateField value={f.fecha} onChange={(v) => set("fecha", v)} />
                   <ErrorText>{e("fecha")}</ErrorText>
                 </View>
-                <View>
+                <View style={ajuste ? { display: "none" } : undefined}>
                   <FieldLabel optional>{venta ? "Cliente o quién recibió" : "Quién gastó"}</FieldLabel>
                   <TextField value={f.persona} onChangeText={(v) => set("persona", v)} placeholder={venta ? "Ej. Bodega San Martín" : "Ej. Luis"} maxLength={120} />
                 </View>
               </>
             ) : null}
-            {!soloTexto && !venta && !deposito && !captura && mov?.origen !== "AJUSTE" ? (
+            {!soloTexto && !venta && !deposito && !captura && !ajuste ? (
               <>
                 <View>
                   <FieldLabel optional>Comprobante</FieldLabel>
@@ -207,7 +224,7 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
                 </View>
               </>
             ) : null}
-            {!soloTexto || mov ? (
+            {(!soloTexto || mov) && !ajuste ? (
               <View>
                 <FieldLabel optional={venta || deposito}>{venta ? "Foto" : "Foto del recibo"}</FieldLabel>
                 {mov?.adjuntos.length ? <View style={{ marginBottom: 12 }}><FotosGuardadas ids={mov.adjuntos} /></View> : null}
@@ -219,7 +236,7 @@ export function MovForm({ modo, mov, opciones, onCerrar, onListo, topInset, bott
           </Cuerpo>
         </ScrollView>
         <BottomBar bottomInset={bottomInset}>
-          {enviando ? <ActivityIndicator color={C.teal} style={{ height: 54 }} /> : <PrimaryButton label={mov ? "GUARDAR CORRECCIÓN" : venta ? "REGISTRAR INGRESO" : deposito ? "REGISTRAR DEPÓSITO" : "REGISTRAR GASTO"} onPress={() => void guardar()} />}
+          {enviando ? <ActivityIndicator color={C.teal} style={{ height: 54 }} /> : <PrimaryButton label={mov ? "GUARDAR CORRECCIÓN" : modo === "ajuste" ? "REGISTRAR AJUSTE" : venta ? "REGISTRAR INGRESO" : deposito ? "REGISTRAR DEPÓSITO" : "REGISTRAR GASTO"} onPress={() => void guardar()} />}
         </BottomBar>
       </KeyboardAvoidingView>
     </Screen>
